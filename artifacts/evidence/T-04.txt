@@ -1,0 +1,37 @@
+T-04 验收证据 — 构造隔离数据夹具
+日期: 2026-10-17 | 提交基线: 9b9a985 | SDK: 10.0.402 (项目本地 .dotnet) | OS: Windows 10 Pro 10.0.19045 x64
+
+## 实施文件
+- tests/DeepSeekHarnessCleaner.Tests/Fixtures/FixtureRoot.cs — 临时根生命周期（%TEMP%\dshcleaner-fixtures\fx-<guid>\，含 .dsh/{sessions,storages,attachments} 与 @deepseek-ai/dsh-desktop；Dispose 幂等整树删除）
+- tests/DeepSeekHarnessCleaner.Tests/Fixtures/FixtureFactory.cs — 合成夹具工厂（12 类夹具，见 README 覆盖清单）
+- tests/DeepSeekHarnessCleaner.Tests/FixtureIsolationTests.cs — 4 个隔离/覆盖测试
+- tests/DeepSeekHarnessCleaner.Tests/Fixtures/README.md — 测试数据覆盖清单（验收要求）
+
+## 命令与退出码
+1. dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror
+   - 首次 EXIT=1：CS1503（ZstdSharp Wrap 返回 Span<byte>，需 .ToArray()）→ 修复
+   - 最终 EXIT=0，0 警告 0 错误
+2. dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   - 首次 EXIT=1：FullMatrix 断言错误（截断 zstd 文件含 2 个帧头属正常，断言写为 1）→ 修正断言为解压抛错
+   - 最终 EXIT=0：通过 6 / 失败 0 / 总计 6（含 T-03 冒烟 2 个）
+
+## 测试断言（全部实测通过）
+- Create_LaysOutRootsUnderTemp_NotUnderRealDsh：夹具根在 Path.GetTempPath() 下且不在真实 %USERPROFILE%\.dsh 下
+- Dispose_RemovesEntireFixtureTree：Dispose 幂等，整树消失
+- RealDshRoot_UnchangedByFullFixtureLifecycle：真实 %USERPROFILE%\.dsh 前后只读快照（相对路径|长度|mtime 排序串）完全一致
+- FullMatrix_CoversRequiredFixtureKinds：v0/v4 多版本、多代际（双帧 zstd 解压含第二帧文本）、Ambiguous 并存、CorruptLine、未知事件、截断尾帧 Decompressor 抛错、空文件、3 个日期 mtime 精确匹配、附件引用+附件文件、投影缓存、6 白名单目录+logs 双日志+Network 哨兵
+
+## 隔离核查
+- 测试后 .artifacts\tmp\dshcleaner-fixtures 下 fx-* 树残留 = 0（仅空父目录，.artifacts 已 gitignore）
+- 用户 %TEMP% 无 dshcleaner-fixtures 残留
+- 全局 %USERPROFILE%\.nuget\packages 目录数 83 → 83 不变；无新增包，packages.lock.json 未变更
+- 真实 %USERPROFILE%\.dsh 存在且仅只读快照访问
+
+## 环境注记
+- 构建/测试须设 TEMP/TMP 为工作区 .artifacts\tmp（否则 MSBuild CreateTempSubdirectory 崩溃 -532462766，同 T-03）
+
+## 验收结论
+- 测试运行能创建/清理 fixtures 且不访问真实 %USERPROFILE%\.dsh：PASS
+- 覆盖清单在测试数据 README 中列出：PASS（tests/DeepSeekHarnessCleaner.Tests/Fixtures/README.md）
+- 构建 -warnaserror 与全部测试通过：PASS
+结论：PASS
