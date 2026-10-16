@@ -133,7 +133,7 @@
 
 ### T-11 — 实现会话日期与搜索筛选
 
-- [ ] **T-11：实现会话日期与搜索筛选**
+- [x] **T-11：实现会话日期与搜索筛选**（2026-10-16，证据 artifacts/evidence/T-11.txt，feat e604257）
 - **前置**：T-10。
 - **修改范围**：`Application/SessionFilter.cs、tests/FilterTests.cs`。
 - **任务边界**：实现 createdAt/lastActivityAt/文件修改日期、项目/ID/关键字过滤，包含式日期范围；缺失值标 Unknown。

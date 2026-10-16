@@ -1,0 +1,54 @@
+T-11 实现会话日期与搜索筛选 — 验收证据
+日期：2026-10-16
+分支：main
+提交：feat e604257（2 files changed, 353 insertions）
+关联测试用例：TC-07（inclusive 日期、跨时区、无日期、ID/项目/关键字）、TC-08（选中仅整会话、过滤后选择正确）
+
+== 实施内容 ==
+新增 src/DeepSeekHarnessCleaner.Application/SessionFilter.cs：
+  DateFilterField{CreatedAt,LastActivityAt,FileModified}、DateFilter(Field,Start,End)、
+  FilterRequest(Date,Project,SessionId,Keyword)、SessionFilter.Apply(sessions,request,timeZone)。
+  规则（design.md §3）：
+  - 日期区间包含式：按指定时区把瞬时换算为本地日历日比较，等价 [start 00:00, day-after-end 00:00)；
+  - 未知日期（字段为 null）不参与区间匹配，不硬填为今天；
+  - FileModified 取会话全部物理文件 LastWriteTimeUtc 最大值（兜底筛选，UI 标注属界面任务）；
+  - Project/SessionId 为大小写不敏感精确匹配，Keyword 为大小写不敏感包含匹配（项目名与会话 ID；
+    事件正文关键字属事件流任务 T-12 之后）；各条件 AND 组合；空白条件视为不限制；
+  - Start>End 抛 ArgumentException；
+  - 筛选只按完整会话粒度取舍，返回原 SessionSummary 实例，不裁剪事件内容（design.md §3“绝不编辑日志内部事件”）。
+新增 tests/DeepSeekHarnessCleaner.Tests/FilterTests.cs：11 用例（含 fixture 集成用例与最小 ScanSource）。
+
+== 实测命令与结果 ==
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror
+   退出码 0，无 error/warning（TEMP 已重定向 .artifacts\tmp）。
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   退出码 0：失败 0，通过 87，总计 87（原 76 + 新增 FilterTests 11）。
+
+== 验收逐项核对 ==
+[x] 跨月/跨年/不同偏移时区断言一致：
+    CreatedAt_CrossYear_ConsistentAcrossTimezones — 2025-12-31T20:00Z 在 China Standard Time(+8)
+    落 2026-01-01（跨年），[2026-01-01,2026-01-01] 命中、[2025-12-31,2025-12-31] 不命中；
+    UTC 下相反，两时区结果与各自本地日历日一致。
+    SameInstant_DifferentOffsets_FallInDifferentLocalDays — 同一瞬时 +14h 落 2026-07-01、
+    -11h 落 2026-06-30，边界日各自命中/不命中。
+[x] start=end：
+    StartEqualsEnd_MatchesSingleLocalDay — [2026-03-15,2026-03-15] 仅命中当日 10:00Z 会话，
+    次日 00:30Z 会话不命中（右开边界正确）。
+    StartAfterEnd_Throws — Start>End 抛 ArgumentException。
+[x] 日期为空时断言一致：
+    UnknownDates_Excluded_NotCoercedToToday — CreatedAt=null、LastActivityAt=null、
+    无物理文件（FileModified 未知）三种情况在宽区间下均被排除，不硬填今天。
+[x] 不裁剪事件内容（TC-08 选中仅整会话）：
+    Filter_KeepsWholeSessionsIntact_NoEventTrimming — 多代际会话过滤后为同一实例（Assert.Same），
+    Generations.Count=2、TotalBytes 不变；筛选结果只含完整会话。
+[x] TC-07 ID/项目/关键字正确：
+    ProjectFilter_IsCaseInsensitiveExactMatch（大小写不敏感精确，部分名不匹配）；
+    SessionIdFilter_IsCaseInsensitiveExactMatch（前缀不匹配）；
+    Keyword_MatchesProjectAndSessionId_CaseInsensitive；
+    CombinedFilters_AreAnded（日期+项目+关键字 AND）。
+[x] 与库存集成：
+    Integration_DatedFixtureSessions_FilterByFileModifiedAndCreatedAt — WriteDatedSessions 三会话，
+    FileModified [2026-04-02,2026-04-03] → dated-003、dated-002（保持库存日期降序）；
+    CreatedAt [2026-04-01,2026-04-01] → dated-001。
+
+结论：全部验收项通过，任务关闭。

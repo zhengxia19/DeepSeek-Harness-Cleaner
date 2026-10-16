@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-16（T-10 轮）
-Git HEAD：feat(T-10) 3d9ec8e；docs(T-10) 勾选提交紧随其后
+更新时间：2026-10-16（T-11 轮）
+Git HEAD：feat(T-11) e604257；docs(T-11) 勾选提交紧随其后
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -14,10 +14,11 @@ Git HEAD：feat(T-10) 3d9ec8e；docs(T-10) 勾选提交紧随其后
 - T-08 会话物理候选发现：Infrastructure/SessionLogDiscovery.cs（2a64660）
 - T-09 受限日志头部读取：Infrastructure/SessionHeaderReader.cs（fc4a3aa，证据 T-09.txt）
 - T-10 会话库存与磁盘统计：Domain/SessionSummary.cs（ParseStatus 已从 Infrastructure 移入 Domain；DateOrigin/PhysicalLog/SessionSummary{TotalBytes,IsAmbiguous}/AnomalousFile/ScannedLogFile/ScannedSessionDirectory/SessionScanData）+ Application/InventoryService.cs（ISessionScanSource 端口、ISessionInventory、InventoryResult；归并/歧义阻断/状态取最严重/CreatedAt 取最高代际 header/排序日期降序→SessionId 升序）+ tests/InventoryTests.cs（10 用例，含测试侧 ScanSource 适配器组合 SessionLogDiscovery+SessionHeaderReader）；全量 76/76（3d9ec8e，证据 T-10.txt）
+- T-11 会话日期与搜索筛选：Application/SessionFilter.cs（DateFilterField{CreatedAt,LastActivityAt,FileModified}/DateFilter/FilterRequest/SessionFilter.Apply(sessions,request,timeZone)；包含式本地日历日区间、未知日期排除、Project/SessionId 大小写不敏感精确、Keyword 包含、AND 组合、Start>End 抛 ArgumentException、整会话粒度不裁剪）+ tests/FilterTests.cs（11 用例）；全量 87/87（e604257，证据 T-11.txt）
 
 ## 下一个任务
-- T-11 实现会话日期与搜索筛选（前置 T-10 已验收）。范围：Application/SessionFilter.cs、tests/FilterTests.cs。要点：createdAt/lastActivityAt/文件修改日期、项目/ID/关键字过滤，包含式日期范围；缺失值标 Unknown。验收：跨月/跨年/不同偏移时区、start=end、日期为空断言一致；不裁剪事件内容。关联 TC-07（inclusive 日期、跨时区、无日期、ID/项目/关键字）、TC-08（多选：选中仅整会话；取消/重选与过滤后选择正确）。
-- 可复用 API：InventoryService.Scan(sessionsRoot)→InventoryResult{RootErrorCode,Sessions(SessionSummary),AnomalousFiles,TotalBytes}；ScanAsync(ResolvedRoots,ct)→Sessions。SessionSummary 字段见上。注意 LastActivityAt 目前恒为 null（事件时间戳属 T-12 之后）；PhysicalLog.Sha256 恒 null（哈希任务在后）。夹具 WriteDatedSessions(project="proj-dates") 生成 3 个不同修改日期会话（TC-07）。
+- T-12 实现安全 JSONL 事件流（前置 T-05、T-09 均已验收）。范围：Infrastructure/SessionEventReader.cs、tests/EventReaderTests.cs。要点：消费解压字节逐行解析 JSON，限制总量（MaxSessionDecompressedBytes=256MiB）、行长（MaxLineBytes=8MiB），返回行号/状态/未知事件，不修改日志。验收：有效 JSONL 行数与顺序一致；无效行明确报损坏/部分；取消与超限不泄漏句柄。关联 TC-04、TC-20。
+- 可复用 API：ZstdFrameDecoder（Infrastructure/Compression，多帧解码，TruncatedTail/CorruptData→Content 空）；SessionHeaderReader.Read；夹具 FixtureFactory.ZstdFrames/CorruptLine/UnknownEventLine/WriteCorruptJsonSession/WriteTruncatedZstdSession/WriteUnknownEventSession。库存/筛选 API：InventoryService.Scan→InventoryResult；SessionFilter.Apply（事件正文关键字过滤属 T-12 之后）。LastActivityAt 事件时间戳解析属 T-12 之后任务。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
@@ -33,4 +34,4 @@ Git HEAD：feat(T-10) 3d9ec8e；docs(T-10) 勾选提交紧随其后
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-10 提交已排除二者。
 
 ## 收尾状态
-- T-10 全部验收 PASS，已勾选；本轮结束。下一轮从 T-11 开始。
+- T-11 全部验收 PASS，已勾选；本轮结束。下一轮从 T-12 开始。
