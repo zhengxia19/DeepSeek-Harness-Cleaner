@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using DeepSeekHarnessCleaner.Domain;
 using DeepSeekHarnessCleaner.Infrastructure;
 using DeepSeekHarnessCleaner.Infrastructure.Compression;
 using DeepSeekHarnessCleaner.Tests.Fixtures;

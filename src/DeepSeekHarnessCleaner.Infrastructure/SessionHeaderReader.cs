@@ -2,19 +2,10 @@ using System.Globalization;
 using System.Security;
 using System.Text;
 using System.Text.Json;
+using DeepSeekHarnessCleaner.Domain;
 using DeepSeekHarnessCleaner.Infrastructure.Compression;
 
 namespace DeepSeekHarnessCleaner.Infrastructure;
-
-/// <summary>头部解析状态（design.md §1 ParseStatus）。</summary>
-public enum ParseStatus
-{
-    Valid,
-    Partial,
-    Unsupported,
-    Corrupt,
-    Unreadable,
-}
 
 /// <summary>受限 header 行的语义字段。</summary>
 public sealed record SessionHeaderInfo(
