@@ -1,0 +1,19 @@
+# 本地隔离开发环境（不提交）
+.dotnet/
+.nuget/
+.artifacts/
+dist/
+
+# 构建与测试产物
+bin/
+obj/
+TestResults/
+*.user
+*.suo
+.vs/
+.vscode/
+*.binlog
+
+# 编辑器/系统噪声
+Thumbs.db
+Desktop.ini
