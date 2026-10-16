@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DeepSeekHarnessCleaner.Domain\DeepSeekHarnessCleaner.Domain.csproj" />
+    <ProjectReference Include="..\..\src\DeepSeekHarnessCleaner.Application\DeepSeekHarnessCleaner.Application.csproj" />
+    <ProjectReference Include="..\..\src\DeepSeekHarnessCleaner.Infrastructure\DeepSeekHarnessCleaner.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

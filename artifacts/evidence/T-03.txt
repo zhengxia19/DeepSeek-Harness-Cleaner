@@ -1,0 +1,66 @@
+T-03：生成解决方案与依赖锁
+========================================
+完成时间：2026-10-16 16:05 +08:00
+任务：docs/implementation-tasks.md T-03（DeepSeekHarnessCleaner.sln、Directory.Build.props、Directory.Packages.props、NuGet.Config、src/ 四项目、tests/ 项目）
+关联用例：TC-17
+
+一、修改/新增文件（均入库）
+----------------------------------------
+新增 DeepSeekHarnessCleaner.sln（dotnet new sln --format sln；先误生成 .slnx 已删除重建）
+新增 Directory.Build.props      —— LangVersion latest、Nullable enable、ImplicitUsings enable、TreatWarningsAsErrors true、EnableNETAnalyzers、AnalysisLevel latest、RestorePackagesWithLockFile true、NuGetAudit true、SatelliteResourceLanguages en
+新增 Directory.Packages.props   —— 集中管理版本（ManagePackageVersionsCentrally + CentralPackageTransitivePinningEnabled）：ZstdSharp.Port 0.8.8；测试：Microsoft.NET.Test.Sdk 17.12.0、xunit 2.9.3、xunit.runner.visualstudio 2.8.2
+新增 NuGet.Config               —— <clear/> 后仅 https://api.nuget.org/v3/index.json
+新增 src/DeepSeekHarnessCleaner.Domain/…csproj（net10.0，无依赖）
+新增 src/DeepSeekHarnessCleaner.Application/…csproj（net10.0 → Domain）
+新增 src/DeepSeekHarnessCleaner.Infrastructure/…csproj（net10.0 → Domain+Application，PackageReference ZstdSharp.Port）
+新增 src/DeepSeekHarnessCleaner.UI/…csproj（WinExe，net10.0-windows，UseWindowsForms → Application+Infrastructure）+ Program.cs（internal static class Program，[STAThread] Main 空体）
+新增 tests/DeepSeekHarnessCleaner.Tests/…csproj（net10.0，IsPackable=false，xUnit 三件套 → Domain/Application/Infrastructure）+ InfrastructureSmokeTests.cs（2 个 Fact：冒烟 + ZstdSharp 压缩/解压往返）
+新增 packages.lock.json ×5（Domain、Application、Infrastructure、UI、Tests；.gitignore 未忽略，随提交入库）
+
+二、执行过程与退出码
+----------------------------------------
+1) 首次 dotnet restore（解决方案级）——排障过程（重要环境事实）：
+   - 现象：无 PackageReference 的 Domain/Application 单独 restore 退出码 0；含包的 Infrastructure/UI/Tests restore 退出码 1，minimal/normal 日志无任何 NU 错误码。
+   - diagnostic 日志中 MSB4276（WorkloadAutoImportPropsLocator/WorkloadManifestTargetsLocator 解析失败）在成功与失败的项目中都出现，且全局 SDK 10.0.106 同样缺该 Sdks 目录（经 SdkResolvers 解析）→ 确认为噪音，非根因。
+   - 用 `dotnet msbuild … -t:Restore -flp:…;errorlog` 抓到真实错误：
+     error NU1301: 无法加载源 https://api.nuget.org/v3/index.json 的服务索引 / The SSL connection could not be established / Authentication failed / “安全包中没有可用的凭证”
+     → 根因：DSH workspace-write 沙箱阻止 .NET SslStream 访问 Windows 证书存储，TLS 握手失败。
+   - 升级执行后 TLS 通过，但写 %LOCALAPPDATA%\NuGet\v3-cache 被沙箱拒绝（Access to the path … denied，含 NU1900 漏洞数据获取失败）。
+   - 最终条件：会话文件策略 danger-full-access（用户调整）+ NUGET_HTTP_CACHE_PATH=.nuget\http-cache、NUGET_SCRATCH=.artifacts\nuget-scratch、TEMP=.artifacts\tmp（全部项目本地）。
+   命令：dotnet restore .\DeepSeekHarnessCleaner.sln
+   退出码：0（“已还原 … UI/Infrastructure/Tests”，2 个项目最新）
+2) 锁文件生成：5 个 packages.lock.json 全部落盘（见上）；Infrastructure 锁仅含 ZstdSharp.Port + 项目引用；UI 锁经传递引用含 ZstdSharp.Port。
+3) 负向测试（锁定模式）：
+   命令：dotnet restore .\DeepSeekHarnessCleaner.sln --locked-mode
+   退出码：0（5 项目均按锁还原成功）
+4) Release 构建：
+   首次：dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror → 退出码 1（CS0246：测试文件缺 using Xunit）→ 修复 InfrastructureSmokeTests.cs。
+   复跑：退出码 0；“已成功生成。0 个警告 0 个错误”；UI 输出 src\DeepSeekHarnessCleaner.UI\bin\Release\net10.0-windows\DeepSeekHarnessCleaner.UI.dll（TFM=net10.0-windows 实证）。
+5) 测试（额外证据，T-03 验收未强制）：
+   命令：dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   退出码：0；已通过! - 失败: 0，通过: 2，总计: 2（含 ZstdSharp 往返，证明包引用链运行时可用）
+6) 缓存隔离核验：
+   本地 .nuget\packages 子目录数：14（restore 前为 0）；
+   全局 %USERPROFILE%\.nuget\packages 子目录数：83 → 83（前后不变，未向全局缓存写入）。
+
+三、验收标准逐条结论
+----------------------------------------
+1. dotnet restore 首次生成锁文件并提交 → PASS（5 个 packages.lock.json 已生成并随 feat 提交入库）
+2. dotnet build 成功且 UI 项目 target=net10.0-windows → PASS（见 4：退出码 0、0 警告 0 错误；输出路径含 net10.0-windows）
+3. 不引用不必要包 → PASS（运行时依赖仅 ZstdSharp.Port；测试依赖仅 xUnit 三件套 + Test.Sdk；NuGet.Config 仅 nuget.org 官方源；无 WebView2/ORM/原生 DLL）
+4. 集中锁定依赖、警告为错误 → PASS（Directory.Packages.props 集中版本；TreatWarningsAsErrors=true 下构建 0 警告通过）
+
+四、git 提交
+----------------------------------------
+feat 提交：见下方“提交记录（补记）”（sln/props/csproj/Program.cs/测试/锁文件/本证据文件）
+docs 提交：勾选 T-03 + AGENT_CHECKPOINT.md，与本补记同批
+
+提交记录（补记）：
+（feat/docs hash 在提交后补记于 AGENT_CHECKPOINT.md，见 git log --oneline）
+
+五、已知问题 / 遗留
+----------------------------------------
+- NuGet TLS 依赖 Windows 证书存储：在 workspace-write 沙箱内 restore 必现 NU1301“安全包中没有可用的凭证”。后续轮次在受限沙箱下 restore 需一次 danger-full-access 升级或 ACL 修复；本轮会话策略已为 danger-full-access。
+- NUGET_HTTP_CACHE_PATH / NUGET_SCRATCH / TEMP 为命令级设置，未写入 scripts/enter-env.ps1（避免超出 T-03 修改范围）；后续如需固化由脚本对应任务处理。
+- MSB4276 workload locator 报错为本地/全局 SDK 共有的无害噪音（构建仍成功）。
+- scripts/build.ps1、test.ps1、publish.ps1 尚未创建（文档称 T-03 后有效，但未列入 T-03 修改范围，未擅自创建）。

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ZstdSharp.Port" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DeepSeekHarnessCleaner.Domain\DeepSeekHarnessCleaner.Domain.csproj" />
+    <ProjectReference Include="..\DeepSeekHarnessCleaner.Application\DeepSeekHarnessCleaner.Application.csproj" />
+  </ItemGroup>
+
+</Project>

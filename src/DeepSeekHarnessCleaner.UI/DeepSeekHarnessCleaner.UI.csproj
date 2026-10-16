@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DeepSeekHarnessCleaner.Application\DeepSeekHarnessCleaner.Application.csproj" />
+    <ProjectReference Include="..\DeepSeekHarnessCleaner.Infrastructure\DeepSeekHarnessCleaner.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
