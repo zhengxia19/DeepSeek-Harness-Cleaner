@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-16（T-13 轮）
-Git HEAD：feat(T-13) 9fdb62e；docs(T-13) 勾选提交紧随其后
+更新时间：2026-10-16（T-14 轮）
+Git HEAD：feat(T-14) 4610b45；docs(T-14) 勾选提交紧随其后
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -17,10 +17,11 @@ Git HEAD：feat(T-13) 9fdb62e；docs(T-13) 勾选提交紧随其后
 - T-11 会话日期与搜索筛选：Application/SessionFilter.cs（DateFilterField{CreatedAt,LastActivityAt,FileModified}/DateFilter/FilterRequest/SessionFilter.Apply(sessions,request,timeZone)；包含式本地日历日区间、未知日期排除、Project/SessionId 大小写不敏感精确、Keyword 包含、AND 组合、Start>End 抛 ArgumentException、整会话粒度不裁剪）+ tests/FilterTests.cs（11 用例）；全量 87/87（e604257，证据 T-11.txt）
 - T-12 安全 JSONL 事件流：Infrastructure/SessionEventReader.cs（EventLineStatus{Valid,Unknown,MalformedJson,NotObject,TooLong}；EventLine{LineNumber 1 基含 TooLong,Status,EventType}；SessionEventReadResult{Status,Lines,ErrorCode}+UnknownCount/MalformedCount/IsReadComplete；Read(fullPath,maxLineBytes=8MiB,maxTotalBytes=256MiB,cancellationToken)；zstd→ZSTD_TRUNCATED/ZSTD_CORRUPT/EVENTS_EMPTY/TOTAL_LIMIT，明文同样限额；聚合 0 行→Corrupt/EVENTS_EMPTY、全畸形→Corrupt/EVENTS_ALL_MALFORMED、有畸形/超长→Partial；KnownEventTypes={header,message,attachment_ref} 由 fixture 绑定；每行检查取消，using FileStream 不泄漏句柄）+ tests/EventReaderTests.cs（13 用例，含读前后字节一致证明不修改日志）；全量 100/100（577e074，证据 T-12.txt）
 - T-13 V4 可验证消息预览：Application/TranscriptProjector.cs（record PreviewItem(Role,Text,At,IsPartial)；record TranscriptProjection(Items,Truncated,IncompleteCount)+IsProjectionComplete；TranscriptProjector.Project(transcriptText,maxItems=2000,ct) 逐行投影，每行检查取消；仅 fixture 确证 message 事件（role∈{user,assistant}、text 为字符串）转 PreviewItem；header/attachment_ref 跳过；缺字段/非文本/未确证角色/未知类型/非对象/无效 JSON→IsPartial 摘要含 1 基行号+原因、正文不保留；附加字段如 reasoning/api_key 不进预览；Project 接收已解码 JSONL 文本，zstd 由调用方解码）+ tests/TranscriptV4Tests.cs（11 用例，zstd 金样经 ZstdFrameDecoder.Decode 后断言角色顺序/文本/时间戳精确匹配）；全量 111/111（9fdb62e，证据 T-13.txt）
+- T-14 旧版本预览安全退化：Application/LegacyPreview.cs（enum LegacyPreviewMode{Projected,MetadataOnly}；record LegacyPreviewResult(Mode,PreviewGeneration,MetadataLines,Projection,SupportsRawBackup,Reason)；SelectPreviewGeneration=数值最高规范代际，无候选 null；Build(summary,已解码文本或 null)：无日志/最高代际不可读→MetadataOnly+不回退理由，代际 schema 未经 fixture 确证（FixtureVerifiedGenerations=[0,4]，v1-v3 无 fixture→仅元数据、不猜正文）→MetadataOnly，已确证→复用 TranscriptProjector 投影；SupportsRawBackup 恒 true；元数据行=会话/项目/创建时间 O 格式+DateOrigin/状态/各代际明细/预览代际）+ tests/LegacyPreviewTests.cs（11 用例：最高代际选择、v0 金样投影无虚构、v1-v3 Theory 仅元数据不含正文、v0+v4 损坏不回退、v0 未知事件标记不完整含行号、坏 JSON 仍可备份、空数据不崩溃、无代际、元数据行内容）；全量 122/122（4610b45，证据 T-14.txt）
 
 ## 下一个任务
-- T-14 实现旧版本预览安全退化（**前置 T-12**，已验收）。范围：Application/LegacyPreview.cs、tests/LegacyPreviewTests.cs。要点：为 v0-v3 提供元数据和已验证类型的保守摘要；不实现完整官方迁移；最高代际失败不隐式回退。验收：旧版未知结构显示"不完整/仅元数据"；无法解析时仍支持原始备份；不存在虚构的消息。关联 TC-06,TC-20。定义见 docs/implementation-tasks.md:164-171（下轮先读原文）。
-- 可复用 API：TranscriptProjector.Project（见上）；SessionEventReader.Read→SessionEventReadResult；ZstdFrameDecoder.Decode(Stream)→ZstdDecodeResult(IsSuccess,Content,Error)；SessionHeaderReader.Read；夹具 FixtureFactory.HeaderLine/MessageLine/UnknownEventLine/CorruptLine/WriteValidV0Session/WriteValidV4Session/WriteUnknownEventSession 等。库存/筛选：InventoryService.Scan；SessionFilter.Apply（事件正文关键字过滤属后续任务）。
+- T-15 建立附件引用证据索引（**前置 T-12**，已验收）。范围：Application/AttachmentIndex.cs、tests/AttachmentIndexTests.cs。要点：仅从已验证事件/路径建立引用；解析缺口时状态 Unknown，不自动标记孤儿。验收：多会话共享附件仍为 referenced；任一未解析会话使全局孤儿结论不可得；无自动删除。关联 TC-14。定义见 docs/implementation-tasks.md:174-181（下轮先读原文）。
+- 可复用 API：TranscriptProjector.Project、LegacyPreview.SelectPreviewGeneration/Build（见上）；SessionEventReader.Read→SessionEventReadResult（EventType 已知类型含 attachment_ref）；ZstdFrameDecoder.Decode(Stream)→ZstdDecodeResult(IsSuccess,Content,Error)；SessionHeaderReader.Read；InventoryService.Scan；SessionFilter.Apply；夹具 FixtureFactory.HeaderLine/MessageLine/AttachmentRefLine/UnknownEventLine/CorruptLine/WriteValidV0Session/WriteValidV4Session/WriteUnknownEventSession 等。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
@@ -36,4 +37,4 @@ Git HEAD：feat(T-13) 9fdb62e；docs(T-13) 勾选提交紧随其后
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-10 提交已排除二者。
 
 ## 收尾状态
-- T-13 全部验收 PASS（build exit 0；111/111 测试），已勾选；本轮结束。下一轮从 T-14 开始。
+- T-14 全部验收 PASS（build exit 0；122/122 测试），已勾选；本轮结束。下一轮从 T-15 开始。

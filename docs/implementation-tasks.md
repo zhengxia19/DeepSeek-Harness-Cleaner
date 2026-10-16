@@ -163,7 +163,7 @@
 
 ### T-14 — 实现旧版本预览安全退化
 
-- [ ] **T-14：实现旧版本预览安全退化**
+- [x] **T-14：实现旧版本预览安全退化**（2026-10-16，证据 artifacts/evidence/T-14.txt，feat 4610b45）
 - **前置**：T-12。
 - **修改范围**：`Application/LegacyPreview.cs、tests/LegacyPreviewTests.cs`。
 - **任务边界**：为 v0-v3 提供元数据和已验证类型的保守摘要；不实现完整官方迁移；最高代际失败不隐式回退。

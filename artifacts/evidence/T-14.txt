@@ -1,0 +1,44 @@
+T-14 实现旧版本预览安全退化 — 验收证据
+日期：2026-10-16
+分支：main
+feat 提交：4610b45（src/DeepSeekHarnessCleaner.Application/LegacyPreview.cs、tests/DeepSeekHarnessCleaner.Tests/LegacyPreviewTests.cs）
+
+== 实施内容 ==
+- LegacyPreviewMode { Projected, MetadataOnly }；LegacyPreviewResult(Mode, PreviewGeneration, MetadataLines, Projection, SupportsRawBackup, Reason)。
+- LegacyPreview.SelectPreviewGeneration：预览代际 = 数值最高的规范物理日志代际（design.md §31）；无候选返回 null。
+- LegacyPreview.Build(summary, previewGenerationTranscript)：
+  * 无物理日志 → MetadataOnly（"会话没有可预览的物理日志文件。"）。
+  * 最高代际文本 null/空 → MetadataOnly，Reason 明示"不回退到更低代际"；绝不使用更低代际文本假装当前内容。
+  * 代际 schema 未经脱敏 fixture 确证（FixtureVerifiedGenerations = [0, 4]，v1-v3 无 fixture）→ MetadataOnly，仅元数据摘要，不猜测事件正文。
+  * 已确证代际 → 复用 T-13 TranscriptProjector 投影；未知/坏事件标记"不完整事件：第 N 行（原因）"。
+  * SupportsRawBackup 恒为 true：预览失败不阻断原始文件备份（design.md §35 最低保证）。
+- 元数据行：会话/项目/创建时间(O 格式 + DateOrigin)/库存状态/各代际（压缩、字节、修改时间、状态）/预览代际。
+- 分层：Application 只依赖 Domain + System；解码（zstd）由调用方完成后传入文本，Application 不引用 Infrastructure。
+
+== 命令与退出码 ==
+1) . .\scripts\enter-env.ps1; $env:TEMP="$PWD\.artifacts\tmp"; $env:TMP=$env:TEMP; dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror
+   → 0 个警告 0 个错误，BUILD_EXIT=0
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   → 已通过! - 失败: 0，通过: 122，已跳过: 0，总计: 122，TEST_EXIT=0
+   （111 存量 + 11 新增 LegacyPreviewTests，无回归）
+
+== 验收逐项核对 ==
+[通过] 旧版未知结构显示"不完整/仅元数据"：
+  - V0UnknownStructure_MarkedIncomplete_NotGuessed：v0 未知事件 quantum_event → IsPartial，Text 含类型与"第 2 行"，IsProjectionComplete=false。
+  - UnverifiedGeneration_MetadataOnly_NoFabricatedMessages（v1/v2/v3 Theory）：Mode=MetadataOnly，Projection=null，Reason 含"未经脱敏 fixture 确证"。
+[通过] 无法解析时仍支持原始备份：
+  - CorruptTranscript_MarkedIncomplete_StillSupportsRawBackup、EmptyTranscript_MetadataOnly_NoCrash、HighestGenerationUnreadable_NoFallbackToOlder：SupportsRawBackup=true，不抛异常。
+[通过] 不存在虚构的消息：
+  - V0FixtureSession_ProjectsVerifiedMessages_NoFabrication：仅金样 fixture 确证的 user 消息被投影（Single + 精确文本）。
+  - v1-v3 元数据模式断言 DoesNotContain 事件正文；元数据行不含任何猜测正文。
+[通过] 最高代际失败不隐式回退：
+  - HighestGenerationUnreadable_NoFallbackToOlder：v0 Valid + v4 Corrupt，transcript=null → PreviewGeneration=4、MetadataOnly、Projection=null（不回退展示 v0 内容）。
+[通过] TC-06：旧版未知事件标记不完整、不崩溃（V0UnknownStructure 测试）。
+[通过] TC-20：空数据、坏 JSON、无代际均不崩溃、无误删语义（Empty/Corrupt/NoGenerations 测试）。
+
+== 边界遵守 ==
+- 未实现完整官方 v0-v3 迁移；仅元数据 + fixture 确证类型摘要。
+- 修改范围仅任务指定的 Application/LegacyPreview.cs 与 tests/LegacyPreviewTests.cs；无新 NuGet 包。
+- 测试全部在合成 fixture 根（重定向 TEMP 下），未触碰真实 %USERPROFILE%\.dsh。
+
+结论：全部验收项通过，任务关闭。
