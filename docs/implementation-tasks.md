@@ -33,7 +33,7 @@
 
 ### T-01 — 初始化仓库骨架
 
-- [ ] **T-01：初始化仓库骨架**
+- [x] **T-01：初始化仓库骨架** — 完成于 2026-10-16，证据 `artifacts/evidence/T-01.txt`，commit `6cc56f1`。
 - **前置**：无。
 - **修改范围**：`根目录 README/CHANGELOG/CONTRIBUTING、docs/、src/、tests/、scripts/、.gitignore`。
 - **任务边界**：只创建设计约定的目录和 Git 忽略规则；不安装 SDK，不实现功能。
