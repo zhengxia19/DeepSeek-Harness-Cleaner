@@ -1,0 +1,36 @@
+T-16 识别单会话投影缓存 — 验收证据
+日期：2026-10-16
+分支：main
+提交：feat eaeb8a6（src/DeepSeekHarnessCleaner.Infrastructure/SessionCacheIndex.cs、tests/DeepSeekHarnessCleaner.Tests/CacheIndexTests.cs）
+关联用例：TC-12（识别半边；删除执行属 T-27）
+
+一、实施内容
+- 新增 SessionCacheIndex（Infrastructure 层，只读索引）：
+  * 扫描 <storagesRoot>/session_projcache/sessions/ 顶层条目，按 <id>.json 命名与目录布局关联专属投影缓存。
+  * 状态：Matched（ID 与调用方提供的已知会话清单精确 Ordinal 匹配）/ Unmatched（命名合规但 ID 不在清单）/ Unknown（无法确认映射）。
+  * Unknown 原因码：CACHE_STRUCTURE_MISMATCH（目录条目、非 .json、空 ID、session_projcache 非目录、sessions 非目录）、PATH_REPARSE（reparse 条目/目录，不跟随）、CACHE_NAME_COLLISION（同名冲突防御）、CACHE_INVENTORY_MISSING（清单为空）、FILE_ACCESS_DENIED。
+  * 全量缓存候选仅记录不展开：session_projcache/ 目录 + session_projcache.json（供 T-27 显式勾选）。
+  * 只读：不创建/写入/删除任何文件；workspace.json 不在索引范围，任何结果条目均不指向它。
+  * 根有效性沿用 PathGuard.Check(root, root) 哨兵（与 SessionLogDiscovery 一致）；根无效返回 RootErrorCode。
+- 新增 CacheIndexTests 10 个测试（夹具合成根，未触碰真实 %USERPROFILE%\.dsh）。
+
+二、命令与退出码
+- dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror → EXIT=0（0 警告 0 错误）
+- dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build → EXIT=0
+  已通过! - 失败: 0，通过: 142，已跳过: 0，总计: 142（原 132 + 新增 10）
+- 过程记录：首轮构建 CS0103（元组解构丢弃符）修复；首轮测试 ReparseCacheEntry 因 junction 父目录未建 mklink 退出 1，补建目录后全绿。
+
+三、逐项验收
+1. 匹配与不匹配缓存分别标记 → 通过：MatchedAndUnmatched_AreMarkedSeparately（s-1/s-2 Matched 含 SessionId；s-9 Unmatched + CACHE_ID_NOT_IN_INVENTORY）。
+2. cache 文件保持不变 → 通过：Build_IsReadOnly_CacheAndWorkspaceJsonBytesUnchanged（Build 前后缓存文件与 workspace.json 字节逐一相等）。
+3. 无法确认映射则 Unknown → 通过：EmptyInventory_WellFormedCache_IsUnknown、DirectoryEntry_IsUnknown_StructureMismatch、NonJsonAndEmptyId_AreUnknown、ReparseCacheEntry_IsUnknown_NotFollowed、SessionsDirReparse_IsAnomaly_WholeCacheStillListed。
+4. 只建只读索引、不修改 workspace.json → 通过：索引不列举 workspace.json（断言 DedicatedCaches/WholeCacheCandidates/Anomalies 均不含其路径），且字节不变。
+5. 边界（按命名与目录布局关联、不猜测映射）→ 通过：仅精确 Ordinal 匹配才 Matched；空清单→Unknown；缺失布局→空结果不崩溃（MissingLayout_ReturnsEmptyResult_NoCrash）；根无效→RootErrorCode（InvalidRoot_ReportsRootErrorCode）。
+6. 全量缓存候选记录 → 通过：WholeCacheCandidates_AreListedForExplicitSelection（目录 + session_projcache.json，含长度）。
+
+四、范围与边界说明
+- 仅新增任务规定的两个文件；未改 Domain/Application/UI；未新增 NuGet 包。
+- 真实 %USERPROFILE%\.dsh 与 %APPDATA%\@deepseek-ai\dsh-desktop 未写入/移动/删除；测试全部在夹具合成根（重定向 TEMP 下）。
+- 删除动作与 Harness 退出检查属 T-27，本任务未实施。
+
+结论：全部验收项通过，任务关闭。

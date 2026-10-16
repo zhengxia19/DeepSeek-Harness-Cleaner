@@ -183,7 +183,7 @@
 
 ### T-16 — 识别单会话投影缓存
 
-- [ ] **T-16：识别单会话投影缓存**
+- [x] **T-16：识别单会话投影缓存**（2026-10-16，证据 artifacts/evidence/T-16.txt，feat eaeb8a6）
 - **前置**：T-07,T-10。
 - **修改范围**：`Infrastructure/SessionCacheIndex.cs、tests/CacheIndexTests.cs`。
 - **任务边界**：按 <id>.json 命名和目录布局关联专属缓存，只建只读索引，不修改 workspace.json。
