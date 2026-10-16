@@ -103,7 +103,7 @@
 
 ### T-08 — 发现会话物理候选
 
-- [ ] **T-08：发现会话物理候选**
+- [x] **T-08：发现会话物理候选**（2026-10-16，证据 artifacts/evidence/T-08.txt，feat 2a64660）
 - **前置**：T-07。
 - **修改范围**：`Infrastructure/SessionLogDiscovery.cs、tests/DiscoveryTests.cs`。
 - **任务边界**：扫描规范命名的会话日志并提取 generation/编码，列出异常/冲突文件。

@@ -1,0 +1,37 @@
+T-08 发现会话物理候选 — 验收证据
+日期: 2026-10-16  分支: main  feat 提交: 2a64660
+任务定义: docs/implementation-tasks.md T-08（前置 T-07 已验收 e3ac223）
+修改范围: src/DeepSeekHarnessCleaner.Infrastructure/SessionLogDiscovery.cs（新增）、tests/DeepSeekHarnessCleaner.Tests/DiscoveryTests.cs（新增）。未越界。
+
+== 实现摘要 ==
+SessionLogDiscovery（只读扫描，不创建/写入/删除）：
+- Discover(sessionRoot) → DiscoveryResult(RootErrorCode, Candidates, Anomalies)。根经 PathGuard 探测（Check(root,root)：PATH_ESCAPE=根合法哨兵；ROOT_INVALID/PATH_REPARSE/FILE_ACCESS_DENIED→不扫描）。
+- 递归进入普通目录；reparse 目录列入异常（PATH_REPARSE）且不进入；目录不可访问→FILE_ACCESS_DENIED 异常。
+- 每个文件经 PathGuard.Check 校验（越界/reparse/不可检查 fail closed）。
+- 白名单名（PathGuard.IsSessionFileName，大小写敏感）按目录归组为 SessionCandidate：generation（session.jsonl(.zstd)=0；session.vN= N，N 溢出→异常）、encoding（.zstd→Zstd 否则 Plain）、Length。
+- 同一目录多代际=同一会话一个候选（TC-03）；同代际同时 Plain+Zstd→ConflictingGenerations 非空、IsAmbiguous=true（design.md §2 阻止清理）。
+- 异常分类：NOT_WHITELISTED（大写/临时/备份/不规则名）、UNEXPECTED_LOCATION（白名单名直放根下）、PATH_REPARSE、FILE_ACCESS_DENIED、MISSING。
+
+== 命令与退出码 ==
+. .\scripts\enter-env.ps1; $env:TEMP="$PWD\.artifacts\tmp"; $env:TMP=$env:TEMP
+dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror → 0 个错误, BUILD_EXIT=0
+dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build → 已通过! 失败:0, 通过:53, 总计:53, TEST_EXIT=0（44 存量 + 9 新增 DiscoveryTests）
+
+== 验收逐项 ==
+1) v0、vN、明文与 zstd 均识别：CanonicalNames_AllGenerationsAndEncodings_Recognized（session.jsonl→gen0/Plain、session.jsonl.zstd→gen0/Zstd、session.v7.jsonl→gen7/Plain、session.v4.jsonl.zstd→gen4/Zstd，Length 断言）→ 通过。
+2) 同代双编码冲突标记：SameGenerationDualEncoding_FlaggedAmbiguous（夹具 session.v4.jsonl + session.v4.jsonl.zstd → IsAmbiguous=true, ConflictingGenerations=[4]）→ 通过。
+3) 多代际归组（TC-03）：MultiGeneration_SameDirectory_GroupedAsOneSession（v0+v4 同目录=1 候选 2 物理文件，不冲突）→ 通过。
+4) 不规则目录/文件标记异常：NonWhitelistedNames_Flagged_NotCandidates（Session.jsonl 大写、session.v0.jsonl、.bak、session.vX.jsonl、notes.txt 共 5 项 NOT_WHITELISTED）；WhitelistedNameDirectlyUnderRoot_FlaggedUnexpectedLocation；JunctionDirectory_FlaggedReparse_NotScanned（mklink /J 目录不进入，异常 PATH_REPARSE）→ 通过。
+5) 无写入：Discovery_IsReadOnly_TreeAndSentinelUnchanged（Discover 前后整树相对路径集合相等 + 根外 sentinel SHA-256 不变）→ 通过。实现仅 Enumerate/GetAttributes/FileInfo.Length。
+6) 根错误：InvalidRoots_ReturnRootError_WithoutScanning（驱动器根/不存在根/空串→ROOT_INVALID）→ 通过。
+
+== 隔离 ==
+全部测试在夹具根 %TEMP%\dshcleaner-fixtures\fx-<guid>（T-04 夹具）下创建/删除；未触碰真实 %USERPROFILE%\.dsh 与 %APPDATA%\@deepseek-ai\dsh-desktop；FixtureIsolationTests 在 53 项全绿中保持通过。
+
+== 开发发现（供后续任务）==
+- NTFS 大小写不敏感：同目录内 "Session.jsonl" 与 "session.jsonl" 是同一文件，大小写白名单测试必须放独立目录（首轮 5→4 异常即此因，已修正测试而非实现）。
+- Infrastructure 项目内 `Security.SecurityException` 简写解析失败（CS0103），需显式 using System.Security。
+- 夹具 junction 须在 FixtureRoot.Dispose 前 Directory.Delete(link,false)（recursive 删不了 junction）。
+- 根合法性探测技巧：PathGuard.Check(root,root) 返回 PATH_ESCAPE 即根合法（根自身非候选的拒绝哨兵）。
+
+结论: PASS（全部验收项通过）。
