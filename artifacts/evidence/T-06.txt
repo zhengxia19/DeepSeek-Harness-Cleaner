@@ -1,0 +1,52 @@
+T-06 定位授权数据根 — 验收证据
+日期: 2026-10-16  分支: main  feat 提交: 00e6101（前置 HEAD f0cd071）
+任务定义: docs/implementation-tasks.md T-06（前置 T-03 已验收）
+结论: PASS
+
+== 交付文件（与任务修改范围一致）==
+- src/DeepSeekHarnessCleaner.Domain/ResolvedRoots.cs
+  RootSource{Default,EnvironmentVariable,UserSelected}、RootProbeStatus{Valid,Missing,NotHarness}、
+  RootProbe(HomePath,Source,Status,ErrorCode)、ResolvedRoots(DshHome,SessionRoot,StorageRoot,
+  AttachmentRoot,DesktopHome,DshProbe,DesktopProbe)。DTO 名称仅存在于源码（design.md §1 允许）。
+- src/DeepSeekHarnessCleaner.Infrastructure/RootLocator.cs
+  Resolve(selectedDshHome?, selectedDesktopHome?)。优先级：用户选择 > DSH_HOME 环境变量 >
+  %USERPROFILE%\.dsh；桌面根：%APPDATA%\@deepseek-ai\dsh-desktop（可被选择覆盖）。
+  结构校验标记：.dsh 需同时存在 sessions/storages/attachments（architecture.md §5 三个受控区域）；
+  桌面根需 Cache + 任一 {Code Cache, GPUCache, logs}（Electron userData 标记）。
+  标记依据本轮只读探测的真实根结构（见下）。
+- tests/DeepSeekHarnessCleaner.Tests/RootLocatorTests.cs（10 个 TC-01 用例，全部在 %TEMP% 合成根上运行）
+
+== 真实根只读探测（本轮执行，未写入）==
+%USERPROFILE%\.dsh 顶层目录: attachments, dsh-runtimes, profiles, sessions, storages
+  → 三个必需标记目录全部存在，Default 用例断言其 DshProbe=Valid 通过。
+%APPDATA%\@deepseek-ai\dsh-desktop 顶层含 Cache, Code Cache, GPUCache, DawnGraphiteCache,
+  DawnWebGPUCache, logs 等 → DesktopProbe=Valid 通过。
+
+== 命令与退出码 ==
+. .\scripts\enter-env.ps1; $env:TEMP="$PWD\.artifacts\tmp"; $env:TMP=$env:TEMP
+dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror → BUILD_EXIT=0（0 个错误）
+dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build → TEST_EXIT=0
+已通过! - 失败: 0，通过: 31，已跳过: 0，总计: 31（原 21 + 新增 10）
+
+== 验收逐项核对 ==
+1) 默认根按合同响应: Default_UsesUserProfileDshAndAppDataDesktop — 路径形态 .dsh\sessions|storages|attachments、
+   APPDATA\@deepseek-ai\dsh-desktop，Source=Default；真实根存在时断言 Valid。通过。
+2) 自定义根按合同响应: CustomSelection_ValidSyntheticRoots_AreAccepted、UserSelection_OverridesEnvironmentVariable、
+   DshHomeEnvironmentVariable_UsedWhenNoSelection（DSH_HOME → Source=EnvironmentVariable）。通过。
+3) 不存在根: MissingRoot_ReportsMissing_AndCreatesNothing — Status=Missing、ErrorCode=null。通过。
+4) 非 Harness 目录: EmptyDirectory_IsNotHarness_RootInvalid、PartialMarkers_AreNotHarness（缺 attachments）、
+   DesktopRoot_RequiresCachePlusEvidenceDir（仅 Cache → NotHarness；Cache+GPUCache → Valid）、
+   InvalidPathCharacters_AreRejectedWithoutThrowing（内嵌 NUL → NotHarness + ROOT_INVALID，不抛异常）。通过。
+5) 禁止扫描过程创建源目录: MissingRoot 用例断言 Resolve 后 %TEMP% 下条目集合不变、缺失路径仍不存在；
+   RootLocator 仅调用 Directory.Exists/EnumerateDirectories，无任何创建/写入/删除调用。通过。
+6) 大小写不敏感（Windows）: Resolve_IsCaseInsensitiveOnMarkerNames（Sessions/Storages/Attachments → Valid）。通过。
+
+== 开发期实测发现（已修复并留证）==
+- Directory.EnumerateDirectories 返回完整路径而非目录名，首版标记匹配全部 NotHarness；改为 Path.GetFileName 后修复。
+- Path.GetFullPath 对 "<>" 等字符在 .NET Core 不再抛异常（归类 Missing）；内嵌 NUL 才抛 ArgumentException，
+  无效路径用例改用 "C:\bad\0path"。
+- 测试构造/Dispose 保存并恢复进程 DSH_HOME 环境变量，避免污染其他测试。
+
+== 安全红线 ==
+未写入/移动/删除真实 %USERPROFILE%\.dsh 与 %APPDATA%\@deepseek-ai\dsh-desktop（仅 Exists/EnumerateDirectories 只读探测）；
+创建/缺失类断言全部在 %TEMP% 合成根进行，测试结束删除。无新增 NuGet 包。

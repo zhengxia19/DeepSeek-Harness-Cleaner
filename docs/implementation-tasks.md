@@ -83,7 +83,7 @@
 
 ### T-06 — 定位授权数据根
 
-- [ ] **T-06：定位授权数据根**
+- [x] **T-06：定位授权数据根**（2026-10-16，证据 artifacts/evidence/T-06.txt，feat 00e6101）
 - **前置**：T-03。
 - **修改范围**：`Infrastructure/RootLocator.cs、Domain/ResolvedRoots.cs、tests/RootLocatorTests.cs`。
 - **任务边界**：使用 USERPROFILE/APPDATA/可选 DSH_HOME 显式根，识别会话/存储/附件/桌面目录并返回状态。
