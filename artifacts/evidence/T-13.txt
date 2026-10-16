@@ -1,0 +1,49 @@
+T-13 实现 V4 可验证消息预览 — 验收证据
+日期：2026-10-16
+分支：main
+提交：feat 9fdb62e（src/DeepSeekHarnessCleaner.Application/TranscriptProjector.cs、tests/DeepSeekHarnessCleaner.Tests/TranscriptV4Tests.cs）
+
+== 实施内容 ==
+- 新增 Application/TranscriptProjector.cs：
+  * record PreviewItem(string Role, string Text, DateTimeOffset? At, bool IsPartial)（design.md §14）。
+  * record TranscriptProjection(Items, Truncated, IncompleteCount) + IsProjectionComplete。
+  * TranscriptProjector.Project(transcriptText, maxItems=2000, ct)：逐行 JSONL 投影；
+    MaxPreviewItems=2000（design.md §34，超限 Truncated=true、不假装完整）；
+    每行检查 CancellationToken。
+  * 仅 fixture 确证的 message 事件（type=message，role ∈ {user, assistant}，text 为字符串）
+    转为 PreviewItem；header/attachment_ref 跳过；缺字段/非文本/未确证角色/未知类型/
+    非对象/无效 JSON → IsPartial 不完整摘要（含 1-based 行号与原因，正文不保留）。
+  * 纯文本赋值，无 Markdown/HTML 渲染；reasoning/api_key 等附加字段不进入预览。
+- 边界：Projector 接收已解码 JSONL 文本（Application 不引用 Infrastructure）；
+  zstd 解码由调用方/测试完成（测试用 ZstdFrameDecoder.Decode 后投影）。
+
+== 命令与退出码 ==
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror
+   → BUILD_EXIT=0（0 警告 0 错误；前两轮修复 CS1739 命名实参、CS1503 Parse(span) 后通过）
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   → TEST_EXIT=0；已通过! - 失败: 0，通过: 111，总计: 111（100 存量 + 11 新增 TranscriptV4Tests）
+
+== 验收逐项 ==
+- 角色顺序/纯文本与 fixture 金样一致：
+  V4FixtureGolden_RoleOrderAndPlainTextMatch（zstd fixture WriteValidV4Session 解码后
+  断言 Roles=[user,assistant]、Texts 精确匹配、At 精确匹配 2026-02-10T10:01/10:02Z、
+  IsProjectionComplete=true）；PlainV4Session_PreviewMatchesZstdProjection（纯文本同金样）。
+- 缺字段标记不完整：MissingTextField_MarkedIncomplete（无 text → IsPartial，摘要含"第 2 行"）。
+- 非文本标记不完整：NonTextContent_MarkedIncomplete（text:42 → IsPartial）。
+- 未知 schema 标记不完整：UnknownSchema_MarkedIncompleteWithSummary_NoCrash
+  （quantum_event → IsPartial，摘要含类型与行号，不猜测语义）；
+  MalformedLine_MarkedIncomplete_NoCrash（无效 JSON → IsPartial）；
+  UnconfirmedRole_MarkedIncomplete（role=tool 未确证 → IsPartial）。
+- 不展示推理/密钥：ReasoningAndSecretFields_NotDisplayed
+  （仅 text 进入预览；"hidden chain of thought"、"sk-secret" 不出现在任何 PreviewItem）。
+- TC-06（testing.md）：v4 角色文本正确 + 旧版/未知事件标记不完整、不崩溃 — 上述用例覆盖。
+- 附加边界：HeaderAndAttachmentRef_SkippedFromPreview；
+  PreviewLimit_TruncatesAndDoesNotPretendComplete（maxItems=2 → Truncated、不完整）；
+  Cancellation_StopsProjection（预取消 token → OperationCanceledException）。
+
+== 约束遵守 ==
+- 修改范围仅任务规定的两个文件；无新 NuGet 包；分层 Application→Domain（System.Text.Json 属 BCL）。
+- 测试全部在隔离合成 fixture 根（FixtureRoot，重定向 TEMP 下），未触碰真实 %USERPROFILE%\.dsh。
+- TreatWarningsAsErrors 下 0 警告构建通过。
+
+结论：全部验收项通过，T-13 勾选关闭。

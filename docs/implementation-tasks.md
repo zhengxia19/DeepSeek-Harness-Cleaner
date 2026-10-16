@@ -153,7 +153,7 @@
 
 ### T-13 — 实现 V4 可验证消息预览
 
-- [ ] **T-13：实现 V4 可验证消息预览**
+- [x] **T-13：实现 V4 可验证消息预览**（2026-10-16，证据 artifacts/evidence/T-13.txt，feat 9fdb62e）
 - **前置**：T-12。
 - **修改范围**：`Application/TranscriptProjector.cs、tests/TranscriptV4Tests.cs`。
 - **任务边界**：仅将已从 Harness 0.2.0.0 脱敏 fixture 确证的用户/助手文本事件转成 PreviewItem。

@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-16（T-12 轮）
-Git HEAD：feat(T-12) 577e074；docs(T-12) 勾选提交紧随其后
+更新时间：2026-10-16（T-13 轮）
+Git HEAD：feat(T-13) 9fdb62e；docs(T-13) 勾选提交紧随其后
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -16,16 +16,17 @@ Git HEAD：feat(T-12) 577e074；docs(T-12) 勾选提交紧随其后
 - T-10 会话库存与磁盘统计：Domain/SessionSummary.cs（ParseStatus 已从 Infrastructure 移入 Domain；DateOrigin/PhysicalLog/SessionSummary{TotalBytes,IsAmbiguous}/AnomalousFile/ScannedLogFile/ScannedSessionDirectory/SessionScanData）+ Application/InventoryService.cs（ISessionScanSource 端口、ISessionInventory、InventoryResult；归并/歧义阻断/状态取最严重/CreatedAt 取最高代际 header/排序日期降序→SessionId 升序）+ tests/InventoryTests.cs（10 用例，含测试侧 ScanSource 适配器组合 SessionLogDiscovery+SessionHeaderReader）；全量 76/76（3d9ec8e，证据 T-10.txt）
 - T-11 会话日期与搜索筛选：Application/SessionFilter.cs（DateFilterField{CreatedAt,LastActivityAt,FileModified}/DateFilter/FilterRequest/SessionFilter.Apply(sessions,request,timeZone)；包含式本地日历日区间、未知日期排除、Project/SessionId 大小写不敏感精确、Keyword 包含、AND 组合、Start>End 抛 ArgumentException、整会话粒度不裁剪）+ tests/FilterTests.cs（11 用例）；全量 87/87（e604257，证据 T-11.txt）
 - T-12 安全 JSONL 事件流：Infrastructure/SessionEventReader.cs（EventLineStatus{Valid,Unknown,MalformedJson,NotObject,TooLong}；EventLine{LineNumber 1 基含 TooLong,Status,EventType}；SessionEventReadResult{Status,Lines,ErrorCode}+UnknownCount/MalformedCount/IsReadComplete；Read(fullPath,maxLineBytes=8MiB,maxTotalBytes=256MiB,cancellationToken)；zstd→ZSTD_TRUNCATED/ZSTD_CORRUPT/EVENTS_EMPTY/TOTAL_LIMIT，明文同样限额；聚合 0 行→Corrupt/EVENTS_EMPTY、全畸形→Corrupt/EVENTS_ALL_MALFORMED、有畸形/超长→Partial；KnownEventTypes={header,message,attachment_ref} 由 fixture 绑定；每行检查取消，using FileStream 不泄漏句柄）+ tests/EventReaderTests.cs（13 用例，含读前后字节一致证明不修改日志）；全量 100/100（577e074，证据 T-12.txt）
+- T-13 V4 可验证消息预览：Application/TranscriptProjector.cs（record PreviewItem(Role,Text,At,IsPartial)；record TranscriptProjection(Items,Truncated,IncompleteCount)+IsProjectionComplete；TranscriptProjector.Project(transcriptText,maxItems=2000,ct) 逐行投影，每行检查取消；仅 fixture 确证 message 事件（role∈{user,assistant}、text 为字符串）转 PreviewItem；header/attachment_ref 跳过；缺字段/非文本/未确证角色/未知类型/非对象/无效 JSON→IsPartial 摘要含 1 基行号+原因、正文不保留；附加字段如 reasoning/api_key 不进预览；Project 接收已解码 JSONL 文本，zstd 由调用方解码）+ tests/TranscriptV4Tests.cs（11 用例，zstd 金样经 ZstdFrameDecoder.Decode 后断言角色顺序/文本/时间戳精确匹配）；全量 111/111（9fdb62e，证据 T-13.txt）
 
 ## 下一个任务
-- T-13 实现 V4 可验证消息预览（前置 T-12 已验收）。范围：Application/TranscriptProjector.cs、tests/TranscriptV4Tests.cs。要点：仅将 Harness 0.2.0.0 脱敏 fixture 确证的用户/助手文本事件转成 PreviewItem；验收：角色顺序/纯文本与 fixture 金样一致，缺字段、非文本、未知 schema 标记不完整，不展示推理/密钥。关联 TC-06。定义见 docs/implementation-tasks.md:154-161。
-- 可复用 API：SessionEventReader.Read→SessionEventReadResult（EventLine 行号/状态/类型，见上）；ZstdFrameDecoder；SessionHeaderReader.Read；夹具 FixtureFactory.HeaderLine/MessageLine/UnknownEventLine/WriteValidV0Session/WriteValidV4Session 等。库存/筛选：InventoryService.Scan；SessionFilter.Apply（事件正文关键字过滤属 T-12 之后任务）。
+- T-14 实现旧版本预览安全退化（**前置 T-12**，已验收）。范围：Application/LegacyPreview.cs、tests/LegacyPreviewTests.cs。要点：为 v0-v3 提供元数据和已验证类型的保守摘要；不实现完整官方迁移；最高代际失败不隐式回退。验收：旧版未知结构显示"不完整/仅元数据"；无法解析时仍支持原始备份；不存在虚构的消息。关联 TC-06,TC-20。定义见 docs/implementation-tasks.md:164-171（下轮先读原文）。
+- 可复用 API：TranscriptProjector.Project（见上）；SessionEventReader.Read→SessionEventReadResult；ZstdFrameDecoder.Decode(Stream)→ZstdDecodeResult(IsSuccess,Content,Error)；SessionHeaderReader.Read；夹具 FixtureFactory.HeaderLine/MessageLine/UnknownEventLine/CorruptLine/WriteValidV0Session/WriteValidV4Session/WriteUnknownEventSession 等。库存/筛选：InventoryService.Scan；SessionFilter.Apply（事件正文关键字过滤属后续任务）。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
 - 命令：`dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror`；`dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build`。build 退出码非 0 时勿跑 --no-build 测试（跑的是旧二进制）。PowerShell 无 grep，用 Select-String。
 - 分层：Application 仅引用 Domain（不能 using Infrastructure）；跨层用 Domain 类型端口（如 ISessionScanSource），测试侧写适配器。Xunit 需显式 `using Xunit;`。Domain.ParseStatus={Valid,Partial,Unsupported,Corrupt,Unreadable}（无 Success 成员）。
-- Path 类无 3 参 EndsWith（CS1501）；后缀判断用 string.EndsWith(…, StringComparison.Ordinal)。
+- Path 类无 3 参 EndsWith（CS1501）；后缀判断用 string.EndsWith(…, StringComparison.Ordinal)。record 位置参数命名实参须用属性名（如 IsPartial:，CS1739）。JsonDocument.Parse 无 ReadOnlySpan<char> 重载（CS1503），传 string 或 UTF-8 字节。
 - ZstdSharp 0.8.8：CompressFrame 带 checksumFlag；截断尾帧→TruncatedTail（Content 为空）；损坏→CorruptData。CompressionLimits.MaxLineBytes=8MiB、MaxSessionDecompressedBytes=256MiB。
 - PathGuard：`new PathGuard()`；Check(root,target,allowDirectory)；Check(root,root)=PATH_ESCAPE 为“根合法”哨兵。
 - 夹具：`using var fx = FixtureRoot.Create(); fx.Factory.*`；junction 须在 Dispose 前 Directory.Delete(link,false)；NTFS 大小写不敏感。
@@ -35,4 +36,4 @@ Git HEAD：feat(T-12) 577e074；docs(T-12) 勾选提交紧随其后
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-10 提交已排除二者。
 
 ## 收尾状态
-- T-12 全部验收 PASS（build exit 0；100/100 测试），已勾选；本轮结束。下一轮从 T-13 开始。
+- T-13 全部验收 PASS（build exit 0；111/111 测试），已勾选；本轮结束。下一轮从 T-14 开始。
