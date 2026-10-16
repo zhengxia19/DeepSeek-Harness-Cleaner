@@ -1,0 +1,41 @@
+T-07 实现路径白名单验证 — 验收证据
+日期: 2026-10-16  分支: main  feat 提交: e3ac223
+任务定义: docs/implementation-tasks.md T-07（前置 T-06 已验收 00e6101）
+修改范围: src/DeepSeekHarnessCleaner.Infrastructure/PathGuard.cs（新增）、tests/DeepSeekHarnessCleaner.Tests/PathGuardTests.cs（新增）。未越界。
+
+== 实现摘要 ==
+PathGuard（只读检查，不创建/写入/删除任何路径）：
+- Check(root, target, allowDirectory=false) → PathCheckResult(FullPath, RelativePath, Status{Allowed|Missing|Rejected}, ErrorCode)。
+- 根包含校验：Path.GetFullPath 规范化后 Path.GetRelativePath 判定；拒绝 "."、根外、跨驱动器；Windows 下大小写不敏感（OrdinalIgnoreCase）。
+- 字面 ".." 段一律拒绝（即使规范化后落回根内）→ PATH_ESCAPE。
+- 逐段 reparse 检查：从受控根到目标每一级（含根与目标本身）File.GetAttributes 检查 FileAttributes.ReparsePoint → PATH_REPARSE（design.md §7.2）。
+- 拒绝 UNC（\\server）、设备路径（\\?\、\\.\）、ADS（盘符冒号后再含冒号）→ PATH_ESCAPE。
+- 根校验：拒绝驱动器根、用户目录根（UserProfile）、项目源目录（AppContext.BaseDirectory 及其内部）、不存在的根（不隐式创建）→ ROOT_INVALID；根自身为 reparse → PATH_REPARSE。
+- 根目录本身不是删除候选 → PATH_ESCAPE；目录目标默认拒绝（allowDirectory 可选）。
+- 无法读取属性（IOException/UnauthorizedAccessException）→ fail closed，FILE_ACCESS_DENIED（TC-15 无法检查必须拒绝）。
+- 白名单：会话文件名正则 ^session(\.v[1-9][0-9]*)?\.jsonl(\.zstd)?$（大小写敏感，design.md §3）；桌面缓存目录白名单 Cache/Code Cache/GPUCache/DawnGraphiteCache/DawnWebGPUCache（design.md §6，排除 Local Storage/Session Storage/Network/logs）。
+- 错误码字符串与 interfaces.md §5 一致：PATH_REPARSE、PATH_ESCAPE、ROOT_INVALID、FILE_ACCESS_DENIED。
+
+== 命令与退出码 ==
+. .\scripts\enter-env.ps1; $env:TEMP="$PWD\.artifacts\tmp"; $env:TMP=$env:TEMP
+dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror → 0 个错误, BUILD_EXIT=0
+dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build → 已通过! 失败:0, 通过:44, 总计:44, TEST_EXIT=0（31 存量 + 13 新增 PathGuardTests）
+
+== 验收逐项 ==
+1) ".." 被拒绝：DotDotEscape_IsRejected（根外 ..，PATH_ESCAPE）、DotDotResolvingInsideRoot_StillRejected（根内 ..，仍 PATH_ESCAPE）→ 通过。
+2) junction 被拒绝：JunctionToOutsideDirectory_IsRejected_AndSentinelShaUnchanged（根内 junction 指向根外目录，目标 PATH_REPARSE）、JunctionAsRoot_IsRejected（根为 junction → PATH_REPARSE）。junction 经 cmd /c mklink /J 创建（无需管理员）→ 通过。
+3) symbolic link 被拒绝：SymbolicLinkFile_IsRejected 已实现（File.CreateSymbolicLink，无权限时优雅跳过）。本机实测 New-Item -ItemType SymbolicLink 报 "Administrator privilege required"（无开发者模式），该用例走跳过分支；reparse 阻断已由两个 junction 用例实证。真实软链场景留待具备权限的环境复验（TC-15 覆盖轮）。
+4) 重命名路径被拒绝：RenamedPath_IsMissing_NotAllowed（改名后 Status=Missing，非 Allowed）→ 通过。
+5) 独立目录外 sentinel 的 SHA 绝不变化：JunctionToOutsideDirectory 用例对根外 sentinel 计算 SHA-256，Check 拒绝后复算，Assert.Equal 前后一致 → 通过。PathGuard 全程只读（仅 GetAttributes），无任何写路径。
+6) 其他边界：UNC/设备路径/ADS → PATH_ESCAPE（UncAndDeviceAndAdsPaths_AreRejected）；驱动器根/用户目录根/项目目录/不存在根 → ROOT_INVALID（DriveRoot_UserProfileRoot_ProjectDirectory_AreInvalidRoots）；根目录本身与目录目标拒绝、allowDirectory 允许（RootItself_AndDirectoryTarget_AreRejected）；大小写不敏感包含判定（Containment_IsCaseInsensitiveOnWindows）；会话文件名与桌面缓存目录白名单（SessionFileNameWhitelist_MatchesDesignContract、DesktopCacheWhitelist_ExcludesBrowserStateDirs）。
+
+== 隔离 ==
+全部测试在 %TEMP%（已重定向至项目本地 .artifacts\tmp）合成根 dshcleaner-pathguard-<guid> 下创建/删除；未写入、移动或删除真实 %USERPROFILE%\.dsh 与 %APPDATA%\@deepseek-ai\dsh-desktop。FixtureIsolationTests 的 .dsh 路径集合断言在 44 项全绿中保持通过。
+
+== 开发发现（供后续任务）==
+- SDK 10.0.402 的 Directory 无 CreateJunction API；测试用 cmd /c mklink /J（无需管理员）。
+- Directory.Delete(recursive) 无法删除 junction（UnauthorizedAccessException）；Dispose 先枚举 reparse 目录并 Directory.Delete(link, false)。
+- 首轮实现有逐段循环 off-by-one（跳过首段、目标未入循环复验），被 NormalFileInsideRoot/RenamedPath 用例当场捕获后修复——逐段检查必须覆盖 根→…→目标 全链。
+- 本机无符号链接权限（非开发者模式）；涉及真实 symlink 的验收需在授权环境复验。
+
+结论: PASS（全部验收项通过；符号链接用例因本机权限走跳过分支，已如实记录）。

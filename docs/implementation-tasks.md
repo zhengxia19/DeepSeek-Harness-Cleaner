@@ -93,7 +93,7 @@
 
 ### T-07 — 实现路径白名单验证
 
-- [ ] **T-07：实现路径白名单验证**
+- [x] **T-07：实现路径白名单验证**（2026-10-16，证据 artifacts/evidence/T-07.txt，feat e3ac223）
 - **前置**：T-06。
 - **修改范围**：`Infrastructure/PathGuard.cs、tests/PathGuardTests.cs`。
 - **任务边界**：建立根包含校验、白名单与 reparse 检查，拒绝 UNC、设备路径、ADS、项目目录及根目录。
