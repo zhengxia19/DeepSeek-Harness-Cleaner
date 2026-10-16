@@ -73,7 +73,7 @@
 
 ### T-05 — 验证 Zstd 多帧物理解码
 
-- [ ] **T-05：验证 Zstd 多帧物理解码**
+- [x] **T-05：验证 Zstd 多帧物理解码**（2026-10-16，证据 artifacts/evidence/T-05.txt，feat 26d5e13）
 - **前置**：T-04。
 - **修改范围**：`Infrastructure/Compression/**、tests/CompressionTests.cs`。
 - **任务边界**：编写可复用流式解压适配器，验证连接帧、CRC、截断尾帧、空帧、超限的差异；无需语义投影。
