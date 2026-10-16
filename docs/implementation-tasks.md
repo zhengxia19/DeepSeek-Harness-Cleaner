@@ -173,7 +173,7 @@
 
 ### T-15 — 建立附件引用证据索引
 
-- [ ] **T-15：建立附件引用证据索引**
+- [x] **T-15：建立附件引用证据索引**（2026-10-16，证据 artifacts/evidence/T-15.txt，feat ddb5093）
 - **前置**：T-12。
 - **修改范围**：`Application/AttachmentIndex.cs、tests/AttachmentIndexTests.cs`。
 - **任务边界**：仅从已验证事件/路径建立引用；解析缺口时状态 Unknown，不自动标记孤儿。
