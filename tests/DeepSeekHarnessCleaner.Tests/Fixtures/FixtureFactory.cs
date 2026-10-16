@@ -1,6 +1,6 @@
 using System.IO;
 using System.Text;
-using ZstdSharp;
+using DeepSeekHarnessCleaner.Infrastructure.Compression;
 
 namespace DeepSeekHarnessCleaner.Tests.Fixtures;
 
@@ -53,14 +53,13 @@ public sealed class FixtureFactory
 
     public static string UnknownEventLine => "{\"type\":\"quantum_event\",\"payload\":{\"synthetic\":true}}";
 
-    /// <summary>把每个明文字符串各自压缩为一个 Zstd frame 并按序连接。</summary>
+    /// <summary>把每个明文字符串各自压缩为一个带内容 checksum 的 Zstd frame 并按序连接。</summary>
     public static byte[] ZstdFrames(params string[] plainFrames)
     {
         using var ms = new MemoryStream();
         foreach (var frame in plainFrames)
         {
-            using var compressor = new Compressor(3);
-            var bytes = compressor.Wrap(Utf8(frame)).ToArray();
+            var bytes = ZstdFrameDecoder.CompressFrame(Utf8(frame));
             ms.Write(bytes, 0, bytes.Length);
         }
 

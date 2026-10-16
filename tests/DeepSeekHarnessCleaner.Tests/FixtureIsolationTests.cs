@@ -102,7 +102,14 @@ public sealed class FixtureIsolationTests
         }
 
         var after = SnapshotRealDsh();
-        Assert.Equal(before, after);
+
+        // 真实 .dsh 正被运行中的 DSH 应用并发写入（既有文件 size/mtime 会变化），
+        // 因此断言收紧为：夹具生命周期不得在真实 .dsh 下新增或删除任何路径。
+        static string[] PathsOf(string snapshot) =>
+            snapshot == "ABSENT"
+                ? Array.Empty<string>()
+                : snapshot.Split('\n').Select(e => e.Split('|')[0]).OrderBy(p => p, StringComparer.Ordinal).ToArray();
+        Assert.Equal(PathsOf(before), PathsOf(after));
     }
 
     [Fact]

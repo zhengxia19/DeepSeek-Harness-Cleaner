@@ -1,0 +1,51 @@
+T-05 验证 Zstd 多帧物理解码 — 验收证据
+日期: 2026-10-16 (本地) | 基线 HEAD: fff7250 | 分支: main
+
+== 实施内容 ==
+新增 src/DeepSeekHarnessCleaner.Infrastructure/Compression/:
+- CompressionLimits.cs: MaxLineBytes=8MiB, MaxSessionDecompressedBytes=256MiB (design.md §2/§3)
+- ZstdFrameDecoder.cs: 流式多帧解码适配器。CompressFrame() 写入内容校验和
+  (ZSTD_c_checksumFlag=1)；Decode(Stream, maxTotalBytes) 逐帧解码连接帧，
+  状态枚举 Success/EmptyInput/TruncatedTail/CorruptData/DecompressedLimitExceeded，
+  截断/损坏/超限均不返回 Success。
+- JsonlLineSplitter.cs: 按 LF 切行，>8MiB 行计数并丢弃行体 (TooLongLineCount/HasTruncation)。
+tests/CompressionTests.cs: 14 个测试 (TC-04/TC-20 覆盖)。
+tests/Fixtures/FixtureFactory.cs: ZstdFrames/WriteTruncatedZstdSession 改用带校验和帧。
+tests/FixtureIsolationTests.cs: 真实 .dsh 快照断言改为“路径集合不得新增/删除”
+  （运行中的 DSH 应用会并发修改既有文件 size/mtime，逐字节相等断言必然抖动）。
+
+== 实测记录 (均在本机执行) ==
+1) 环境: . .\scripts\enter-env.ps1; $env:TEMP="$PWD\.artifacts\tmp"; $env:TMP=$env:TEMP
+2) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror
+   → 0 个警告 0 个错误, BUILD_EXIT=0
+3) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   → 已通过! 失败: 0, 通过: 21, 总计: 21, TEST_EXIT=0
+   (含 T-04 既有 7 测试 + T-05 新增 14 测试)
+
+== ZstdSharp.Port 0.8.8 实测探针结论 (临时探针测试已删除, design.md:130 要求实测) ==
+- DecompressionStream 顺序解码连接帧，两帧字节全部输出 → 多帧契约成立。
+- 截断尾帧(去 8 字节): 流路径抛 EndOfStreamException "Premature end of stream";
+  Decompressor().Unwrap 抛 ZstdException ZSTD_error_GENERIC。
+- 默认 Compressor.Wrap 不写内容校验和: 中间字节翻转后解码“成功”但内容错误
+  (out=9000, sameText=False) → 写入侧必须启用 checksumFlag (已由 CompressFrame 强制)。
+- 启用 ZSTD_c_checksumFlag=1 后: 中间损坏 → ZSTD_error_checksum_wrong;
+  去尾部 4 字节校验和 → EndOfStreamException; 完整帧往返一致。
+- 空帧 → 0 字节不抛异常; 0 字节输入 → 0 字节不抛异常 → 适配器以 EmptyInput 状态区分。
+
+== 验收标准逐项 ==
+[a] 多帧输出字节逐个一致: MultiFrame_DecodesByteIdentical,
+    MultiFrameFile_DecodesThenSplitsToLines → 通过。
+[b] 截断/损坏不可被当成正常成功: TruncatedTailFrame_NotSuccess,
+    TruncatedMidFrame_NotSuccess, FixtureTruncatedSession_DecoderRejects,
+    CorruptedFrame_WithChecksum_CorruptData, TrailingGarbageAfterFrames_NotSuccess,
+    WriterChecksumContract_DefaultWrapSilentlyCorrupts_... → 通过。
+[c] 8MiB 行/256MiB 解压量保护在测试中触发:
+    Line_Exceeding8MiB_CountedAndBodyDropped / Line_Exactly8MiB_Preserved;
+    DecompressedVolume_ExceedsCustomLimit_Triggered / ExactlyAtLimit_Succeeds /
+    ExceedsDefault256MiB_Triggered (65×4MiB 零字节帧=260MiB) → 通过。
+
+== 边界 ==
+未触碰真实 %USERPROFILE%\.dsh 与 %APPDATA% 桌面目录（隔离测试断言路径集合不变）。
+未新增 NuGet 包（ZstdSharp.Port 0.8.8 已在 T-02 引入）。未做语义投影（属后续任务）。
+
+结论: PASS
