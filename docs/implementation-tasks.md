@@ -123,7 +123,7 @@
 
 ### T-10 — 生成会话库存与磁盘统计
 
-- [ ] **T-10：生成会话库存与磁盘统计**
+- [x] **T-10：生成会话库存与磁盘统计**（2026-10-16，证据 artifacts/evidence/T-10.txt，feat 3d9ec8e）
 - **前置**：T-09。
 - **修改范围**：`Application/InventoryService.cs、Domain/SessionSummary.cs、tests/InventoryTests.cs`。
 - **任务边界**：按经验证身份把多 generation 归并一条会话，汇总文件大小和异常状态。

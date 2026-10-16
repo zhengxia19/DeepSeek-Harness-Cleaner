@@ -1,0 +1,59 @@
+T-10 生成会话库存与磁盘统计 — 验收证据
+日期：2026-10-16
+分支：main
+提交：feat 3d9ec8e（5 files changed, 508 insertions, 10 deletions）
+关联测试用例：TC-05（docs/testing.md:17 — 件数/大小/日期/项目/状态均可解释）
+
+== 实施内容 ==
+新增 src/DeepSeekHarnessCleaner.Domain/SessionSummary.cs：
+  ParseStatus / DateOrigin 枚举，PhysicalLog、SessionSummary（含 TotalBytes、IsAmbiguous）、
+  AnomalousFile、ScannedLogFile、ScannedSessionDirectory、SessionScanData（design.md §1 核心数据结构）。
+新增 src/DeepSeekHarnessCleaner.Application/InventoryService.cs：
+  ISessionScanSource（Domain 类型端口）、ISessionInventory（interfaces.md:11）、
+  InventoryResult、InventoryService。归并规则（design.md §2/§3）：
+  - 同一会话目录多代际归并一条逻辑记录，按 Generation 排序；
+  - 身份冲突（跨代际 header sessionId 不一致、目录名与 header 不一致、同代际双编码）→ IsAmbiguous=true、SessionId=null，阻断后续清理；
+  - TotalBytes = 全部物理文件 Bytes 求和；InventoryResult.TotalBytes = 各会话 TotalBytes 求和；
+  - 状态取最严重（Valid<Partial<Unsupported<Corrupt<Unreadable）；
+  - CreatedAt 仅取最高代际有效 header 的 createdAt，DateOrigin=Header/Unknown；LastActivityAt 留待事件解析任务；
+  - 排序：日期降序（无日期最后）→ SessionId 升序 → 首个文件路径。
+  ScanAsync 经 ISessionScanSource 消费扫描事实，单条损坏不中断扫描。
+
+== 分层调整（超出任务列出修改范围的说明）==
+Application csproj 仅引用 Domain，无法直接使用 Infrastructure 的 SessionLogDiscovery/SessionHeaderReader。
+故引入 ISessionScanSource 端口（DTO 全部 Domain 类型），并把 ParseStatus 枚举从
+SessionHeaderReader.cs 移至 Domain/SessionSummary.cs（design.md §1 属核心数据结构）。
+连带修改：SessionHeaderReader.cs（删本地枚举、加 using Domain）、HeaderTests.cs（加 using Domain）。
+测试侧适配器 InventoryTests.ScanSource 组合 SessionLogDiscovery + SessionHeaderReader 实现端口。
+
+== 实测命令与结果 ==
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror
+   退出码 0，无 error/warning（TEMP 已重定向 .artifacts\tmp）。
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   退出码 0：失败 0，通过 76，总计 76（原 66 + 新增 InventoryTests 10）。
+
+== 验收逐项核对 ==
+[x] 多代同会话只记一条逻辑记录：
+    MultiGeneration_MergedIntoSingleLogicalRecord — proj-alpha/synth-multi-001（session.jsonl +
+    session.v4.jsonl.zstd）→ Sessions 仅 1 条，SessionId=synth-multi-001，Project=proj-alpha，
+    Generations=[0,4]，Status=Valid，IsAmbiguous=false，CreatedAt=2026-01-20T08:00:00Z（Header 来源）。
+[x] 容量按所有物理文件求和且与 fixture 文件大小相符：
+    TotalBytes_SumsAllPhysicalFiles_MatchesFixtureSizes — 会话 TotalBytes == 两文件 FileInfo.Length 之和；
+    库存 TotalBytes == 全部会话文件之和。
+    Scan_ContinuesDespiteCorruption 亦断言 4 会话 TotalBytes == 4 文件实际大小之和。
+[x] 不因单条损坏中断扫描：
+    Scan_ContinuesDespiteCorruption_AllSessionsListed — 有效 v4 + 零字节(Corrupt) + 截断 zstd(Partial) +
+    损坏 JSON 行(头部仍 Valid) 四目录全部在册，状态各自可解释，扫描未中断。
+[x] 歧义阻断（design.md §2）：
+    SameGenerationDualEncoding_MarkedAmbiguous（同代际 .jsonl+.jsonl.zstd）；
+    HeaderIdentityConflictAcrossGenerations（id-a/id-b → IsAmbiguous、SessionId=null）；
+    DirectoryIdentityMismatch（目录名与 header 不符 → IsAmbiguous、SessionId=null）。
+[x] 根无效与异常文件可解释：
+    RootInvalid_ReportsErrorCode_NoScan（ROOT 错误码、空清单）；
+    AnomalousFiles_ReportedWithReasonAndBytes（根级 session.jsonl → UNEXPECTED_LOCATION + 实际字节数）。
+[x] TC-05 可解释性：件数（Sessions.Count）、大小（TotalBytes 与 fixture 相符）、日期（CreatedAt/DateOrigin，
+    Sorting_CreatedAtDescending_UnknownDatesLast 验证排序）、项目（Project=目录首段）、状态（Status/IsAmbiguous）均可解释。
+[x] ISessionInventory.ScanAsync(ResolvedRoots, ct) 合同（interfaces.md:11）：
+    ScanAsync_ReturnsSessionsViaResolvedRoots 通过。
+
+结论：全部验收项通过，任务关闭。
