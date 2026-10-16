@@ -113,7 +113,7 @@
 
 ### T-09 — 解析受限日志头部
 
-- [ ] **T-09：解析受限日志头部**
+- [x] **T-09：解析受限日志头部**（2026-10-16，证据 artifacts/evidence/T-09.txt，feat fc4a3aa）
 - **前置**：T-05,T-08。
 - **修改范围**：`Infrastructure/SessionHeaderReader.cs、tests/HeaderTests.cs`。
 - **任务边界**：只读取首条受限 header，验证 id、formatVersion、createdAt/cwd；不可验证标异常。

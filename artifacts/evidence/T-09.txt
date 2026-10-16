@@ -1,0 +1,38 @@
+T-09 解析受限日志头部 — 验收证据
+日期: 2026-10-16  分支: main  feat 提交: fc4a3aa
+任务定义: docs/implementation-tasks.md T-09（前置 T-05、T-08 已验收）
+修改范围: src/DeepSeekHarnessCleaner.Infrastructure/SessionHeaderReader.cs（新增）、tests/DeepSeekHarnessCleaner.Tests/HeaderTests.cs（新增）。未越界。
+
+== 实现摘要 ==
+SessionHeaderReader（只读，仅解析首条 header 行）：
+- ParseStatus={Valid,Partial,Unsupported,Corrupt,Unreadable}（design.md §1）；SessionHeaderInfo(SessionId,FormatVersion,CreatedAt,Cwd?)；SessionHeaderReadResult(Status,Header,ErrorCode)+IdentityMatches(bool?)+AllowsAutoCleanup。
+- 明文：FileStream 只读打开，读至多 MaxLineBytes+1 字节取首行；超 8MiB 首行→HEADER_LINE_TOO_LONG；空文件→HEADER_MISSING。
+- .zstd（文件名 Ordinal 后缀）：ZstdFrameDecoder 多帧解码；TruncatedTail→Partial(ZSTD_TRUNCATED)、CorruptData→Corrupt(ZSTD_CORRUPT)、超限→Partial(ZSTD_LIMIT)、空→HEADER_MISSING。
+- 语义验证：type=="header"；sessionId 非空字符串；formatVersion 非负 int（>4→Unsupported）；createdAt 严格 InvariantCulture RoundtripKind 解析；cwd 可选但存在时必须为字符串。
+- 身份映射（design.md §29）：Read(path, expectedSessionId) 核对目录身份→IdentityMatches；不匹配仍 Valid 但 AllowsAutoCleanup=false。
+- HeadersConsistent(results)：任一非 Valid 或 sessionId 不一致→false（design.md §2 身份冲突阻止清理）。
+- IO/权限/SecurityException→Unreadable(FILE_UNREADABLE:类型名)。
+
+== 命令与退出码 ==
+. .\scripts\enter-env.ps1; $env:TEMP="$PWD\.artifacts\tmp"; $env:TMP=$env:TEMP
+dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror → 0 个错误, BUILD_EXIT=0
+dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build → 已通过! 失败:0, 通过:66, 总计:66, TEST_EXIT=0（53 存量 + 13 新增 HeaderTests）
+
+== 验收逐项 ==
+1) 有效 v4/旧版 fixture 提取准确：ValidV4_Plain_HeaderExtracted（id/4/2026-02-10T10:00:00Z 精确断言）、ValidV0_Legacy_HeaderExtracted（v0）、MultiGeneration_ZstdAndPlain_BothExtracted_ConsistentIds（明文 v0 + zstd v4 双代际提取且 HeadersConsistent=true，TC-03）→ 通过。
+2) 畸形 header 不进可删白名单：MalformedFirstLine_Corrupt（TC-04 未闭合 JSON→HEADER_MALFORMED）、InvalidCreatedAt_Corrupt、HeaderLineExceedingLimit_Corrupt（8MiB+16 首行）→ AllowsAutoCleanup=false。
+3) 缺失 header 不进白名单：FirstLineNotHeader_MissingHeader、EmptyFile_MissingHeader、TruncatedZstd_Partial_NotDeletable（TC-04 尾帧截断→Partial，HeadersConsistent=false）→ 通过。
+4) 冲突 header 不进白名单：ConflictingHeadersAcrossGenerations_NotConsistent（同目录两代际 id-a/id-b→false）；IdentityMismatch_Flagged_NotDeletable（目录身份映射不匹配→禁删）→ 通过。
+5) 源字节不变：Read_IsReadOnly_SourceBytesUnchanged（明文+zstd 读取前后 SHA-256 相等）；实现仅 FileMode.Open/FileAccess.Read/FileShare.ReadWrite → 通过。
+6) 不支持版本：UnsupportedFormatVersion_Flagged_NotDeletable（formatVersion=9→Unsupported）→ 通过。
+
+== 隔离 ==
+全部测试在夹具合成根（T-04）下；未触碰真实 %USERPROFILE%\.dsh 与 %APPDATA%\@deepseek-ai\dsh-desktop；FixtureIsolationTests 在 66 项全绿中保持通过。
+
+== 开发发现（供后续任务）==
+- Path 类没有 3 参 EndsWith 重载（CS1501）；后缀判断用 string.EndsWith(".zstd", StringComparison.Ordinal)。
+- ZstdFrameDecoder 对截断尾帧返回空 Content（无法取回首行），故 T-09 将 TruncatedTail 记 Partial 且无 header——与 TC-04“坏尾标 Partial 不可当成功”一致。
+- formatVersion 上限 4（MaxSupportedFormatVersion）：v0-v3 旧版按最低保证读取，>4 Unsupported。
+- 错误码常量：HEADER_MISSING/HEADER_MALFORMED/HEADER_ID_MISSING/HEADER_VERSION_INVALID/HEADER_VERSION_UNSUPPORTED/HEADER_DATE_INVALID/HEADER_CWD_INVALID/HEADER_LINE_TOO_LONG/ZSTD_TRUNCATED/ZSTD_CORRUPT/ZSTD_LIMIT/FILE_UNREADABLE。
+
+结论: PASS（全部验收项通过）。
