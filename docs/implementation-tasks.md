@@ -53,7 +53,7 @@
 
 ### T-03 — 生成解决方案与依赖锁
 
-- [ ] **T-03：生成解决方案与依赖锁**
+- [x] **T-03：生成解决方案与依赖锁**（2026-10-16，证据 artifacts/evidence/T-03.txt，feat 55744e0）
 - **前置**：T-02。
 - **修改范围**：`DeepSeekHarnessCleaner.sln、Directory.Build.props、Directory.Packages.props、NuGet.Config、src/ 四项目、tests/ 项目`。
 - **任务边界**：创建 Domain/Application/Infrastructure/UI 和 xUnit；添加 ZstdSharp.Port；集中锁定依赖，开启编译警告为错误。
