@@ -43,7 +43,7 @@
 
 ### T-02 — 实现本地 SDK 初始化脚本
 
-- [ ] **T-02：实现本地 SDK 初始化脚本**
+- [x] **T-02：实现本地 SDK 初始化脚本** — 完成于 2026-10-16，证据 `artifacts/evidence/T-02.txt`，commit `9815afc`。
 - **前置**：T-01。
 - **修改范围**：`scripts/bootstrap.ps1、scripts/enter-env.ps1、global.json`。
 - **任务边界**：用官方安装脚本在项目 `.dotnet` 安装经核验稳定版 .NET 10 SDK；固定精确版本；当前会话设置 DOTNET_ROOT/PATH/NUGET_PACKAGES/DOTNET_CLI_HOME；不使用 setx。
