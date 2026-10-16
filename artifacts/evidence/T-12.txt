@@ -1,0 +1,42 @@
+T-12 实现安全 JSONL 事件流 — 验收证据
+日期：2026-10-16
+分支：main
+提交：feat 577e074（src/DeepSeekHarnessCleaner.Infrastructure/SessionEventReader.cs、tests/DeepSeekHarnessCleaner.Tests/EventReaderTests.cs）
+
+== 实施范围 ==
+- 新增 SessionEventReader：消费解压字节逐行解析 JSON，返回 EventLine(LineNumber 1 基、Status、EventType)。
+  行状态：Valid / Unknown / MalformedJson / NotObject / TooLong（超限行保留行号、不保留正文）。
+- 限制：maxLineBytes（默认 CompressionLimits.MaxLineBytes=8MiB）、maxTotalBytes（默认 MaxSessionDecompressedBytes=256MiB）。
+  超限返回 Partial + TOTAL_LIMIT，不记录正文（design.md §33）。
+- .zstd 经 ZstdFrameDecoder：TruncatedTail→Partial/ZSTD_TRUNCATED；CorruptData→Corrupt/ZSTD_CORRUPT；
+  空输入→Corrupt/EVENTS_EMPTY；超限→Partial/TOTAL_LIMIT。明文与多帧 zstd 均支持。
+- 未知事件：type 不在 fixture 绑定的 KnownEventTypes（header/message/attachment_ref）→ Unknown，
+  输出类型与行号，不猜测语义（design.md §48）。
+- 聚合：0 行→Corrupt/EVENTS_EMPTY；全部畸形→Corrupt/EVENTS_ALL_MALFORMED；有畸形/超限行→Partial。
+- 取消：每行检查 CancellationToken；FileStream 在 using 内，异常/取消/超限路径均释放句柄。
+- 不修改日志：只读打开（FileShare.ReadWrite），无任何写操作。
+
+== 命令与退出码 ==
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror → exit 0
+   （首轮 exit 1：误用 ParseStatus.Success，Domain 枚举为 Valid；修正后通过，无 warning）
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build → exit 0
+   已通过! - 失败: 0，通过: 100，已跳过: 0，总计: 100（原 87 + 新增 EventReaderTests 13）
+
+== 验收逐项 ==
+- 有效 JSONL 行数与顺序一致：PlainSession_LineCountAndOrderMatch、MultiFrameZstdSession_LineCountAndOrderMatch
+  （行号 [1,2]、类型顺序 header→message 断言通过）。通过。
+- 无效行明确报损坏/部分：IncompleteJsonLine_ReportedMalformed_FilePartial（Partial+MalformedJson 行 2）、
+  AllLinesMalformed_ReportedCorrupt（Corrupt/EVENTS_ALL_MALFORMED）、NonObjectLine_ReportedNotObject_FilePartial、
+  TruncatedZstdTail_ReportedPartial（Partial/ZSTD_TRUNCATED）、EmptyFile_ReportedCorrupt。通过。
+- 取消与超限不泄漏句柄：Cancellation_ThrowsAndNoHandleLeak（预取消→OperationCanceledException 后 File.Delete 成功）、
+  TotalLimitExceeded_PartialAndNoHandleLeak（Partial/TOTAL_LIMIT 后 File.Delete 成功）。通过。
+- TC-04（多帧按序、明文兼容；坏尾/不完整 JSON 标记 Partial/Corrupt）：上述多帧、坏尾、不完整 JSON 用例覆盖。通过。
+- TC-20（未知格式、权限、空数据、坏压缩、异常目录均无误删/卡死）：UnknownEvent_ReportedWithTypeAndLineNumber_NotGuessed、
+  EmptyFile_ReportedCorrupt、MissingFile_ReportedUnreadable_NoThrow、ReadNeverModifiesLogFile_BytesIdentical
+  （读前后字节完全一致，无误删）。通过。
+
+== 边界说明 ==
+- 读取器不修改日志文件（ReadNeverModifiesLogFile 断言字节一致）。
+- KnownEventTypes 由脱敏 fixture（FixtureFactory.UnknownEventLine = quantum_event）断言绑定。
+- LastActivityAt 事件时间戳提取与事件正文关键词过滤属后续任务（T-13+），本任务不实现。
+- 未新增 NuGet 包；测试全部在隔离合成根（FixtureRoot，重定向 TEMP）运行，未触碰真实 %USERPROFILE%\.dsh。

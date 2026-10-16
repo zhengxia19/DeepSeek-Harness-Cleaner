@@ -143,7 +143,7 @@
 
 ### T-12 — 实现安全 JSONL 事件流
 
-- [ ] **T-12：实现安全 JSONL 事件流**
+- [x] **T-12：实现安全 JSONL 事件流**（2026-10-16，证据 artifacts/evidence/T-12.txt，feat 577e074）
 - **前置**：T-05,T-09。
 - **修改范围**：`Infrastructure/SessionEventReader.cs、tests/EventReaderTests.cs`。
 - **任务边界**：消费解压字节逐行解析 JSON，限制总量、行长，返回行号/状态/未知事件，不修改日志。
