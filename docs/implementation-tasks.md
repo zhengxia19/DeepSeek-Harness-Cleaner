@@ -223,7 +223,7 @@
 
 ### T-20 — 实现独立设置的保存与读取
 
-- [ ] **T-20：实现独立设置的保存与读取**
+- [x] **T-20：实现独立设置的保存与读取**（2026-10-17，证据 artifacts/evidence/T-20.txt，feat 见 git log）
 - **前置**：T-17。
 - **修改范围**：`Infrastructure/SettingsStore.cs、UI/SettingsDialog.cs、tests/SettingsTests.cs`。
 - **任务边界**：schemaVersion=1、记忆路径布尔与窗口配置；损坏配置只读回退默认。

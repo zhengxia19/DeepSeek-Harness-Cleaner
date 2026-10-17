@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-17（T-19 轮）
-Git HEAD：feat(T-19)；docs(T-19) 勾选提交紧随其后（基线 92182c7 docs(T-18)）
+更新时间：2026-10-17（T-20 轮）
+Git HEAD：feat(T-20)；docs(T-20) 勾选提交紧随其后（基线 bcab381 docs(T-19)）
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -25,9 +25,11 @@ Git HEAD：feat(T-19)；docs(T-19) 勾选提交紧随其后（基线 92182c7 doc
 
 - T-19 绑定会话预览与解析状态：UI/PreviewPresenter.cs（PreviewOutcome；PreviewAsync=Task.Run 后台；PathGuard 复验→受限读取/zstd 解压→LegacyPreview.Build；Render 纯文本含元数据/模式/说明/警告/事件正文/截断与不完整计数）、MainForm.cs（_previewCts 取消旧请求；_effectiveScanRoot 缓存；渲染前双重核对 cts 与选中行 Tag 同一对象→不串会话；0 选清空/多选提示）、MainForm.Smoke.cs（RunPreviewChecks+SelectRowBySessionId+PumpUntil；期望 303→305）；冒烟 54 项全 PASS 退出码 0；build -m:1 exit 0；142/142（feat 见 git log，证据 T-19.txt）。fixture 新增 projD/smoke-v4-0004/session.v4.jsonl（V4 金样）、projE/smoke-old-0005/session.v7.jsonl（未知代际），现 307 文件/305 会话/1 异常。坑：static lambda 不能捕获局部变量（CS8820）；PowerShell 函数名 H 与 Get-History 别名冲突；fixture 是根级布局（无 projects\ 层）
 
+- T-20 独立设置保存/读取：Infrastructure/SettingsStore.cs（AppSettings schemaVersion=1 契约字段 camelCase；Load 缺失=Default/损坏=CorruptFallback/未知 schema=UnknownSchema 均回退默认且不改文件；previewMaxItems 钳制≤2000、未知 dateField 回退 fileModified、额外字段忽略；Save 既有损坏/未知 schema 拒绝覆写字节不变、原子=同目录 tmp+File.Move(overwrite)、rememberRoots=false 根一律 null、相对根丢弃、窗口非正回退默认钳制[320,8192]；默认路径 %LOCALAPPDATA%\DeepSeekHarnessCleaner\settings.json，测试注入夹具路径）、UI/SettingsDialog.cs（Load 回退提示、rememberRoots 禁用根输入/浏览、保存拒绝弹警告不关闭、FolderBrowserDialog；**未接线 MainForm**，归后续 UI 任务）、tests/SettingsTests.cs（10 用例）；build -m:1 exit 0；152/152；UI 冒烟 54 项回归 PASS 退出码 0（证据 T-20.txt）。坑：xunit Assert.Equal 对 string?[] 选 ReadOnlySpan 重载报 CS8631，Select 用 `Path.GetFileName(name)!` 投影非空
+
 ## 下一个任务
-- T-20 实现独立设置的保存与读取（**前置 T-17**，已验收）。范围：Infrastructure/SettingsStore.cs、UI/SettingsDialog.cs、tests/SettingsTests.cs。要点：schemaVersion=1、记忆路径布尔与窗口配置；损坏配置只读回退默认。验收：rememberRoots=false 时配置不含历史绝对路径；未知 schema 不覆写；读/写正常。关联 TC-19。定义见 docs/implementation-tasks.md:224-231（下轮先读原文）。
-- 可复用 API：InventoryService.Scan（UiScanSource）；SessionFilter.Apply；PreviewPresenter（UI 侧预览，MainForm 已接线）；LegacyPreview；PathGuard；夹具 FixtureRoot/FixtureFactory。注意：SettingsStore 不得写真实 %USERPROFILE%\.dsh（测试用夹具/临时目录）。UI 冒烟取证模式：exe `--smoke <res> --scan-root <fixture根>` + Process API。
+- T-21 实现 ZIP manifest 与清单签名（**前置 T-07,T-10**，均已验收）。范围：Application/BackupManifest.cs、tests/ManifestTests.cs。要点：从选中会话构建 ZIP 相对路径/长度/SHA 预期清单；覆盖所有已识别代际、去重、拒绝 zip-slip（..、跨根、重复条目、未知文件）。验收：所有 generation 计入；manifest 校验可复算。关联 TC-09。定义见 docs/implementation-tasks.md:234-241（下轮先读原文，并读 interfaces.md §28-34 ZIP 导出契约：sessions/<relative>、attachments/<relative>、manifest.json 记 root/relativePath/length/sha256/sessionId/警告；SHA-256 小写 64 位 hex）。
+- 可复用 API：InventoryService.Scan；SessionSummary.Generations（含 ModifiedAt）；PathGuard；夹具 FixtureRoot/FixtureFactory（WriteFile/Utf8）。SettingsStore/AppSettings 已就绪（T-20）。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
@@ -46,4 +48,4 @@ Git HEAD：feat(T-19)；docs(T-19) 勾选提交紧随其后（基线 92182c7 doc
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-17 提交已排除二者。
 
 ## 收尾状态
-- T-19 全部验收 PASS（build -m:1 exit 0；142/142 测试；冒烟 54 项 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-20 开始。
+- T-20 全部验收 PASS（build -m:1 exit 0；152/152 测试含 SettingsTests 10 项；UI 冒烟 54 项回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-21 开始。
