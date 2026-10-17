@@ -1,0 +1,58 @@
+T-20 实现独立设置的保存与读取 — 验收证据
+日期：2026-10-17
+基线 HEAD：bcab381 docs(T-19)
+
+## 范围（与任务定义一致）
+- 新增 src/DeepSeekHarnessCleaner.Infrastructure/SettingsStore.cs
+  - AppSettings（schemaVersion=1、rememberRoots、sessionRoot/desktopRoot/backupRoot、dateField、previewMaxItems、windowWidth/windowHeight，interfaces.md §4 契约字段与 camelCase 命名）
+  - SettingsStore：默认位置 %LOCALAPPDATA%\DeepSeekHarnessCleaner\settings.json（工具私有目录，非 Harness 数据根）；构造注入路径供测试夹具使用
+  - Load：文件缺失=Default；JSON 损坏/无法读取=CorruptFallback 回退默认且不改文件；schemaVersion 缺失/非整数=CorruptFallback；schemaVersion≠1=UnknownSchema 回退默认且不改文件；previewMaxItems 恶意大值截断到 2000；未知 dateField token 回退 fileModified；未知额外字段忽略（前向兼容）
+  - Save：既有文件损坏或未知 schema 一律拒绝覆写（RejectedCorrupt/RejectedUnknownSchema，字节不变）；正常保存经同目录临时文件 + File.Move(overwrite) 原子替换；rememberRoots=false 时三个根路径一律落盘 null；rememberRoots=true 仅持久化绝对路径（相对路径丢弃）；窗口尺寸非正回退默认、越界钳制 [320,8192]
+- 新增 src/DeepSeekHarnessCleaner.UI/SettingsDialog.cs
+  - 打开经 SettingsStore.Load，损坏/未知 schema 显示只读回退提示；rememberRoots 关闭时根输入与浏览按钮禁用；保存经 SettingsStore（拒绝覆写时弹警告不关闭）；FolderBrowserDialog 选择根；AutoScaleMode.Font/FixedDialog/CenterParent
+  - 未接线 MainForm（T-20 修改范围不含 MainForm，接线归后续 UI 任务）
+- 新增 tests/DeepSeekHarnessCleaner.Tests/SettingsTests.cs（10 用例，全部夹具临时根注入路径，未触碰真实 %LOCALAPPDATA% 与 Harness 数据根）
+
+## 命令与退出码
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   → 已成功生成，0 警告 0 错误，EXIT=0
+   （首轮 1 个测试断言 CS8631 可空类型错误，修复断言写法后复建通过）
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   → 通过! 失败:0 通过:152 总计:152（142 存量 + 10 新增），EXIT=0
+3) dotnet test --filter FullyQualifiedName~SettingsTests --logger console;verbosity=normal
+   → 10/10 通过：
+   MissingFile_LoadsDefaults_WithoutCreatingFile PASS
+   SaveThenLoad_RoundTripsRootsDateFieldAndWindow PASS
+   RememberRootsFalse_ConfigContainsNoAbsolutePaths PASS
+   CorruptJson_FallsBackToDefaults_AndSaveRefusesToOverwrite PASS
+   UnknownSchemaVersion_FallsBackAndIsNeverOverwritten PASS
+   OversizedPreviewMaxItems_IsClampedToDesignLimit PASS
+   UnknownDateFieldToken_FallsBackToFileModified PASS
+   RelativeRoot_IsNotPersisted PASS
+   Save_UsesAtomicReplace_AndLeavesNoTempResidue PASS
+   UnknownExtraFields_AreIgnoredForForwardCompatibility PASS
+4) UI 冒烟回归：DeepSeekHarnessCleaner.UI.exe --smoke .artifacts\tmp\t20-smoke.txt --scan-root .artifacts\tmp\dsh-t18-fixture（Process API 等待）
+   → SMOKE_RESULT=PASS（54 项，含 T-17/T-18/T-19 回归），EXIT=0
+
+## 验收标准逐项
+- rememberRoots=false 时配置不含历史绝对路径：PASS
+  （RememberRootsFalse_ConfigContainsNoAbsolutePaths：先 true 写入夹具绝对路径，再 false 保存；
+  断言原始 JSON 不含夹具根路径字符串且三个 root 字段为 null）
+- 未知 schema 不覆写：PASS
+  （UnknownSchemaVersion_FallsBackAndIsNeverOverwritten：schemaVersion=99 → Load UnknownSchema 回退默认；
+  Save 返回 RejectedUnknownSchema 且文件字节逐字符不变）
+- 读/写正常：PASS
+  （MissingFile 默认值；SaveThenLoad 往返根路径/日期字段/预览上限/窗口尺寸一致；
+  落盘含 "schemaVersion": 1；原子替换无临时文件残留）
+- 损坏配置只读回退默认（任务边界）：PASS
+  （CorruptJson：损坏文件 Load 回退默认、Save 拒绝覆写、字节不变）
+- 关联 TC-19（默认/损坏/未知版本处理正确；记忆关闭时不写根路径）：PASS
+
+## 安全红线核对
+- 测试全部注入夹具路径（.artifacts\tmp\dshcleaner-fixtures 下），未读写真实
+  %USERPROFILE%\.dsh、%APPDATA%\@deepseek-ai\dsh-desktop；默认 %LOCALAPPDATA%\DeepSeekHarnessCleaner
+  仅为 UI 运行时路径，本轮测试未写入。
+- 未修改系统 PATH/注册表；未联网；证据不含用户会话正文。
+
+## 结论
+全部验收项 PASS，任务勾选。
