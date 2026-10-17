@@ -1,17 +1,31 @@
 using System.Drawing;
 using System.Windows.Forms;
+using DeepSeekHarnessCleaner.Application;
+using DeepSeekHarnessCleaner.Domain;
+using DeepSeekHarnessCleaner.Infrastructure;
 
 namespace DeepSeekHarnessCleaner.UI;
 
 /// <summary>
-/// 主窗体：菜单/导航、会话列表区、预览区、操作按钮区与状态栏的单窗口布局（T-17，可无数据）。
+/// 主窗体：菜单/导航、会话列表区（DataGridView + 过滤面板）、预览区、操作按钮区与状态栏（T-17/T-18）。
 /// 布局全部使用 Dock/AutoSize，配合 AutoScaleMode.Font 与 PerMonitorV2 保证任意 DPI 下主操作按钮不被遮挡。
+/// T-18：扫描在后台线程执行（UI 不冻结）；列表/统计/筛选与 InventoryService、SessionFilter 结果一致；
+/// 每行 Tag 绑定 SessionSummary，多选跟随行对象，排序不会改变选中会话。
 /// </summary>
 public sealed partial class MainForm : Form
 {
     private readonly MenuStrip _menu = new();
     private readonly SplitContainer _split = new();
-    private readonly ListView _sessionList = new();
+    private readonly FlowLayoutPanel _filterPanel = new();
+    private readonly TextBox _keywordBox = new();
+    private readonly TextBox _projectBox = new();
+    private readonly TextBox _sessionIdBox = new();
+    private readonly ComboBox _dateFieldCombo = new();
+    private readonly CheckBox _dateEnabledCheck = new();
+    private readonly DateTimePicker _dateStartPicker = new();
+    private readonly DateTimePicker _dateEndPicker = new();
+    private readonly Button _applyFilterButton = new();
+    private readonly DataGridView _sessionGrid = new();
     private readonly RichTextBox _preview = new();
     private readonly FlowLayoutPanel _actionPanel = new();
     private readonly Button _scanButton = new();
@@ -20,10 +34,15 @@ public sealed partial class MainForm : Form
     private readonly StatusStrip _statusStrip = new();
     private readonly ToolStripStatusLabel _statusLabel = new("就绪");
     private readonly Font _baseFont;
+    private readonly InventoryPresenter _presenter;
+    private readonly string? _scanRootOverride;
+    private bool _scanning;
 
-    public MainForm(string? smokeResultPath = null)
+    public MainForm(string? smokeResultPath = null, string? scanRootPath = null)
     {
         _smokeResultPath = smokeResultPath;
+        _scanRootOverride = scanRootPath;
+        _presenter = new InventoryPresenter(new UiScanSource(), TimeZoneInfo.Local);
         _baseFont = SystemFonts.MessageBoxFont ?? DefaultFont;
         Font = _baseFont;
         AutoScaleMode = AutoScaleMode.Font;
@@ -46,7 +65,7 @@ public sealed partial class MainForm : Form
         Controls.Add(_menu);
         MainMenuStrip = _menu;
 
-        _sessionList.SelectedIndexChanged += OnSessionListSelectionChanged;
+        _sessionGrid.SelectionChanged += OnSessionGridSelectionChanged;
         _deleteButton.Enabled = false; // UX-01：未选择会话时禁用删除。
 
         if (_smokeResultPath is not null)
@@ -79,18 +98,95 @@ public sealed partial class MainForm : Form
         _split.Panel2MinSize = 200;
         _split.SplitterDistance = 460;
 
-        _sessionList.Dock = DockStyle.Fill;
-        _sessionList.View = View.Details;
-        _sessionList.FullRowSelect = true;
-        _sessionList.HideSelection = false;
-        _sessionList.MultiSelect = true;
-        _sessionList.TabIndex = 1;
-        _sessionList.Columns.Add("会话 ID", 240);
-        _sessionList.Columns.Add("项目", 200);
-        _sessionList.Columns.Add("创建时间", 150);
-        _sessionList.Columns.Add("大小", 100);
-        _sessionList.Columns.Add("状态", 120);
-        _split.Panel1.Controls.Add(_sessionList);
+        _sessionGrid.Dock = DockStyle.Fill;
+        _sessionGrid.MultiSelect = true;
+        _sessionGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _sessionGrid.ReadOnly = true;
+        _sessionGrid.AllowUserToAddRows = false;
+        _sessionGrid.AllowUserToDeleteRows = false;
+        _sessionGrid.AllowUserToResizeRows = false;
+        _sessionGrid.RowHeadersVisible = false;
+        _sessionGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+        _sessionGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        _sessionGrid.TabIndex = 9;
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "id", HeaderText = "会话 ID", Width = 190 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "project", HeaderText = "项目", Width = 130 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "created", HeaderText = "创建时间", Width = 140 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "origin", HeaderText = "日期来源", Width = 110 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "size", HeaderText = "大小", Width = 110 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "format", HeaderText = "格式（代际）", Width = 140 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = "状态", Width = 110 });
+        _split.Panel1.Controls.Add(_sessionGrid);
+
+        BuildFilterPanel();
+        _split.Panel1.Controls.Add(_filterPanel);
+    }
+
+    private void BuildFilterPanel()
+    {
+        _filterPanel.Dock = DockStyle.Top;
+        _filterPanel.AutoSize = true;
+        _filterPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _filterPanel.WrapContents = true;
+        _filterPanel.Padding = new Padding(6, 4, 6, 4);
+
+        _keywordBox.Width = 140;
+        _projectBox.Width = 120;
+        _sessionIdBox.Width = 140;
+        foreach (var box in new[] { _keywordBox, _projectBox, _sessionIdBox })
+        {
+            box.Margin = new Padding(4, 4, 10, 4);
+            box.AutoSize = false;
+        }
+
+        _dateFieldCombo.DropDownStyle = ComboBoxStyle.DropDownList;
+        _dateFieldCombo.Items.AddRange(new object[] { "创建时间", "文件修改时间（非会话活动）" });
+        _dateFieldCombo.SelectedIndex = 0;
+        _dateFieldCombo.Width = 190;
+        _dateFieldCombo.Margin = new Padding(4, 4, 10, 4);
+
+        _dateEnabledCheck.Text = "启用日期(&E)";
+        _dateEnabledCheck.AutoSize = true;
+        _dateEnabledCheck.Margin = new Padding(4, 6, 6, 4);
+
+        _dateStartPicker.Format = DateTimePickerFormat.Short;
+        _dateEndPicker.Format = DateTimePickerFormat.Short;
+        _dateStartPicker.Margin = new Padding(0, 4, 4, 4);
+        _dateEndPicker.Margin = new Padding(0, 4, 10, 4);
+
+        _applyFilterButton.Text = "应用筛选(&L)";
+        _applyFilterButton.AutoSize = true;
+        _applyFilterButton.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _applyFilterButton.Padding = new Padding(10, 4, 10, 4);
+        _applyFilterButton.Margin = new Padding(4, 3, 0, 3);
+        _applyFilterButton.Click += (_, _) => ApplyFilterFromUi();
+
+        _keywordBox.TabIndex = 1;
+        _projectBox.TabIndex = 2;
+        _sessionIdBox.TabIndex = 3;
+        _dateFieldCombo.TabIndex = 4;
+        _dateEnabledCheck.TabIndex = 5;
+        _dateStartPicker.TabIndex = 6;
+        _dateEndPicker.TabIndex = 7;
+        _applyFilterButton.TabIndex = 8;
+
+        _filterPanel.Controls.AddRange(new Control[]
+        {
+            new Label { Text = "关键字(&K)", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
+            _keywordBox,
+            new Label { Text = "项目(&J)", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
+            _projectBox,
+            new Label { Text = "会话 ID(&I)", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
+            _sessionIdBox,
+            new Label { Text = "日期字段(&T)", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
+            _dateFieldCombo,
+            _dateEnabledCheck,
+            new Label { Text = "起", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
+            _dateStartPicker,
+            new Label { Text = "止", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
+            _dateEndPicker,
+            _applyFilterButton,
+        });
     }
 
     private void BuildPreviewRegion()
@@ -98,7 +194,7 @@ public sealed partial class MainForm : Form
         _preview.Dock = DockStyle.Fill;
         _preview.ReadOnly = true;
         _preview.BorderStyle = BorderStyle.None;
-        _preview.TabIndex = 2;
+        _preview.TabIndex = 10;
         _split.Panel2.Controls.Add(_preview);
     }
 
@@ -110,9 +206,9 @@ public sealed partial class MainForm : Form
         _actionPanel.WrapContents = false;
         _actionPanel.Padding = new Padding(8, 6, 8, 6);
 
-        ConfigureActionButton(_scanButton, "扫描(&S)", 3);
-        ConfigureActionButton(_deleteButton, "删除(&D)", 4);
-        ConfigureActionButton(_exitButton, "退出(&X)", 5);
+        ConfigureActionButton(_scanButton, "扫描(&S)", 11);
+        ConfigureActionButton(_deleteButton, "删除(&D)", 12);
+        ConfigureActionButton(_exitButton, "退出(&X)", 13);
 
         _scanButton.Click += OnScanClick;
         _deleteButton.Click += OnDeleteClick;
@@ -139,15 +235,147 @@ public sealed partial class MainForm : Form
         _statusStrip.Dock = DockStyle.Bottom;
     }
 
-    private void OnSessionListSelectionChanged(object? sender, EventArgs e)
+    private void OnSessionGridSelectionChanged(object? sender, EventArgs e)
     {
-        _deleteButton.Enabled = _sessionList.SelectedItems.Count > 0;
+        _deleteButton.Enabled = _sessionGrid.SelectedRows.Count > 0;
     }
 
-    private void OnScanClick(object? sender, EventArgs e)
+    private async void OnScanClick(object? sender, EventArgs e)
     {
-        _statusLabel.Text = "扫描功能将在 T-18 接入。";
+        if (_scanning)
+        {
+            return;
+        }
+
+        _scanning = true;
+        _scanButton.Enabled = false;
+        _statusLabel.Text = "扫描中…";
+        try
+        {
+            var root = ResolveScanRoot();
+            if (root is null)
+            {
+                _statusLabel.Text = _rootErrorText ?? "数据根不可用。";
+                return;
+            }
+
+            var result = await _presenter.ScanAsync(root);
+            if (result.RootErrorCode is null)
+            {
+                BindSessions(result.Sessions);
+            }
+
+            _statusLabel.Text = _presenter.BuildStatusText(filtered: null);
+        }
+        catch (OperationCanceledException)
+        {
+            _statusLabel.Text = "扫描已取消。";
+        }
+        catch (Exception ex)
+        {
+            _statusLabel.Text = "扫描失败：" + ex.Message;
+        }
+        finally
+        {
+            _scanning = false;
+            _scanButton.Enabled = true;
+            if (_smokeResultPath is not null)
+            {
+                _smokeScanFinished = true;
+            }
+        }
     }
+
+    private string? _rootErrorText;
+
+    private string? ResolveScanRoot()
+    {
+        if (_scanRootOverride is not null)
+        {
+            return _scanRootOverride;
+        }
+
+        var roots = new RootLocator().Resolve();
+        if (!roots.DshProbe.IsValid)
+        {
+            _rootErrorText = $"数据根不可用：{roots.DshProbe.ErrorCode}（{roots.DshProbe.HomePath}）";
+            return null;
+        }
+
+        return roots.SessionRoot;
+    }
+
+    private void ApplyFilterFromUi()
+    {
+        if (_presenter.LastResult is null)
+        {
+            _statusLabel.Text = "请先扫描，再应用筛选。";
+            return;
+        }
+
+        DateFilter? date = null;
+        if (_dateEnabledCheck.Checked)
+        {
+            var field = _dateFieldCombo.SelectedIndex == 0 ? DateFilterField.CreatedAt : DateFilterField.FileModified;
+            date = new DateFilter(
+                field,
+                DateOnly.FromDateTime(_dateStartPicker.Value.Date),
+                DateOnly.FromDateTime(_dateEndPicker.Value.Date));
+        }
+
+        var request = new FilterRequest(date, _projectBox.Text, _sessionIdBox.Text, _keywordBox.Text);
+        IReadOnlyList<SessionSummary> filtered;
+        try
+        {
+            filtered = _presenter.ApplyFilter(request);
+        }
+        catch (ArgumentException ex)
+        {
+            _statusLabel.Text = "筛选无效：" + ex.Message;
+            return;
+        }
+
+        BindSessions(filtered);
+        _statusLabel.Text = _presenter.BuildStatusText(filtered);
+    }
+
+    /// <summary>绑定列表：每行 Tag 持有对应 SessionSummary，排序/筛选后选中项仍指向原会话。</summary>
+    private void BindSessions(IReadOnlyList<SessionSummary> sessions)
+    {
+        _sessionGrid.SuspendLayout();
+        _sessionGrid.Rows.Clear();
+        foreach (var session in sessions)
+        {
+            var index = _sessionGrid.Rows.Add(
+                session.SessionId ?? "（未知）",
+                session.Project ?? "（未知）",
+                FormatDate(session.CreatedAt),
+                DateOriginText(session.DateOrigin),
+                InventoryPresenter.FormatBytes(session.TotalBytes),
+                FormatsText(session),
+                StatusText(session));
+            _sessionGrid.Rows[index].Tag = session;
+        }
+
+        _sessionGrid.ResumeLayout();
+    }
+
+    private static string FormatDate(DateTimeOffset? value) =>
+        value is null ? "（未知）" : value.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+
+    private static string DateOriginText(DateOrigin origin) => origin switch
+    {
+        DateOrigin.Header => "header",
+        DateOrigin.Event => "事件",
+        DateOrigin.FileMtime => "文件修改时间",
+        _ => "未知",
+    };
+
+    private static string FormatsText(SessionSummary session) =>
+        string.Join("，", session.Generations.Select(static g => $"v{g.Generation}{(g.Compressed ? " zstd" : " 明文")}"));
+
+    private static string StatusText(SessionSummary session) =>
+        session.Status + (session.IsAmbiguous ? "（歧义）" : string.Empty);
 
     private void OnDeleteClick(object? sender, EventArgs e)
     {
