@@ -61,18 +61,18 @@ public sealed class CleanupExecutor
 
     /// <summary>
     /// 执行计划。<paramref name="manifest"/> 与 <paramref name="backup"/> 来自 T-21/T-22；
-    /// 执行前对 ZIP 重新校验（损坏/缺失/签名不符即中止）。
+    /// 会话计划（RequiresBackup=true）必须两者齐备且 ZIP 重校验通过（损坏/缺失/签名不符即中止）；
+    /// 缓存计划（RequiresBackup=false，T-27）不要求会话 ZIP，但若调用方仍提供备份则同样校验。
     /// </summary>
     public CleanupExecutionResult Execute(
         CleanupPlan plan,
-        BackupManifest manifest,
+        BackupManifest? manifest,
         VerifiedBackup? backup,
         string root,
         bool userConfirmed,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        ArgumentNullException.ThrowIfNull(manifest);
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
 
         if (!userConfirmed)
@@ -80,15 +80,18 @@ public sealed class CleanupExecutor
             return new CleanupExecutionResult(true, GateNotConfirmedCode, []);
         }
 
-        if (backup is null)
+        if (plan.RequiresBackup && (manifest is null || backup is null))
         {
             return new CleanupExecutionResult(true, GateBackupRequiredCode, []);
         }
 
-        var verify = _backupService.VerifyZip(backup.ZipPath, manifest);
-        if (!verify.Success)
+        if (manifest is not null && backup is not null)
         {
-            return new CleanupExecutionResult(true, $"{GateBackupInvalidCode}:{verify.ErrorCode}", []);
+            var verify = _backupService.VerifyZip(backup.ZipPath, manifest);
+            if (!verify.Success)
+            {
+                return new CleanupExecutionResult(true, $"{GateBackupInvalidCode}:{verify.ErrorCode}", []);
+            }
         }
 
         var probeResult = _probe.Probe();
