@@ -233,7 +233,7 @@
 
 ### T-21 — 实现 ZIP manifest 与清单签名
 
-- [ ] **T-21：实现 ZIP manifest 与清单签名**
+- [x] **T-21：实现 ZIP manifest 与清单签名**（2026-10-17，证据 artifacts/evidence/T-21.txt，feat 见 git log）
 - **前置**：T-07,T-10。
 - **修改范围**：`Application/BackupManifest.cs、tests/ManifestTests.cs`。
 - **任务边界**：从选中会话构建 ZIP 相对路径/长度/SHA 预期清单；覆盖所有已识别代际，去重并拒绝 zip-slip。

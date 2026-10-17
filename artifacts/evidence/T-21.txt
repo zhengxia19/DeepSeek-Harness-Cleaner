@@ -1,0 +1,40 @@
+T-21 验收证据 — ZIP manifest 与清单签名
+日期：2026-10-17
+基线 HEAD：457db7c docs(T-20)
+
+## 实施内容
+- 新增 src/DeepSeekHarnessCleaner.Application/BackupManifest.cs：
+  - ManifestEntry（zipPath/relativePath/length/sha256/sessionId/warnings）、BackupManifest（schemaVersion=1，root 绝对路径）。
+  - BackupManifestBuilder.Build：从选中会话全部 Generations 物理文件构建预期清单；逐文件流式 SHA-256（小写 64 位 hex）与长度；
+    条目必须位于数据根下 sessions/ 或 attachments/ 类别内；先于 GetFullPath 拒绝原始路径任何 .. 段（PATH_TRAVERSAL）；
+    根外/跨盘=CROSS_ROOT；规范化条目去重（OrdinalIgnoreCase）=DUPLICATE_ENTRY；类别未知=UNKNOWN_FILE；
+    错误非空则不产出部分清单；会话/代际非 Valid 记警告不阻断。
+  - Verify：结构复核（含条目 zipPath==relativePath、无 ..、无绝对路径、SHA 格式）→ 可选清单签名核对 →
+    逐条目磁盘复算长度与 SHA-256（MISSING/LENGTH_MISMATCH/SHA_MISMATCH/UNREADABLE）→ 可选实际文件集合（清单外=UNKNOWN_FILE）。
+  - 清单签名 ComputeSignature = 规范化 JSON（紧凑、字段序固定、条目按 zipPath 排序）的 SHA-256 小写 hex；
+    ToJson/FromJson 往返一致；FromJson 拒绝未知 schema、大写 SHA、.. 条目、重复条目、未知类别。
+  - 纯只读：不写/移/删任何数据文件。
+- 新增 tests/DeepSeekHarnessCleaner.Tests/ManifestTests.cs（14 用例）。
+
+## 命令与退出码
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1 → exit 0（0 警告 0 错误）
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build → exit 0
+   已通过! - 失败: 0，通过: 166，已跳过: 0，总计: 166（含 ManifestTests 14 项；此前 152 项全保留）
+   注：本会话文件策略 workspace-write 下 testhost OpenProcess 被拒（Win32Exception 5），经批准升级 danger-full-access 后正常（检查点已知坑）。
+3) UI 冒烟回归：DeepSeekHarnessCleaner.UI.exe --smoke → SMOKE_RESULT=PASS，退出码 0（54 项，无回归）。
+
+## 验收标准逐项
+- 所有 generation 被计入：Build_CountsAllGenerations_WithNormalizedZipPaths（v0+v4 两代际 → 2 条目，zipPath 为 sessions/<relative> '/' 分隔）→ PASS
+- 出现 .. 拒绝：Build_RejectsPathTraversalSegments（PATH_TRAVERSAL）；FromJson 拒绝 "sessions/../escape"（INVALID_MANIFEST）→ PASS
+- 重复条目拒绝：Build_RejectsDuplicateNormalizedEntries（大小写不同同路径 → DUPLICATE_ENTRY）；FromJson 重复条目 → PASS
+- 跨根拒绝：Build_RejectsCrossRootFiles（CROSS_ROOT）；Verify 对条目解析复验 IsUnderRoot → PASS
+- 未知文件拒绝：Build_RejectsUnknownCategoryFiles（storages/ 下 → UNKNOWN_FILE）；Verify_RejectsUnknownActualFile（实际文件超出清单 → UNKNOWN_FILE）→ PASS
+- manifest 校验可复算：Verify_RecomputesManifestFromDisk_AndPasses；Tampered→SHA_MISMATCH+LENGTH_MISMATCH；Missing→MISSING_FILE → PASS
+- 清单签名：Signature_StableAcrossJsonRoundTrip_AndDetectsTampering（往返 JSON 一致、签名稳定、篡改→SIGNATURE_MISMATCH）→ PASS
+- 契约（interfaces.md §ZIP 导出 schemaVersion=1）：root/relativePath/length/sha256/sessionId/警告字段齐备；SHA 小写 64 hex；无绝对路径/遍历/重复规范化路径 → PASS
+
+## 关联测试
+TC-09（ZIP 备份：原始代际全部入包；逐文件 SHA 相同）manifest 侧已覆盖；ZIP 写入与逐文件校验副作用归 T-22。
+
+## 结论
+全部验收 PASS，任务勾选。

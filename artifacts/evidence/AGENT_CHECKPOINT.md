@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-17（T-20 轮）
-Git HEAD：feat(T-20)；docs(T-20) 勾选提交紧随其后（基线 bcab381 docs(T-19)）
+更新时间：2026-10-17（T-21 轮）
+Git HEAD：feat(T-21)；docs(T-21) 勾选提交紧随其后（基线 457db7c docs(T-20)）
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -27,13 +27,15 @@ Git HEAD：feat(T-20)；docs(T-20) 勾选提交紧随其后（基线 bcab381 doc
 
 - T-20 独立设置保存/读取：Infrastructure/SettingsStore.cs（AppSettings schemaVersion=1 契约字段 camelCase；Load 缺失=Default/损坏=CorruptFallback/未知 schema=UnknownSchema 均回退默认且不改文件；previewMaxItems 钳制≤2000、未知 dateField 回退 fileModified、额外字段忽略；Save 既有损坏/未知 schema 拒绝覆写字节不变、原子=同目录 tmp+File.Move(overwrite)、rememberRoots=false 根一律 null、相对根丢弃、窗口非正回退默认钳制[320,8192]；默认路径 %LOCALAPPDATA%\DeepSeekHarnessCleaner\settings.json，测试注入夹具路径）、UI/SettingsDialog.cs（Load 回退提示、rememberRoots 禁用根输入/浏览、保存拒绝弹警告不关闭、FolderBrowserDialog；**未接线 MainForm**，归后续 UI 任务）、tests/SettingsTests.cs（10 用例）；build -m:1 exit 0；152/152；UI 冒烟 54 项回归 PASS 退出码 0（证据 T-20.txt）。坑：xunit Assert.Equal 对 string?[] 选 ReadOnlySpan 重载报 CS8631，Select 用 `Path.GetFileName(name)!` 投影非空
 
+- T-21 ZIP manifest 与清单签名：Application/BackupManifest.cs（ManifestEntry/BackupManifest schemaVersion=1；Builder.Build=数据根下 sessions//attachments/ 类别限定 + 原始路径任何 .. 段先拒（PATH_TRAVERSAL，先于 GetFullPath 折叠）+ 跨根/跨盘 CROSS_ROOT + OrdinalIgnoreCase 去重 DUPLICATE_ENTRY + 未知类别 UNKNOWN_FILE，错误非空不产出部分清单，非 Valid 状态记警告；Verify=结构复核→可选签名→磁盘复算 length/SHA（MISSING/LENGTH_MISMATCH/SHA_MISMATCH）→可选 actualFiles 清单外=UNKNOWN_FILE；签名=规范化 JSON（紧凑、字段序固定、按 zipPath 排序）SHA-256 小写 hex；ToJson/FromJson 往返一致，FromJson 拒未知 schema/大写 SHA/../重复/未知类别；纯只读）、tests/ManifestTests.cs（14 用例）；build -m:1 exit 0；166/166；UI 冒烟 54 项回归 PASS 退出码 0（证据 T-21.txt）。坑：FileInfo.Length 对不存在文件抛 FileNotFoundException（测试须先落盘再构造 PhysicalLog）
+
 ## 下一个任务
-- T-21 实现 ZIP manifest 与清单签名（**前置 T-07,T-10**，均已验收）。范围：Application/BackupManifest.cs、tests/ManifestTests.cs。要点：从选中会话构建 ZIP 相对路径/长度/SHA 预期清单；覆盖所有已识别代际、去重、拒绝 zip-slip（..、跨根、重复条目、未知文件）。验收：所有 generation 计入；manifest 校验可复算。关联 TC-09。定义见 docs/implementation-tasks.md:234-241（下轮先读原文，并读 interfaces.md §28-34 ZIP 导出契约：sessions/<relative>、attachments/<relative>、manifest.json 记 root/relativePath/length/sha256/sessionId/警告；SHA-256 小写 64 位 hex）。
-- 可复用 API：InventoryService.Scan；SessionSummary.Generations（含 ModifiedAt）；PathGuard；夹具 FixtureRoot/FixtureFactory（WriteFile/Utf8）。SettingsStore/AppSettings 已就绪（T-20）。
+- T-22 实现原始 ZIP 创建与校验（**前置 T-21**，已验收）。范围：Infrastructure/BackupService.cs、tests/BackupTests.cs。要点：流式写临时 zip，校验 entry 字节 SHA/数量/长度后无覆盖发布；失败移除临时 zip，返回 VerifiedBackup。验收：损坏/磁盘满/目标已有文件/进程取消时不返回成功；完成 ZIP 解压后每份原文件与原 SHA 一致。关联 TC-09,TC-20。定义见 docs/implementation-tasks.md:244-251（下轮先读原文；ZIP 契约见 interfaces.md §28-34：条目原字节、sessions/<relative>|attachments/<relative>、manifest.json 由 T-21 BackupManifestBuilder.ToJson 产出；不覆盖旧备份）。
+- 可复用 API：BackupManifestBuilder.Build/Verify/ComputeSignature/ToJson/FromJson（T-21）；InventoryService.Scan；SessionSummary.Generations；夹具 FixtureRoot/FixtureFactory。备份目标目录选择与不覆盖门禁见 T-22 原文。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
-- **本会话起 DSH 文件策略为 danger-full-access、审批关闭（不得请求 sandbox 升级）**。此前 workspace-write 下：MSBuild 并行子节点启动失败（“生成失败”但 0 错误、约 3 秒超时）→ build 须加 `-m:1`；dotnet test 的 testhost OpenProcess 被拒（Win32Exception 5）。full-access 下标准 `dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build` 正常（142/142）。保守起见 build 仍带 `-m:1`。
+- **文件策略随会话变化**：T-21 轮起为 workspace-write；该策略下 `dotnet test` 的 testhost OpenProcess 被拒（Win32Exception 5，测试运行中止）。解法：对确切命令一次性升级 `sandbox_permissions=danger-full-access`（T-21 已获批准）。build 在 workspace-write 下须 `-m:1`。full-access 下标准 `dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build` 正常（166/166）。
 - **Start-Process -Wait 在本环境会挂起**（即使目标进程已退出）。同步等待 GUI exe 用 `[System.Diagnostics.Process]::Start($psi)` + `WaitForExit(ms)`；异步用 `& $exe` + 轮询结果文件。
 - UI 冒烟取证：`& exe --smoke <out.txt>`（结果文件 SMOKE_RESULT=PASS/FAIL，逐项 PASS/FAIL；退出码经 Process API 获取）。本机 DeviceDpi=96；真实 DPI/干净 Win10 VM 验证归 T-33，勿在此宣称。
 - 命令：`dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1`；`dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build`。build 退出码非 0 时勿跑 --no-build 测试。PowerShell 无 grep，用 Select-String。Get-CimInstance 可能被拒，用 Get-Process。
@@ -48,4 +50,4 @@ Git HEAD：feat(T-20)；docs(T-20) 勾选提交紧随其后（基线 bcab381 doc
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-17 提交已排除二者。
 
 ## 收尾状态
-- T-20 全部验收 PASS（build -m:1 exit 0；152/152 测试含 SettingsTests 10 项；UI 冒烟 54 项回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-21 开始。
+- T-21 全部验收 PASS（build -m:1 exit 0；166/166 测试含 ManifestTests 14 项；UI 冒烟 54 项回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-22 开始。
