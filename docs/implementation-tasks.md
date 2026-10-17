@@ -213,7 +213,7 @@
 
 ### T-19 — 绑定会话预览与解析状态
 
-- [ ] **T-19：绑定会话预览与解析状态**
+- [x] **T-19：绑定会话预览与解析状态**（2026-10-17，证据 artifacts/evidence/T-19.txt，feat 见 git log）
 - **前置**：T-13,T-14,T-18。
 - **修改范围**：`UI/PreviewPresenter.cs、UI/MainForm.*`。
 - **任务边界**：选中会话触发后台受限预览，显示 role、文本、来源与 warning。
