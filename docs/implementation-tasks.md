@@ -193,7 +193,7 @@
 
 ### T-17 — 建立 WinForms 单窗口布局
 
-- [ ] **T-17：建立 WinForms 单窗口布局**
+- [x] **T-17：建立 WinForms 单窗口布局**（2026-10-17，证据 artifacts/evidence/T-17.txt，feat 12a644f）
 - **前置**：T-03。
 - **修改范围**：`UI/MainForm.*、UI/Program.cs`。
 - **任务边界**：建立菜单/导航、列表区、预览区、状态栏、按钮与尺寸/DPI 行为（可无数据）。
