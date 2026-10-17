@@ -293,7 +293,7 @@
 
 ### T-27 — 实现会话投影缓存的独立清理计划
 
-- [ ] **T-27：实现会话投影缓存的独立清理计划**
+- [x] **T-27：实现会话投影缓存的独立清理计划**（2026-10-18，证据 artifacts/evidence/T-27.txt，feat 见 git log）
 - **前置**：T-07,T-16,T-26。
 - **修改范围**：`Application/CacheCleanupSelection.cs、tests/CacheCleanupTests.cs`。
 - **任务边界**：单会话仅精确匹配；全量必须显式选择；用同一安全 executor 通道，缓存删除不要求会话 ZIP。

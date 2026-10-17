@@ -1,0 +1,38 @@
+T-27 验收证据 — 会话投影缓存的独立清理计划
+日期：2026-10-18（Asia/Shanghai）
+任务：docs/implementation-tasks.md T-27（前置 T-07、T-16、T-26 均已验收）
+修改范围：src/DeepSeekHarnessCleaner.Application/CacheCleanupSelection.cs（新增）、tests/DeepSeekHarnessCleaner.Tests/CacheCleanupTests.cs（新增）；附带 src/DeepSeekHarnessCleaner.Infrastructure/CleanupExecutor.cs 门禁语义按 plan.RequiresBackup 分流（“同一安全 executor 通道，缓存删除不要求会话 ZIP”的任务边界要求）
+
+一、实施摘要
+- CacheCleanupSelection.Select(storagesRoot, mode, selectedSessionIds, candidates) → CacheCleanupPlanResult{RootErrorCode,Plan,Exclusions}；复用 T-24 CleanupPlan/CleanupTarget 契约（Category=DedicatedCache），RequiresBackup=false。
+- 输入为 Application 定义记录 CacheFileEvidence（调用方从 T-16 SessionCacheIndex 条目转换，Application 不依赖 Infrastructure）。
+- SingleSession：仅 session_projcache/sessions/<ID>.json 与会话 ID 严格一致（相对路径 Ordinal 精确）且 ID 在所选集合内；文件名/位置不符 → CACHE_STRUCTURE_MISMATCH；未选/无主 → CACHE_NOT_SELECTED。
+- WholeCache：仅显式模式；范围=session_projcache.json（根下）+ session_projcache\ 内任意深度；其他存储域（Local Storage 等）→ OUT_OF_CACHE_SCOPE；SingleSession+空选择绝不隐式全量。
+- workspace.json 任何模式下永不列入（WORKSPACE_NEVER_CLEANED）；重复路径第二次 CACHE_DUPLICATE_PATH；根外/穿越 CACHE_CROSS_ROOT/CACHE_PATH_TRAVERSAL（同 T-24 内联复验）；根非法 ROOT_INVALID。
+- 计划带根指纹（与 T-24 同构 SHA-256 小写 hex）、目标按 CompareOrdinal 排序；纯内存零 IO。
+- CleanupExecutor.Execute：manifest 改可空；plan.RequiresBackup=true 时 manifest+backup 必须齐备且 ZIP 重校验（T-26 语义不变）；false 时不要求会话 ZIP，但若仍提供则同样校验；进程门禁与逐项 PathGuard/复验对所有计划一致生效。
+
+二、命令与退出码
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   首跑 BUILD_EXIT=1（CS9174 集合表达式 [] 误用于 CleanupPlan? 位置）；修复后 BUILD_EXIT=0，0 警告 0 错误
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   TEST_EXIT=0，已通过! - 失败: 0，通过: 234，总计: 234（新增 CacheCleanupTests 14 项；此前 220 项无回归，含 T-26 全部执行器用例在 manifest 可空化后仍通过）
+3) UI 冒烟回归：DeepSeekHarnessCleaner.UI.exe --smoke
+   SMOKE_RESULT=PASS，SMOKE_EXIT=0（Process API）
+
+三、验收标准逐项
+- workspace.json 不被列入：PASS（WorkspaceJson_NeverListedInEitherMode：两模式均排除 WORKSPACE_NEVER_CLEANED；fixture 执行用例 Executor_CachePlanWithoutZip 中 workspace.json 前后字节相等）。
+- 单会话范围无误：PASS（SingleSession_OnlyExactMatchedSelectedSession_EntersPlan：仅精确匹配所选会话一条进入；SingleSession_StructureMismatchExcluded：文件名不符与位置不符均拒；SingleSession_UnselectedOrOwnerlessExcluded）。
+- 全量范围无误且必须显式选择：PASS（WholeCache_IncludesCacheScope_ExcludesOtherDomains：projcache 目录任意深度+projcache.json 进入，Local Storage/根下 other.json 排除；WholeCache_RequiresExplicitMode_NeverImplicit：SingleSession+空选择零进入）。
+- 运行中仍被阻断：PASS（Executor_CachePlanProcessActive_StillBlocked：缓存计划+Active 探测→GATE_PROCESS_NOT_INACTIVE 中止，文件未删）。
+- 路径不安全仍被阻断：PASS（OutOfRootAndTraversalExcluded 选择层排除；Executor_CacheTargetOutsideRoot_SkippedByPathGuard：根外目标执行层 PATH_ESCAPE 跳过零删除）。
+- 缓存删除不要求会话 ZIP / 会话强备份不回归：PASS（Executor_CachePlanWithoutZip_DeletesOnlyMatched：manifest/backup 均 null 成功删除；Executor_BackupRequiredPlanWithoutZip_StillGated：RequiresBackup=true 计划缺备份仍 GATE_BACKUP_REQUIRED）。
+- 根非法/指纹：PASS（RootInvalid_ReturnsErrorCode；Fingerprint_StablePerRoot_DistinctAcrossRoots）。
+- 关联测试 TC-12（单会话只删匹配 JSON；全量需显式选择，workspace.json 不变）：PASS。
+
+四、真实排障记录
+- CS9174：ROOT_INVALID 分支 `new CacheCleanupPlanResult("ROOT_INVALID", [], [])` 集合表达式落到 CleanupPlan? 位置；改显式 null。
+- 测试设计修正：根外哨兵文件需真实存在才能验证 PATH_ESCAPE（而非 Missing）分支，用例中先写出该文件。
+
+五、安全红线
+- 选择器纯内存零 IO；删除仅发生在合成 FixtureRoot.StoragesRoot；真实数据根未触碰；无网络。

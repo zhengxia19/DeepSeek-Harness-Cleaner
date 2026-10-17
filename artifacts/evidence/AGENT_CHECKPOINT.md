@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-18（T-26 轮）
-Git HEAD：docs(T-26) 勾选提交（其前为 feat(T-26)；上上基线 ff26c52 docs(T-25)）
+更新时间：2026-10-18（T-27 轮）
+Git HEAD：docs(T-27) 勾选提交（其前为 feat(T-27)；上上基线 67f2b71 docs(T-26)）
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -41,9 +41,11 @@ Git HEAD：docs(T-26) 勾选提交（其前为 feat(T-26)；上上基线 ff26c52
 
 - T-26 备份门禁与逐文件删除执行器：Infrastructure/CleanupExecutor.cs（Execute(plan,manifest,backup,root,userConfirmed,ct)→{Aborted,AbortCode,Outcomes[ItemOutcome{Status∈Deleted/Skipped/Failed,Reason,DeletedBytes}]}+统计；全局门禁顺序=确认→备份非空→VerifyZip 重校验(缺失/损坏→GATE_BACKUP_INVALID)→probe 仅 Inactive(GATE_PROCESS_NOT_INACTIVE)→根指纹一致(GATE_FINGERPRINT_CHANGED,与 T-24 同构)；逐项复验=PathGuard→存在→自身 Reparse/目录→长度→mtime UTC 精确→SHA(计划非空时)，不符 Skipped 不删；删除失败 Failed PERMISSION_DENIED/IO_FAILURE 不中断其余；ct 逐项 CANCELED；未选/根外零触碰）、tests/CleanupExecutorTests.cs（14 用例，合成 FixtureRoot+mklink /J junction+ReadOnly 模拟权限）；build exit 0；220/220；UI 冒烟 PASS（证据 T-26.txt）。坑：net10.0 TFM 无 Directory.CreateJunction→用 cmd mklink /J 辅助；测试辅助 `backup ?? ctx.Backup` 吞掉显式 null→改 omitBackup 布尔；NOT_REGULAR 判定勿用 (Attributes&Normal)==0（Archive 文件误拒）
 
+- T-27 投影缓存独立清理计划：Application/CacheCleanupSelection.cs（Select(storagesRoot,mode∈SingleSession/WholeCache,selectedIds,CacheFileEvidence[])→{RootErrorCode,Plan,Exclusions[CacheExclusion]}；复用 CleanupPlan/CleanupTarget(Category=DedicatedCache,RequiresBackup=false)；单会话=session_projcache\sessions\<ID>.json 相对路径 Ordinal 精确+ID 已选，否则 CACHE_STRUCTURE_MISMATCH/CACHE_NOT_SELECTED；全量仅显式模式=session_projcache.json+session_projcache\任意深度，其他域 OUT_OF_CACHE_SCOPE；workspace.json 恒 WORKSPACE_NEVER_CLEANED；重复 CACHE_DUPLICATE_PATH；根外/穿越 CACHE_CROSS_ROOT/CACHE_PATH_TRAVERSAL；指纹同 T-24）、CleanupExecutor.cs 附带修改（manifest 可空；plan.RequiresBackup=true 才强制备份+VerifyZip，false 免会话 ZIP 但提供仍校验——T-26 用例全过无回归）、tests/CacheCleanupTests.cs（14 用例）；build exit 0；234/234；UI 冒烟 PASS（证据 T-27.txt）。坑：CS9174 集合表达式 [] 不能落到可空非集合类型位置须显式 null；根外哨兵须真实存在才走 PATH_ESCAPE 分支（否则 Missing）；执行器指纹用 GetFullPath(root.Trim()) 不剥尾分隔符而选择器 NormalizeRoot 剥——接线时须传无尾分隔符的同一根字符串
+
 ## 下一个任务
-- T-27 实现会话投影缓存的独立清理计划（**前置 T-07,T-16,T-26**，均已验收）。范围：Application/CacheCleanupSelection.cs、tests/CacheCleanupTests.cs。要点：单会话仅精确匹配（T-16 SessionCacheIndex Matched）；全量必须显式选择；用同一安全 executor 通道（CleanupExecutor），缓存删除不要求会话 ZIP。验收：workspace.json 不被列入；全量和单会话范围无误；运行中/路径不安全仍被阻断。关联 TC-12（单会话只删匹配 JSON；全量需显式选择，workspace.json 不变）。定义见 docs/implementation-tasks.md:294-301（下轮先读原文）。注意：缓存 ZIP 门禁问题——Execute 要求 manifest+backup；缓存计划 RequiresBackup=false，需为“无 ZIP 备份”设计门禁通道（勿破坏会话删除强备份语义；可给 Execute 增加按 plan.RequiresBackup 决定备份门禁的语义或独立重载）。
-- 可复用 API：PathGuard（T-07）、CleanupPlanner/CleanupTarget/CleanupPlan（T-24）、CleanupExecutor/ItemOutcome（T-26）、BackupService（T-22）、HarnessProcessProbe（T-25）、SessionCacheIndex（T-16）。
+- T-28 实现桌面缓存/日志清理计划（**前置 T-07,T-26**，均已验收）。范围：Application/DesktopCleanupSelection.cs、tests/DesktopCleanupTests.cs。要点：仅固定 5 个 cache 目录（Cache、Code Cache、GPUCache、DawnGraphiteCache、DawnWebGPUCache，design §6）+ logs 目录（共 6 白名单，TC-13），日志支持按文件修改日期筛选；只删目录内普通文件并清空后目录（桌面缓存）；不修改其他桌面数据。验收：Local Storage/Session Storage/Network 在所有组合下 hash 不变；误选根被拒绝。关联 TC-13。定义见 docs/implementation-tasks.md:304-311（下轮先读原文）。桌面根=%APPDATA%\@deepseek-ai\dsh-desktop（测试用合成根）；PathGuard.DesktopCacheDirs 已有 5 目录白名单常量（Infrastructure，Application 需自带同名单）。
+- 可复用 API：PathGuard（T-07）、CleanupPlanner（T-24）、CleanupExecutor（T-26，manifest 可空）、CacheCleanupSelection（T-27）、SessionCacheIndex（T-16）、HarnessProcessProbe（T-25）。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
@@ -62,4 +64,4 @@ Git HEAD：docs(T-26) 勾选提交（其前为 feat(T-26)；上上基线 ff26c52
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-17 提交已排除二者。
 
 ## 收尾状态
-- T-26 全部验收 PASS（build exit 0；220/220 测试含 CleanupExecutorTests 14 项；UI 冒烟回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-27 开始。
+- T-27 全部验收 PASS（build exit 0；234/234 测试含 CacheCleanupTests 14 项；UI 冒烟回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-28 开始。
