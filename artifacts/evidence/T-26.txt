@@ -1,0 +1,39 @@
+T-26 验收证据 — 备份门禁与逐文件删除执行器
+日期：2026-10-18（Asia/Shanghai）
+任务：docs/implementation-tasks.md T-26（前置 T-22、T-24、T-25 均已验收）
+修改范围：src/DeepSeekHarnessCleaner.Infrastructure/CleanupExecutor.cs（新增）、tests/DeepSeekHarnessCleaner.Tests/CleanupExecutorTests.cs（新增）
+
+一、实施摘要
+- CleanupExecutor(probe?).Execute(plan, manifest, backup, root, userConfirmed, ct) → CleanupExecutionResult{Aborted,AbortCode,Outcomes[ItemOutcome{AbsolutePath,Status∈Deleted/Skipped/Failed,Reason,DeletedBytes}]}，统计 DeletedCount/SkippedCount/FailedCount/DeletedBytes/AllSucceeded。
+- 全局门禁（任一失败即中止、Outcomes 空、零删除）：用户确认（GATE_NOT_CONFIRMED）→ 备份非空（GATE_BACKUP_REQUIRED）→ ZIP 重新校验 BackupService.VerifyZip（缺失/损坏/签名不符 → GATE_BACKUP_INVALID:*）→ HarnessProcessProbe 仅 Inactive 放行（GATE_PROCESS_NOT_INACTIVE:*，Active/Unknown 均拒）→ 根指纹与计划一致（GATE_FINGERPRINT_CHANGED，指纹与 T-24 同构：规范化根 UTF-8 SHA-256 小写 hex）。
+- 逐项复验（design.md §7.5）：PathGuard.Check（包含/逐段 reparse/UNC 等）→ 存在性 → 最终文件自身 ReparsePoint/目录 → 长度 → mtime(UTC 精确) → SHA-256（计划 ExpectedSha256 非空时）；任一不符 Skipped（CHANGED_LENGTH/CHANGED_MTIME/CHANGED_SHA256/PATH_REPARSE/MISSING_FILE/…），文件保持原样。
+- 删除失败如实记录：ReadOnly→UnauthorizedAccessException→Failed PERMISSION_DENIED；IOException→Failed IO_FAILURE；单项失败不中断其余项（部分成功报告真实）。
+- 取消：ct 逐项检查，剩余项 Skipped CANCELED，已删项如实保留。
+- 未选文件与根外哨兵零触碰（执行器只删计划内目标）。
+
+二、命令与退出码
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   首跑 BUILD_EXIT=1（CS0117 Directory.CreateJunction 不存在）；修复后 BUILD_EXIT=0，0 警告 0 错误
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   首跑 219/220（1 失败，测试辅助 null 回退缺陷）；修复后 TEST_EXIT=0，已通过! - 失败: 0，通过: 220，总计: 220（新增 CleanupExecutorTests 14 项；此前 206 项无回归）
+3) UI 冒烟回归：DeepSeekHarnessCleaner.UI.exe --smoke
+   SMOKE_RESULT=PASS，SMOKE_EXIT=0（Process API）
+
+三、验收标准逐项（全部在隔离合成 FixtureRoot 内，未触碰真实数据根）
+- 未备份零越界删除：PASS（Execute_NullBackup_AbortsZeroDeletions：GATE_BACKUP_REQUIRED，两目标文件仍在）。
+- ZIP 无效零越界删除：PASS（Execute_CorruptZip_AbortsZeroDeletions：zip 覆写 512 字节垃圾→GATE_BACKUP_INVALID:ZIP_VERIFY_FAILED；Execute_MissingZip_AbortsZeroDeletions：zip 删除→中止）。
+- 变化零越界删除：PASS（Execute_ChangedLength_SkipsItem_AndDeletesOther：追加字节→CHANGED_LENGTH 跳过、另一目标删除；Execute_ChangedMtime_SkipsItem：mtime+120s→CHANGED_MTIME；Execute_ShaMismatch_SkipsItem：ExpectedSha256 伪造 64 个 0→CHANGED_SHA256，长度/mtime 一致仍拒删）。
+- 活动进程零越界删除：PASS（Execute_ProcessActive_AbortsZeroDeletions：注入 Active 快照→GATE_PROCESS_NOT_INACTIVE:Active；Execute_ProcessUnknown_AbortsZeroDeletions：枚举异常→Unknown→中止，fail closed）。
+- reparse 零越界删除：PASS（Execute_ReparseJunctionPath_SkipsItem_TargetUntouched：根内 junction（mklink /J）路径→PATH_REPARSE 跳过，junction 外真实文件 hash 不变）。
+- 权限不足零越界删除：PASS（Execute_ReadOnlyFile_ReportsFailed_AndDeletesOther：ReadOnly→File.Delete 抛 UnauthorizedAccessException→Failed PERMISSION_DENIED，文件未被删除）。
+- 部分成功报告真实：PASS（上述变化/权限用例 Deleted=1+Skipped/Failed=1 如实统计；Execute_PreCanceled_SkipsAllZeroDeletions：预取消→2 项 Skipped CANCELED、零删除）。
+- 不改未选 fixture：PASS（Execute_DeletesPlannedTargets_KeepsUnselectedAndOutsideUntouched：未选 keep.txt 与根外 outside.txt 前后字节数组相等；仅计划内 2 目标删除）。
+- 关联测试 TC-11（仅所选目标删除、树外/未选 hash 不变、失败逐项列明）、TC-15（活动进程/无法检查必拒绝）、TC-16（部分失败/取消/权限拒绝/统计准确）：PASS。
+
+四、真实排障记录
+- CS0117：net10.0 测试 TFM 无 Directory.CreateJunction；改用既有测试同款 cmd /c mklink /J 辅助（首次修复只加了辅助未改调用点，二次编译同错后改调用点）。
+- 测试失败 Execute_NullBackup：Run 辅助 `backup ?? ctx.Backup` 把显式传 null 回退为真实备份，门禁未触发；改 omitBackup 布尔参数。
+- 实现期自查修正：NOT_REGULAR_FILE 判定曾误用 (Attributes & Normal)==0——Archive 属性文件会被误拒；改为仅拒 Directory/ReparsePoint（ReadOnly 走删除失败路径如实报告）。
+
+五、安全红线
+- 删除仅发生在合成 fixture 根；真实 %USERPROFILE%\.dsh 与 %APPDATA%\@deepseek-ai\dsh-desktop 未触碰；无网络。

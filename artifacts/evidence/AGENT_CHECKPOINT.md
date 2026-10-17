@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-18（T-25 轮）
-Git HEAD：docs(T-25) 勾选提交（其前为 feat(T-25)；上上基线 e0a8d3f docs(T-24)）
+更新时间：2026-10-18（T-26 轮）
+Git HEAD：docs(T-26) 勾选提交（其前为 feat(T-26)；上上基线 ff26c52 docs(T-25)）
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -39,9 +39,11 @@ Git HEAD：docs(T-25) 勾选提交（其前为 feat(T-25)；上上基线 e0a8d3f
 
 - T-25 Harness 退出状态检查：Infrastructure/HarnessProcessProbe.cs（Probe()→{State∈Active/Inactive/Unknown,Matches,RiskNotes,ErrorCode}；AllowsWrite 门禁=仅 Inactive；已知 exe "DeepSeek Harness.exe"，ProcessName 匹配大小写不敏感或主模块文件名匹配（改名/包装计 Active+风险注记）；名称匹配但路径不可验证→Unknown fail closed；枚举异常→Unknown+PROCESS_ENUMERATION_FAILED；RiskNotes 恒含托管/子进程风险（design §7.6）；只读无 Kill；构造可注入 Func<IReadOnlyList<ProcessSnapshot>> 模拟三态）、tests/ProcessProbeTests.cs（9 用例）；build -m:1 exit 0 一次过；206/206；UI 冒烟回归 PASS 退出码 0；本机实测 6 个 DeepSeek Harness 进程在运行（只读 Get-Process，未停止）（证据 T-25.txt）。坑：ProcessName 不含 .exe 扩展名；MainModule 对 32/64 位差异或权限不足抛 InvalidOperationException/Win32Exception 须降级 PathAccessible=false
 
+- T-26 备份门禁与逐文件删除执行器：Infrastructure/CleanupExecutor.cs（Execute(plan,manifest,backup,root,userConfirmed,ct)→{Aborted,AbortCode,Outcomes[ItemOutcome{Status∈Deleted/Skipped/Failed,Reason,DeletedBytes}]}+统计；全局门禁顺序=确认→备份非空→VerifyZip 重校验(缺失/损坏→GATE_BACKUP_INVALID)→probe 仅 Inactive(GATE_PROCESS_NOT_INACTIVE)→根指纹一致(GATE_FINGERPRINT_CHANGED,与 T-24 同构)；逐项复验=PathGuard→存在→自身 Reparse/目录→长度→mtime UTC 精确→SHA(计划非空时)，不符 Skipped 不删；删除失败 Failed PERMISSION_DENIED/IO_FAILURE 不中断其余；ct 逐项 CANCELED；未选/根外零触碰）、tests/CleanupExecutorTests.cs（14 用例，合成 FixtureRoot+mklink /J junction+ReadOnly 模拟权限）；build exit 0；220/220；UI 冒烟 PASS（证据 T-26.txt）。坑：net10.0 TFM 无 Directory.CreateJunction→用 cmd mklink /J 辅助；测试辅助 `backup ?? ctx.Backup` 吞掉显式 null→改 omitBackup 布尔；NOT_REGULAR 判定勿用 (Attributes&Normal)==0（Archive 文件误拒）
+
 ## 下一个任务
-- T-26 实现备份门禁与逐文件删除执行器（**前置 T-22,T-24,T-25**，均已验收）。范围：Infrastructure/CleanupExecutor.cs、tests/CleanupExecutorTests.cs。要点：在 verified backup + 用户确认后重新检查进程、路径、源文件 SHA/mtime，逐项删除并收集 ItemOutcome。验收：未备份、ZIP 无效、变化、活动进程、reparse、权限不足均零越界删除；部分成功报告真实；不改未选 fixture。关联 TC-11,TC-15,TC-16。定义见 docs/implementation-tasks.md:284-291（下轮先读原文）。删除测试必须在隔离合成根；执行器在 Infrastructure，可用 PathGuard/HarnessProcessProbe/BackupService.VerifyZip/CleanupPlan。
-- 可复用 API：PathGuard（T-07）、CleanupPlanner/CleanupTarget/CleanupPlan（T-24）、BackupService.VerifyZip/VerifiedBackup（T-22）、HarnessProcessProbe（T-25）、SessionCacheIndex（T-16）。
+- T-27 实现会话投影缓存的独立清理计划（**前置 T-07,T-16,T-26**，均已验收）。范围：Application/CacheCleanupSelection.cs、tests/CacheCleanupTests.cs。要点：单会话仅精确匹配（T-16 SessionCacheIndex Matched）；全量必须显式选择；用同一安全 executor 通道（CleanupExecutor），缓存删除不要求会话 ZIP。验收：workspace.json 不被列入；全量和单会话范围无误；运行中/路径不安全仍被阻断。关联 TC-12（单会话只删匹配 JSON；全量需显式选择，workspace.json 不变）。定义见 docs/implementation-tasks.md:294-301（下轮先读原文）。注意：缓存 ZIP 门禁问题——Execute 要求 manifest+backup；缓存计划 RequiresBackup=false，需为“无 ZIP 备份”设计门禁通道（勿破坏会话删除强备份语义；可给 Execute 增加按 plan.RequiresBackup 决定备份门禁的语义或独立重载）。
+- 可复用 API：PathGuard（T-07）、CleanupPlanner/CleanupTarget/CleanupPlan（T-24）、CleanupExecutor/ItemOutcome（T-26）、BackupService（T-22）、HarnessProcessProbe（T-25）、SessionCacheIndex（T-16）。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
@@ -60,4 +62,4 @@ Git HEAD：docs(T-25) 勾选提交（其前为 feat(T-25)；上上基线 e0a8d3f
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-17 提交已排除二者。
 
 ## 收尾状态
-- T-25 全部验收 PASS（build -m:1 exit 0 一次过；206/206 测试含 ProcessProbeTests 9 项；UI 冒烟回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-26 开始。
+- T-26 全部验收 PASS（build exit 0；220/220 测试含 CleanupExecutorTests 14 项；UI 冒烟回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-27 开始。

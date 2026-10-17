@@ -283,7 +283,7 @@
 
 ### T-26 — 实现备份门禁与逐文件删除执行器
 
-- [ ] **T-26：实现备份门禁与逐文件删除执行器**
+- [x] **T-26：实现备份门禁与逐文件删除执行器**（2026-10-18，证据 artifacts/evidence/T-26.txt，feat 见 git log）
 - **前置**：T-22,T-24,T-25。
 - **修改范围**：`Infrastructure/CleanupExecutor.cs、tests/CleanupExecutorTests.cs`。
 - **任务边界**：在 verified backup + 用户确认后重新检查进程、路径、源文件 SHA/mtime，逐项删除并收集 ItemOutcome。
