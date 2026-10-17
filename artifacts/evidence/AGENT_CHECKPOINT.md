@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-18（T-28 轮）
-Git HEAD：docs(T-28) 勾选提交（其前为 feat(T-28)；上上基线 d7f3312 docs(T-27)）
+更新时间：2026-10-18（T-29 轮）
+Git HEAD：docs(T-29) 勾选提交（其前为 feat(T-29)；上上基线 ef480a0 docs(T-28)）
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -45,9 +45,11 @@ Git HEAD：docs(T-28) 勾选提交（其前为 feat(T-28)；上上基线 d7f3312
 
 - T-28 桌面缓存/日志清理计划：Application/DesktopCleanupSelection.cs（Select(desktopRoot,DesktopFileEvidence[],logModifiedBefore?)→{RootErrorCode,Plan,Exclusions[DesktopExclusion]}；白名单=5 cache 目录(Cache/Code Cache/GPUCache/DawnGraphiteCache/DawnWebGPUCache,OrdinalIgnoreCase)+logs，其他顶层域 OUT_OF_DESKTOP_SCOPE；DesktopCache/DesktopLog 类别（CleanupCategory 扩展）；日志日期上界严格早于才纳入 LOG_DATE_FILTERED，cache 不受日期筛选；误选根：根自身 DESKTOP_ROOT_NOT_TARGET、目录自身/散落文件 DESKTOP_TOPLEVEL_NOT_TARGET、空白/驱动器根/UNC 根 ROOT_INVALID；RequiresBackup=false）、tests/DesktopCleanupTests.cs（12 用例，含两组合下 Local Storage/Session Storage/Network SHA-256 不变）；build exit 0；246/246；UI 冒烟 PASS（证据 T-28.txt）。坑：GetPathRoot("C:\")=="C:\" 长度 3，`is not {Length:>1}` 不拒驱动器根——须加 GetPathRoot(full)==full 相等判定（T-24/T-27 NormalizeRoot 同样宽松，接线时再统一收紧）；清空后目录的目录删除留给接线层
 
+- T-29 显式附件备份与独立清理：Application/AttachmentCleanupSelection.cs（Select(dataRoot,AttachmentCandidate[FullPath,EvidenceStatus,IsRegularFile,Expected*],selectedPaths)→{RootErrorCode,Plan,Exclusions[AttachmentExclusion],Statuses[AttachmentStatusNote]}；仅数据根 attachments\ 任意深度+人工选择(OrdinalIgnoreCase)进入，Category=Attachment(CleanupCategory 再扩展)，RequiresBackup=true 走 T-26 完整备份门禁；Unknown 状态经 Statuses 明确标注不推断孤儿；非普通文件 ATTACHMENT_NOT_REGULAR_FILE；其他域 OUT_OF_ATTACHMENTS_SCOPE；重复 ATTACHMENT_DUPLICATE_PATH）、tests/AttachmentCleanupTests.cs（13 用例，含备份+确认删除、未备份 GATE_BACKUP_REQUIRED、未确认 GATE_NOT_CONFIRMED、Active 阻断）；build exit 0；259/259；UI 冒烟 PASS（证据 T-29.txt）。坑：BackupService.CreateBackup 拒绝写入不存在的目标目录（“目标目录不存在”），测试须先建 backups 目录
+
 ## 下一个任务
-- T-29 实现显式附件备份与独立清理（**前置 T-15,T-22,T-26**，均已验收）。范围：Application/AttachmentCleanupSelection.cs、tests/AttachmentCleanupTests.cs。要点：列表中人工选择普通附件文件；强制源文件 ZIP 备份及确认（RequiresBackup=true 走 T-26 完整备份门禁通道）；不随会话自动删除。验收：未知引用状态明确标 Unknown；共享附件不会自动加入；未备份不得删除；非普通文件拒绝。关联 TC-14（未证明孤儿时标 Unknown；单文件经备份+确认方可删除）。定义见 docs/implementation-tasks.md:314-321（下轮先读原文）。可复用：AttachmentScanner/附件索引（T-15，先读其 API）、BackupManifestBuilder 的 attachmentPaths 参数（T-21）、BackupService（T-22）、CleanupExecutor（T-26，manifest 可空但 RequiresBackup=true 强制备份+VerifyZip）、CleanupTarget/CleanupPlan（需为附件扩展 CleanupCategory 成员或复用）。
-- 可复用 API：PathGuard（T-07）、CleanupPlanner（T-24）、CleanupExecutor（T-26）、CacheCleanupSelection（T-27）、DesktopCleanupSelection（T-28）、SessionCacheIndex（T-16）、HarnessProcessProbe（T-25）。
+- T-30 集成 UI 备份/清理及二次确认（**前置 T-18,T-19,T-20,T-22,T-23,T-26,T-27,T-28,T-29**，均已验收）。范围：UI/ActionsPresenter.cs、UI/BackupDialog.cs、UI/CleanupDialog.cs（下轮先 glob src/DeepSeekHarnessCleaner.UI 看现有文件与 T-18/19/20 已建的 presenter/dialog 结构，勿重复创建）。要点：展示最终清单/备份状态/警告；用户确认后才调用 executor；后台进度可取消（CancellationToken → executor ct，取消产生 CANCELED 跳过）。验收：点击取消不删除；未备份的会话删除按钮禁用；完成刷新清单；过程未阻塞 UI。关联 TC-09,TC-11,TC-16。定义见 docs/implementation-tasks.md:324-331（下轮先读原文）。注意 UI 冒烟 --smoke 机制（54 项）须扩展覆盖新对话框逻辑；executor Execute(plan, manifest?, backup?, root, userConfirmed, ct)；根字符串须无尾分隔符（指纹一致性）。
+- 可复用 API：PathGuard（T-07）、CleanupPlanner（T-24）、CleanupExecutor（T-26）、CacheCleanupSelection（T-27）、DesktopCleanupSelection（T-28）、AttachmentCleanupSelection（T-29）、BackupService/BackupManifestBuilder（T-21/22）、SessionCacheIndex（T-16）、HarnessProcessProbe（T-25）。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
@@ -66,4 +68,4 @@ Git HEAD：docs(T-28) 勾选提交（其前为 feat(T-28)；上上基线 d7f3312
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-17 提交已排除二者。
 
 ## 收尾状态
-- T-28 全部验收 PASS（build exit 0；246/246 测试含 DesktopCleanupTests 12 项；UI 冒烟回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-29 开始。
+- T-29 全部验收 PASS（build exit 0；259/259 测试含 AttachmentCleanupTests 13 项；UI 冒烟回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-30 开始。

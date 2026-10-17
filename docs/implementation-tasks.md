@@ -313,7 +313,7 @@
 
 ### T-29 — 实现显式附件备份与独立清理
 
-- [ ] **T-29：实现显式附件备份与独立清理**
+- [x] **T-29：实现显式附件备份与独立清理**（2026-10-18，证据 artifacts/evidence/T-29.txt，feat 见 git log）
 - **前置**：T-15,T-22,T-26。
 - **修改范围**：`Application/AttachmentCleanupSelection.cs、tests/AttachmentCleanupTests.cs`。
 - **任务边界**：列表中人工选择普通附件文件；强制源文件 ZIP 备份及确认，不随会话自动删除。

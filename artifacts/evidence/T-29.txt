@@ -1,0 +1,34 @@
+T-29 验收证据 — 显式附件备份与独立清理
+日期：2026-10-18（Asia/Shanghai）
+任务：docs/implementation-tasks.md T-29（前置 T-15、T-22、T-26 均已验收）
+修改范围：src/DeepSeekHarnessCleaner.Application/AttachmentCleanupSelection.cs（新增）、tests/DeepSeekHarnessCleaner.Tests/AttachmentCleanupTests.cs（新增）；附带 CleanupPlanner.cs 的 CleanupCategory 枚举扩展 Attachment（T-24 注释预留归属）
+
+一、实施摘要
+- AttachmentCleanupSelection.Select(dataRoot, AttachmentCandidate[], selectedPaths) → AttachmentCleanupPlanResult{RootErrorCode,Plan,Exclusions,Statuses}；复用 CleanupPlan/CleanupTarget 契约（Category=Attachment），RequiresBackup=true（强制源文件 ZIP 备份及确认，走 T-26 executor 完整备份门禁通道）；纯内存零 IO。
+- 输入记录 AttachmentCandidate 携带 T-15 AttachmentIndex 的 AttachmentEvidenceStatus（Referenced/Unknown/ConfirmedUnreferenced）与 IsRegularFile（调用方枚举结果）。
+- 仅数据根 attachments/ 下任意深度、IsRegularFile=true、且路径出现在人工选择集合（OrdinalIgnoreCase）中的候选进入计划；无任何自动加入机制——Referenced/共享/ConfirmedUnreferenced 未选择一律 ATTACHMENT_NOT_SELECTED。
+- 范围内候选逐一输出 AttachmentStatusNote(FullPath, Status)：Unknown 引用状态明确标注，不推断孤儿（design.md §5）。
+- 非普通文件（目录级附件/软链/未知类型）→ ATTACHMENT_NOT_REGULAR_FILE 拒绝；其他域（sessions/、storages/、attachments 目录自身）→ OUT_OF_ATTACHMENTS_SCOPE；根外/穿越 → ATTACHMENT_CROSS_ROOT/ATTACHMENT_PATH_TRAVERSAL；重复第二次 ATTACHMENT_DUPLICATE_PATH；根非法 ROOT_INVALID。
+- 计划带根指纹（与 T-24/T-27/T-28 同构）、CompareOrdinal 排序。
+
+二、命令与退出码
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   BUILD_EXIT=0，0 警告 0 错误（两轮均 0）
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   首跑 TEST_EXIT=1（3 失败：BackupFor helper 未创建 zip 目标目录，CreateBackup 返回“目标目录不存在”）；修复后 TEST_EXIT=0，已通过! - 失败: 0，通过: 259，总计: 259（新增 AttachmentCleanupTests 13 项；此前 246 项无回归）
+3) UI 冒烟回归：DeepSeekHarnessCleaner.UI.exe --smoke
+   SMOKE_RESULT=PASS，SMOKE_EXIT=0（Process API）
+
+三、验收标准逐项
+- 未知引用状态明确标 Unknown：PASS（UnknownEvidenceStatus_MarkedExplicitly：范围内 Unknown 候选无论是否选中均出现在 Statuses 且状态=Unknown；选择层不将 Unknown 视为孤儿——未选 Unknown 仍 NOT_SELECTED 而非自动进入）。
+- 共享附件不会自动加入：PASS（ReferencedOrSharedAttachments_NeverAutoAdded：Referenced 与 ConfirmedUnreferenced 空选择时零进入、全部 NOT_SELECTED；OnlyExplicitlySelectedRegularFiles_EnterPlan：仅显式选择路径进入）。
+- 未备份不得删除：PASS（Executor_WithoutBackup_NotDeleted：RequiresBackup=true 计划 manifest/backup 为 null → GATE_BACKUP_REQUIRED 中止、文件仍在；Executor_BackupThenConfirm_DeletesSelected_KeepsUnselected：ZIP 备份+确认后成功删除且未选附件 hash 不变；Executor_WithoutUserConfirmation_NotDeleted：GATE_NOT_CONFIRMED）。
+- 非普通文件拒绝：PASS（NonRegularFiles_Rejected：目录级/软链候选即使被选中仍 ATTACHMENT_NOT_REGULAR_FILE 零进入）。
+- 不随会话自动删除：PASS（计划独立构建，选择集合为空即零目标；会话删除计划（T-24）不含附件类别）。
+- 关联测试 TC-14（未证明孤儿时标 Unknown；单文件经备份+确认方可删除）：PASS。
+
+四、真实排障记录
+- 首跑 3 失败：测试 helper BackupFor 直接把 ZIP 写到不存在的 fx.Root\backups 目录，BackupService.CreateBackup 按设计拒绝（“目标目录不存在”，Success=false）；修复为 helper 先 Directory.CreateDirectory。属测试脚手架问题，非产品缺陷。
+
+五、安全红线
+- 选择器纯内存零 IO；删除仅发生在合成 FixtureRoot.DshHome/attachments；真实 %USERPROFILE%\.dsh 未触碰；无网络；附件内容未写入证据。
