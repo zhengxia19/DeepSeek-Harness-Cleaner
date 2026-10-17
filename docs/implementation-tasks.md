@@ -303,7 +303,7 @@
 
 ### T-28 — 实现桌面缓存/日志清理计划
 
-- [ ] **T-28：实现桌面缓存/日志清理计划**
+- [x] **T-28：实现桌面缓存/日志清理计划**（2026-10-18，证据 artifacts/evidence/T-28.txt，feat 见 git log）
 - **前置**：T-07,T-26。
 - **修改范围**：`Application/DesktopCleanupSelection.cs、tests/DesktopCleanupTests.cs`。
 - **任务边界**：仅按固定 5 个 cache 目录与 logs，日志支持文件修改日期；不修改其他桌面数据。

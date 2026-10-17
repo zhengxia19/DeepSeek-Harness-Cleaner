@@ -1,0 +1,34 @@
+T-28 验收证据 — 桌面缓存/日志清理计划
+日期：2026-10-18（Asia/Shanghai）
+任务：docs/implementation-tasks.md T-28（前置 T-07、T-26 均已验收）
+修改范围：src/DeepSeekHarnessCleaner.Application/DesktopCleanupSelection.cs（新增）、tests/DeepSeekHarnessCleaner.Tests/DesktopCleanupTests.cs（新增）；附带 CleanupPlanner.cs 的 CleanupCategory 枚举扩展 DesktopCache/DesktopLog（T-24 注释即预留该归属）
+
+一、实施摘要
+- DesktopCleanupSelection.Select(desktopRoot, DesktopFileEvidence[], logModifiedBefore?) → DesktopCleanupPlanResult{RootErrorCode,Plan,Exclusions}；复用 CleanupPlan/CleanupTarget 契约，RequiresBackup=false；纯内存零 IO。
+- 白名单：固定 5 个 cache 目录（Cache、Code Cache、GPUCache、DawnGraphiteCache、DawnWebGPUCache，OrdinalIgnoreCase，与 design.md §6 及 Infrastructure PathGuard.DesktopCacheDirs 同名单）内任意深度普通文件 → DesktopCache；logs 目录 → DesktopLog；其他顶层域（Local Storage、Session Storage、Network 等）一律 OUT_OF_DESKTOP_SCOPE。
+- 日志日期筛选：logModifiedBefore 提供时仅纳入修改时间严格早于该时刻的日志（LOG_DATE_FILTERED）；cache 不受日期筛选影响。
+- 误选根被拒绝：根自身 → DESKTOP_ROOT_NOT_TARGET；白名单目录自身/根下散落文件 → DESKTOP_TOPLEVEL_NOT_TARGET；根非法（空白、驱动器根、UNC 共享根）→ ROOT_INVALID；根外/穿越 → DESKTOP_CROSS_ROOT/DESKTOP_PATH_TRAVERSAL；重复路径第二次 DESKTOP_DUPLICATE_PATH。
+- 计划带根指纹（与 T-24/T-27 同构 SHA-256 小写 hex）、目标 CompareOrdinal 排序；“清空后目录”的目录删除留给接线/执行层（计划只列文件目标）。
+- 执行走 T-26 同一 executor 通道（manifest 可空，缓存/日志无强制 ZIP）。
+
+二、命令与退出码
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   首跑 BUILD_EXIT=0；修复驱动器根检查后重跑 BUILD_EXIT=0，0 警告 0 错误
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   首跑 TEST_EXIT=1（1 失败：RootInvalid_Rejected_ForBlankAndDriveRoot，见排障）；修复后 TEST_EXIT=0，已通过! - 失败: 0，通过: 246，总计: 246（新增 DesktopCleanupTests 12 项；此前 234 项无回归）
+3) UI 冒烟回归：DeepSeekHarnessCleaner.UI.exe --smoke
+   SMOKE_RESULT=PASS，SMOKE_EXIT=0（Process API）
+
+三、验收标准逐项
+- Local Storage/Session Storage/Network 在所有组合下 hash 不变：PASS（选择层 OnlyFiveWhitelistedCacheDirs_Included_OtherDomainsExcluded：三域候选全部 OUT_OF_DESKTOP_SCOPE；执行层 Executor_CacheAndLogsCombination 与 Executor_LogsOnlyCombination 两组合中三域文件 SHA-256 前后相等且未删；LogsOnly 组合下 Cache 文件 hash 亦不变）。
+- 误选根被拒绝：PASS（RootItselfAndTopLevelEntries_Rejected：根自身/白名单目录自身/根下散落文件全部排除零进入；RootInvalid_Rejected_ForBlankAndDriveRoot：空白根与 C:\ 驱动器根均 ROOT_INVALID）。
+- 仅固定 5 个 cache 目录与 logs：PASS（5 目录+嵌套深度全部纳入 DesktopCache；logs 纳入 DesktopLog；日期筛选只作用于日志 DateFilter_DoesNotAffectCache）。
+- 日志支持文件修改日期：PASS（Logs_IncludedAsDesktopLog_DateFilterSelectsOlderOnly：cutoff 前旧日志保留、新日志 LOG_DATE_FILTERED）。
+- 同一 executor 通道安全门禁：PASS（无 ZIP 成功删除；Active 进程 GATE_PROCESS 中止零删除）。
+- 关联测试 TC-13（仅允许 6 个白名单目录；浏览器状态和 Network 均不变）：PASS。
+
+四、真实排障记录
+- 首跑 1 失败：NormalizeRoot 的驱动器根检查 `Path.GetPathRoot(full) is not { Length: > 1 }` 对 "C:\" 不成立（GetPathRoot("C:\")=="C:\" 长度 3）→ 增加 `GetPathRoot(full)==full` 相等判定（同时覆盖 UNC 共享根）。注：T-24/T-27 的 NormalizeRoot 存在同样宽松点，接线任务如需统一收紧另行处理，本任务未越界改动。
+
+五、安全红线
+- 选择器纯内存零 IO；删除仅发生在合成 FixtureRoot 下 dsh-desktop 合成根；真实 %APPDATA%\@deepseek-ai\dsh-desktop 未触碰；无网络。
