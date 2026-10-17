@@ -243,7 +243,7 @@
 
 ### T-22 — 实现原始 ZIP 创建与校验
 
-- [ ] **T-22：实现原始 ZIP 创建与校验**
+- [x] **T-22：实现原始 ZIP 创建与校验**（2026-10-17，证据 artifacts/evidence/T-22.txt，feat 见 git log）
 - **前置**：T-21。
 - **修改范围**：`Infrastructure/BackupService.cs、tests/BackupTests.cs`。
 - **任务边界**：流式写临时 zip，校验 entry 字节 SHA/数量/长度后无覆盖发布；失败移除临时 zip，返回 VerifiedBackup。

@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-17（T-21 轮）
-Git HEAD：feat(T-21)；docs(T-21) 勾选提交紧随其后（基线 457db7c docs(T-20)）
+更新时间：2026-10-17（T-22 轮）
+Git HEAD：feat(T-22)；docs(T-22) 勾选提交紧随其后（基线 e041b23 docs(T-21)）
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -29,9 +29,11 @@ Git HEAD：feat(T-21)；docs(T-21) 勾选提交紧随其后（基线 457db7c doc
 
 - T-21 ZIP manifest 与清单签名：Application/BackupManifest.cs（ManifestEntry/BackupManifest schemaVersion=1；Builder.Build=数据根下 sessions//attachments/ 类别限定 + 原始路径任何 .. 段先拒（PATH_TRAVERSAL，先于 GetFullPath 折叠）+ 跨根/跨盘 CROSS_ROOT + OrdinalIgnoreCase 去重 DUPLICATE_ENTRY + 未知类别 UNKNOWN_FILE，错误非空不产出部分清单，非 Valid 状态记警告；Verify=结构复核→可选签名→磁盘复算 length/SHA（MISSING/LENGTH_MISMATCH/SHA_MISMATCH）→可选 actualFiles 清单外=UNKNOWN_FILE；签名=规范化 JSON（紧凑、字段序固定、按 zipPath 排序）SHA-256 小写 hex；ToJson/FromJson 往返一致，FromJson 拒未知 schema/大写 SHA/../重复/未知类别；纯只读）、tests/ManifestTests.cs（14 用例）；build -m:1 exit 0；166/166；UI 冒烟 54 项回归 PASS 退出码 0（证据 T-21.txt）。坑：FileInfo.Length 对不存在文件抛 FileNotFoundException（测试须先落盘再构造 PhysicalLog）
 
+- T-22 原始 ZIP 创建与校验：Infrastructure/BackupService.cs（CreateBackup=目标目录须存在+TARGET_EXISTS 不覆盖→同目录临时 zip（target+".tmp-"+guid）流式写 manifest.json+原字节条目→重开校验数量/逐条目解压 SHA/长度/manifest 签名→发布前复验+File.Move(overwrite:false)→VerifiedBackup(ZipPath,ManifestSignature,FileEntryCount,TotalBytes)；失败 CANCELED/IO_FAILURE/ZIP_VERIFY_FAILED 均删临时 zip 无副作用；VerifyZip 只读复验 SEC-03）、tests/BackupTests.cs（8 用例，附件夹具 4KB 伪随机合成字节）；build -m:1 exit 0；174/174；UI 冒烟 54 项回归 PASS 退出码 0（证据 T-22.txt）。坑：`using ZipArchive zip;`+try 内赋值=CS0210/CS1656，须普通声明+using(zip) 块；小 zip 单字节破坏偏移可能落 local header（.NET 以 central directory 为准）校验仍过，夹具数据须足够大使偏移落入条目数据流
+
 ## 下一个任务
-- T-22 实现原始 ZIP 创建与校验（**前置 T-21**，已验收）。范围：Infrastructure/BackupService.cs、tests/BackupTests.cs。要点：流式写临时 zip，校验 entry 字节 SHA/数量/长度后无覆盖发布；失败移除临时 zip，返回 VerifiedBackup。验收：损坏/磁盘满/目标已有文件/进程取消时不返回成功；完成 ZIP 解压后每份原文件与原 SHA 一致。关联 TC-09,TC-20。定义见 docs/implementation-tasks.md:244-251（下轮先读原文；ZIP 契约见 interfaces.md §28-34：条目原字节、sessions/<relative>|attachments/<relative>、manifest.json 由 T-21 BackupManifestBuilder.ToJson 产出；不覆盖旧备份）。
-- 可复用 API：BackupManifestBuilder.Build/Verify/ComputeSignature/ToJson/FromJson（T-21）；InventoryService.Scan；SessionSummary.Generations；夹具 FixtureRoot/FixtureFactory。备份目标目录选择与不覆盖门禁见 T-22 原文。
+- T-23 实现 Markdown/JSON 可读导出（**前置 T-13,T-14**，均已验收）。范围：Application/ReadableExport.cs、tests/ReadableExportTests.cs。要点：离线导出可读消息并标记 event/附件缺口；不作为恢复凭据。验收：UTF-8 中文、换行、代码块不破坏结构；未知内容有 exportIncomplete 标记；输出不联网。关联 TC-10。定义见 docs/implementation-tasks.md:254-261（下轮先读原文；interfaces.md §33：可读导出为 UTF-8 Markdown + 机器可读 JSON 概览，必须带 exportIncomplete=true（若有未知事件、超限或附件缺失）；可读导出不是恢复备份）。
+- 可复用 API：TranscriptProjector（T-13 V4 投影）、LegacyPreview（T-14 退化）、AttachmentIndex（T-15）、SessionEventReader；BackupManifestBuilder/BackupService（T-21/T-22）。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
@@ -50,4 +52,4 @@ Git HEAD：feat(T-21)；docs(T-21) 勾选提交紧随其后（基线 457db7c doc
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-17 提交已排除二者。
 
 ## 收尾状态
-- T-21 全部验收 PASS（build -m:1 exit 0；166/166 测试含 ManifestTests 14 项；UI 冒烟 54 项回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-22 开始。
+- T-22 全部验收 PASS（build -m:1 exit 0；174/174 测试含 BackupTests 8 项；UI 冒烟 54 项回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-23 开始。
