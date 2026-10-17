@@ -273,7 +273,7 @@
 
 ### T-25 — 实现 Harness 退出状态检查
 
-- [ ] **T-25：实现 Harness 退出状态检查**
+- [x] **T-25：实现 Harness 退出状态检查**（2026-10-18，证据 artifacts/evidence/T-25.txt，feat 见 git log）
 - **前置**：T-03。
 - **修改范围**：`Infrastructure/HarnessProcessProbe.cs、tests/ProcessProbeTests.cs`。
 - **任务边界**：通过已知 exe 和可验证的进程路径检测 Harness/可能关联执行者；无法判定时返回 Unknown。

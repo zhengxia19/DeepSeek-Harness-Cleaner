@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-17（T-24 轮）
-Git HEAD：docs(T-24) 勾选提交（其前为 feat(T-24)；上上基线 3592948 docs(T-23)）
+更新时间：2026-10-18（T-25 轮）
+Git HEAD：docs(T-25) 勾选提交（其前为 feat(T-25)；上上基线 e0a8d3f docs(T-24)）
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -37,9 +37,11 @@ Git HEAD：docs(T-24) 勾选提交（其前为 feat(T-24)；上上基线 3592948
 - T-24 会话精确清理计划：Application/CleanupPlanner.cs（Build(sessionRoot,selectedSessions,dedicatedCaches)→CleanupPlanResult{RootErrorCode,Plan,Exclusions}；CleanupTarget(AbsolutePath,Category{SessionLog,DedicatedCache},OwnerSessionId,Expected*)；CleanupPlan(PlanId,CreatedUtc,RootFingerprint=规范化根 SHA-256 小写 hex,Targets,RequiresBackup)；Application 不引用 Infrastructure→根内复验同 T-21 内联（.. 段先拒 PATH_TRAVERSAL、根外 CROSS_ROOT、根非法 ROOT_INVALID）；排除=UNVERIFIED_SESSION_ID/DUPLICATE_SESSION_ID/SHARED_FILE/ABNORMAL_FORMAT/ABNORMAL_GENERATION(整会话不拆分:staged 聚合全过才提交)/AMBIGUOUS/UNKNOWN_FILE(白名单 session(.vN≥1).jsonl(.zstd) 严格小写)/根外；专属缓存仅选择且已规划会话的 Matched 条目进入(DedicatedCacheEvidence 由调用方从 T-16 转换)；纯内存零写入）、tests/CleanupPlanTests.cs（16 用例）；build -m:1 exit 0；197/197；UI 冒烟回归 PASS 退出码 0（证据 T-24.txt）。坑：逐代际即时 Add 会在后段失败时残留拆分目标，须 staged+AddRange；xUnit2031 禁 Where+Single 用谓词重载
 
 
+- T-25 Harness 退出状态检查：Infrastructure/HarnessProcessProbe.cs（Probe()→{State∈Active/Inactive/Unknown,Matches,RiskNotes,ErrorCode}；AllowsWrite 门禁=仅 Inactive；已知 exe "DeepSeek Harness.exe"，ProcessName 匹配大小写不敏感或主模块文件名匹配（改名/包装计 Active+风险注记）；名称匹配但路径不可验证→Unknown fail closed；枚举异常→Unknown+PROCESS_ENUMERATION_FAILED；RiskNotes 恒含托管/子进程风险（design §7.6）；只读无 Kill；构造可注入 Func<IReadOnlyList<ProcessSnapshot>> 模拟三态）、tests/ProcessProbeTests.cs（9 用例）；build -m:1 exit 0 一次过；206/206；UI 冒烟回归 PASS 退出码 0；本机实测 6 个 DeepSeek Harness 进程在运行（只读 Get-Process，未停止）（证据 T-25.txt）。坑：ProcessName 不含 .exe 扩展名；MainModule 对 32/64 位差异或权限不足抛 InvalidOperationException/Win32Exception 须降级 PathAccessible=false
+
 ## 下一个任务
-- T-25 实现 Harness 退出状态检查（**前置 T-03**，已验收）。范围：Infrastructure/HarnessProcessProbe.cs、tests/ProcessProbeTests.cs。要点：通过已知 exe 和可验证的进程路径检测 Harness/可能关联执行者；无法判定时返回 Unknown。验收：模拟 Active/Inactive/Unknown，后两类仅 Inactive 可进入写入；不得主动停止进程。关联 TC-15。定义见 docs/implementation-tasks.md:274-281（下轮先读原文）。注意：Get-CimInstance 可能被拒（用 Get-Process）；测试不得杀真实 Harness 进程，模拟用本项目自启动的合成子进程。
-- 可复用 API：PathGuard（T-07）、CleanupPlanner/CleanupTarget/CleanupPlan（T-24）、BackupService/VerifiedBackup（T-22）、SessionCacheIndex（T-16）。
+- T-26 实现备份门禁与逐文件删除执行器（**前置 T-22,T-24,T-25**，均已验收）。范围：Infrastructure/CleanupExecutor.cs、tests/CleanupExecutorTests.cs。要点：在 verified backup + 用户确认后重新检查进程、路径、源文件 SHA/mtime，逐项删除并收集 ItemOutcome。验收：未备份、ZIP 无效、变化、活动进程、reparse、权限不足均零越界删除；部分成功报告真实；不改未选 fixture。关联 TC-11,TC-15,TC-16。定义见 docs/implementation-tasks.md:284-291（下轮先读原文）。删除测试必须在隔离合成根；执行器在 Infrastructure，可用 PathGuard/HarnessProcessProbe/BackupService.VerifyZip/CleanupPlan。
+- 可复用 API：PathGuard（T-07）、CleanupPlanner/CleanupTarget/CleanupPlan（T-24）、BackupService.VerifyZip/VerifiedBackup（T-22）、HarnessProcessProbe（T-25）、SessionCacheIndex（T-16）。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
@@ -58,4 +60,4 @@ Git HEAD：docs(T-24) 勾选提交（其前为 feat(T-24)；上上基线 3592948
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-17 提交已排除二者。
 
 ## 收尾状态
-- T-24 全部验收 PASS（build -m:1 exit 0；197/197 测试含 CleanupPlanTests 16 项；UI 冒烟回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-25 开始。
+- T-25 全部验收 PASS（build -m:1 exit 0 一次过；206/206 测试含 ProcessProbeTests 9 项；UI 冒烟回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-26 开始。

@@ -1,0 +1,38 @@
+T-25 验收证据 — 实现 Harness 退出状态检查
+日期：2026-10-18（Asia/Shanghai）
+任务：docs/implementation-tasks.md T-25（前置 T-03 已验收）
+修改范围：src/DeepSeekHarnessCleaner.Infrastructure/HarnessProcessProbe.cs（新增）、tests/DeepSeekHarnessCleaner.Tests/ProcessProbeTests.cs（新增）
+
+一、实施摘要
+- HarnessProcessProbe.Probe() → HarnessProcessProbeResult{State,Matches,RiskNotes,ErrorCode}；AllowsWrite 门禁 = State==Inactive（TC-15：仅 Inactive 可进入写入）。
+- 已知 exe：KnownExecutableName="DeepSeek Harness.exe"（design.md §7.6）；匹配 = ProcessName 等于 "DeepSeek Harness"（大小写不敏感）或主模块文件名等于已知 exe（改名/包装计入并记录风险）。
+- 三态：Active=≥1 可验证匹配；Inactive=枚举成功且无匹配；Unknown=枚举抛异常（PROCESS_ENUMERATION_FAILED）或名称匹配但主模块路径不可验证（权限/位数差异，fail closed）。
+- RiskNotes 恒含固定风险记录：托管/子进程可能不以已知 exe 名出现；进程退出探测不是绝对文件锁（design.md §7.6 要求明确记录）。
+- 只读探测：源码 grep Kill|Terminate|CloseMainWindow|WaitForExit 仅命中注释行，无任何停止/等待调用。
+- 可注入快照源（Func<IReadOnlyList<ProcessSnapshot>>）用于测试模拟三态；默认 TakeRealSnapshots 用 Process.GetProcesses()，逐进程 MainModule 访问异常降级为 PathAccessible=false，枚举期进程退出跳过。
+
+二、命令与退出码
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   BUILD_EXIT=0，0 警告 0 错误（一次通过）
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   TEST_EXIT=0，已通过! - 失败: 0，通过: 206，总计: 206（新增 ProcessProbeTests 9 项；此前 197 项无回归）
+3) UI 冒烟回归：DeepSeekHarnessCleaner.UI.exe --smoke
+   SMOKE_RESULT=PASS，SMOKE_EXIT=0（Process API）
+
+三、验收标准逐项
+- 模拟 Active/Inactive/Unknown：PASS
+  Active：Probe_KnownExeRunning_Active_AndBlocksWrite、Probe_NameMatchIsCaseInsensitive、Probe_PathMatchWithDifferentName_ActiveAndRiskRecorded、Probe_MultipleMatches_AllRecorded；
+  Inactive：Probe_NoMatch_Inactive_AllowsWrite；
+  Unknown：Probe_NameMatchButPathUnverifiable_Unknown_FailClosed（路径不可验证）、Probe_EnumerationThrows_Unknown_WithErrorCode（枚举失败）。
+- 仅 Inactive 可进入写入：PASS（Active/Unknown 用例断言 AllowsWrite=false；Inactive 用例 =true；真实系统用例断言 AllowsWrite==(State==Inactive)）。
+- 不得主动停止进程：PASS（grep 无 Kill/Terminate/CloseMainWindow/WaitForExit 调用，仅注释提及；探测全程只读）。
+- 无法判定返回 Unknown（fail closed）：PASS（上述两 Unknown 用例 + 枚举异常错误码）。
+- 明确记录托管/子进程风险：PASS（Probe_ManagedProcessRiskNoteAlwaysRecorded：Inactive 结果亦含风险注记）。
+- 真实系统稳定性：PASS（Probe_RealSystem_ReturnsStableStateWithoutThrowing；本机实测 Get-Process "DeepSeek Harness" 6 个进程在运行，路径 C:\Users\zx\AppData\Local\Programs\DeepSeek Harness\DeepSeek Harness.exe，探测应判 Active——只读检查，未停止任何进程）。
+- 关联测试 TC-15（运行进程/无法检查必拒绝删除）：PASS（AllowsWrite 门禁为 T-26 执行器写入前置）。
+
+四、真实排障记录
+- 本轮无失败：build 一次通过，206/206 一次通过。
+
+五、安全红线
+- 全程只读：未停止/等待任何进程；未触碰真实数据根；测试注入合成快照，真实枚举仅读进程表。
