@@ -4,11 +4,13 @@ using DeepSeekHarnessCleaner.Domain;
 
 namespace DeepSeekHarnessCleaner.Application;
 
-/// <summary>清理目标类别（T-24 仅会话日志与专属缓存；桌面缓存/附件归 T-27/T-28/T-29）。</summary>
+/// <summary>清理目标类别（T-24 会话日志与专属缓存；T-27 专属缓存；T-28 桌面缓存/日志；附件归 T-29）。</summary>
 public enum CleanupCategory
 {
     SessionLog,
     DedicatedCache,
+    DesktopCache,
+    DesktopLog,
 }
 
 /// <summary>逐文件清理目标（design.md §1 草案）：Expected* 供执行前二次验证。</summary>
