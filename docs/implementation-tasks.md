@@ -253,7 +253,7 @@
 
 ### T-23 — 实现 Markdown/JSON 可读导出
 
-- [ ] **T-23：实现 Markdown/JSON 可读导出**
+- [x] **T-23：实现 Markdown/JSON 可读导出**（2026-10-17，证据 artifacts/evidence/T-23.txt，feat 见 git log）
 - **前置**：T-13,T-14。
 - **修改范围**：`Application/ReadableExport.cs、tests/ReadableExportTests.cs`。
 - **任务边界**：离线导出可读消息并标记 event/附件缺口；不将其作为恢复凭据。

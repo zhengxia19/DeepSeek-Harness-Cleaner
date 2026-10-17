@@ -1,0 +1,39 @@
+T-23 验收证据 — 实现 Markdown/JSON 可读导出
+日期：2026-10-17（Asia/Shanghai）
+任务：docs/implementation-tasks.md T-23（前置 T-13、T-14 已验收）
+修改范围：src/DeepSeekHarnessCleaner.Application/ReadableExport.cs（新增）、tests/DeepSeekHarnessCleaner.Tests/ReadableExportTests.cs（新增）
+
+一、实施摘要
+- ReadableExport.Export(ReadableExportInput)：复用 LegacyPreview（代际选择/元数据/MetadataOnly 退化）与 TranscriptProjector 投影，产出 UTF-8 Markdown + 机器可读 JSON 概览（schemaVersion=1）。
+- Markdown：标题固定声明“不是恢复备份”；exportIncomplete 与不完整原因逐条列出；消息正文置于代码块，围栏长度 = 正文最长反引号串 + 1（≥3），保证含 ```/````/~~~/中文/换行的正文不破坏结构、可逐字节往返；不完整事件以引用块输出；附件节标注 存在/缺失/状态未知。
+- JSON：Utf8JsonWriter + UnsafeRelaxedJsonEscaping（保留 UTF-8 中文，控制字符安全转义）；含 exportIncomplete、incompleteReasons、generations、attachments(state)、projection(items/truncated/incompleteCount)。
+- exportIncomplete=true 触发条件：未知/不完整事件、预览上限截断（超限）、附件缺失、附件磁盘清单不可判定、MetadataOnly（未确证代际或最高代际不可读）。
+- 离线：ReadableExport.cs 无 HttpClient/Socket/File/Directory 调用（grep 0 命中），纯内存字符串变换。
+
+二、命令与退出码
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   BUILD_EXIT=0，0 警告 0 错误
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   TEST_EXIT=0，已通过! - 失败: 0，通过: 181，总计: 181（新增 ReadableExportTests 7 项；此前 174 项无回归）
+3) UI 冒烟回归：DeepSeekHarnessCleaner.UI.exe --smoke
+   SMOKE_RESULT=PASS，SMOKE_EXIT=0（Process.ExitCode）
+
+三、验收标准逐项
+- UTF-8 中文、换行、代码块不破坏结构：PASS
+  Export_ChineseNewlinesAndFences_MarkdownRoundTrips：正文含中文、真实换行、``` 与 4 连反引号、~~~；测试按实现围栏逐行往返提取，断言与原文完全相等；围栏长度 ≥4 断言。
+  Export_JsonPreservesUtf8Chinese_AndRoundTripsText：JSON 含未转义中文（无 \u4e2d），JsonDocument 解析后 text 与原文相等（含 <tag> 与引号）。
+- 未知内容有 exportIncomplete 标记：PASS
+  Export_UnknownEvent_MarksIncompleteInBothOutputs（Markdown 引用块 + JSON exportIncomplete=true + reasons 计数）；
+  Export_TruncatedAtPreviewLimit_MarksIncomplete（2001 条 → 超限原因）；
+  Export_UnverifiedGeneration_MetadataOnly_MarksIncomplete（v7 未确证：不导出正文、标记不完整）；
+  Export_UnreadableTranscript_MarksIncomplete（不可读 → 标记）；
+  Export_AttachmentMissingAndUnknownStates_Marked（缺失/不可判定均置 exportIncomplete）。
+- 输出不联网：PASS（代码 grep 无网络/文件 API；测试全程内存字符串，无 fixture IO 依赖网络）。
+- 边界：不作为恢复凭据：PASS（Markdown 标题与引言固定声明“不是恢复备份”，完整/不完整导出均含）。
+- 关联测试 TC-10（testing.md §TC-10：Markdown/JSON 字符串安全编码，未知事件有 incomplete 标记）：PASS（上述用例覆盖）。
+
+四、真实排障记录
+- 初稿 BuildJson 误写 `new Utf8JsonWriter(new MemoryStream(), options)` 且引用未定义变量 sink；改为局部 `using var stream = new MemoryStream();` + `stream.ToArray()` 后编译通过（本轮首次 build 前已修复，未产生失败构建）。
+
+五、安全红线
+- 未触碰真实 %USERPROFILE%\.dsh / %APPDATA%\@deepseek-ai\dsh-desktop；测试为纯内存合成字符串；无网络传送会话内容。

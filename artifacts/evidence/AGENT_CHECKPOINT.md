@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-17（T-22 轮）
-Git HEAD：feat(T-22)；docs(T-22) 勾选提交紧随其后（基线 e041b23 docs(T-21)）
+更新时间：2026-10-17（T-23 轮）
+Git HEAD：docs(T-23) 勾选提交（其前为 feat(T-23)；上上基线 452bfe2 docs(T-22)）
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -31,9 +31,12 @@ Git HEAD：feat(T-22)；docs(T-22) 勾选提交紧随其后（基线 e041b23 doc
 
 - T-22 原始 ZIP 创建与校验：Infrastructure/BackupService.cs（CreateBackup=目标目录须存在+TARGET_EXISTS 不覆盖→同目录临时 zip（target+".tmp-"+guid）流式写 manifest.json+原字节条目→重开校验数量/逐条目解压 SHA/长度/manifest 签名→发布前复验+File.Move(overwrite:false)→VerifiedBackup(ZipPath,ManifestSignature,FileEntryCount,TotalBytes)；失败 CANCELED/IO_FAILURE/ZIP_VERIFY_FAILED 均删临时 zip 无副作用；VerifyZip 只读复验 SEC-03）、tests/BackupTests.cs（8 用例，附件夹具 4KB 伪随机合成字节）；build -m:1 exit 0；174/174；UI 冒烟 54 项回归 PASS 退出码 0（证据 T-22.txt）。坑：`using ZipArchive zip;`+try 内赋值=CS0210/CS1656，须普通声明+using(zip) 块；小 zip 单字节破坏偏移可能落 local header（.NET 以 central directory 为准）校验仍过，夹具数据须足够大使偏移落入条目数据流
 
+- T-23 Markdown/JSON 可读导出：Application/ReadableExport.cs（Export(ReadableExportInput{Session,TranscriptText,ReferencedAttachmentIds,AttachmentIdsOnDisk})→ReadableExportResult{Markdown,Json,ExportIncomplete,IncompleteReasons}；复用 LegacyPreview.Build 选代际/元数据/MetadataOnly 退化；Markdown 固定声明“不是恢复备份”，消息正文代码块围栏=正文最长反引号串+1（≥3）保证 ```/````/~~~/中文/换行往返不破坏结构，不完整事件用引用块，附件节 存在/缺失/状态未知；JSON Utf8JsonWriter+UnsafeRelaxedJsonEscaping 保留 UTF-8 中文，schemaVersion=1，含 exportIncomplete/incompleteReasons/generations/attachments/projection；exportIncomplete 触发=未知事件/超限截断/附件缺失/磁盘清单不可判定/MetadataOnly/不可读；纯内存无 IO/网络）、tests/ReadableExportTests.cs（7 用例）；build -m:1 exit 0；181/181；UI 冒烟回归 PASS 退出码 0（证据 T-23.txt）。坑：Utf8JsonWriter 须持局部 `using var stream=new MemoryStream()` 再 `stream.ToArray()`（勿内联 new）
+
+
 ## 下一个任务
-- T-23 实现 Markdown/JSON 可读导出（**前置 T-13,T-14**，均已验收）。范围：Application/ReadableExport.cs、tests/ReadableExportTests.cs。要点：离线导出可读消息并标记 event/附件缺口；不作为恢复凭据。验收：UTF-8 中文、换行、代码块不破坏结构；未知内容有 exportIncomplete 标记；输出不联网。关联 TC-10。定义见 docs/implementation-tasks.md:254-261（下轮先读原文；interfaces.md §33：可读导出为 UTF-8 Markdown + 机器可读 JSON 概览，必须带 exportIncomplete=true（若有未知事件、超限或附件缺失）；可读导出不是恢复备份）。
-- 可复用 API：TranscriptProjector（T-13 V4 投影）、LegacyPreview（T-14 退化）、AttachmentIndex（T-15）、SessionEventReader；BackupManifestBuilder/BackupService（T-21/T-22）。
+- T-24 生成会话精确清理计划（**前置 T-07,T-10,T-16,T-21**，均已验收）。范围：Application/CleanupPlanner.cs、tests/CleanupPlanTests.cs。要点：由已验证会话 ID 与用户选择集合产生逐文件计划，含该会话全部 generation 与可验证的专属缓存。验收：未选会话、异常格式、身份冲突、未知文件和根外路径不进入计划；按日期仅整会话；计划带指纹。关联 TC-08,TC-11。定义见 docs/implementation-tasks.md:264-271（下轮先读原文）。
+- 可复用 API：PathGuard（T-07）、InventoryService/SessionSummary（T-10）、SessionCacheIndex（T-16，专属缓存证据）、BackupManifestBuilder（T-21）、ReadableExport（T-23）、BackupService（T-22）。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
@@ -52,4 +55,4 @@ Git HEAD：feat(T-22)；docs(T-22) 勾选提交紧随其后（基线 e041b23 doc
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-17 提交已排除二者。
 
 ## 收尾状态
-- T-22 全部验收 PASS（build -m:1 exit 0；174/174 测试含 BackupTests 8 项；UI 冒烟 54 项回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-23 开始。
+- T-23 全部验收 PASS（build -m:1 exit 0；181/181 测试含 ReadableExportTests 7 项；UI 冒烟回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-24 开始。
