@@ -263,7 +263,7 @@
 
 ### T-24 — 生成会话精确清理计划
 
-- [ ] **T-24：生成会话精确清理计划**
+- [x] **T-24：生成会话精确清理计划**（2026-10-17，证据 artifacts/evidence/T-24.txt，feat 见 git log）
 - **前置**：T-07,T-10,T-16,T-21。
 - **修改范围**：`Application/CleanupPlanner.cs、tests/CleanupPlanTests.cs`。
 - **任务边界**：由已验证会话 ID 与用户选择集合产生逐文件计划，包含所有该会话 generation、可验证的专属缓存。

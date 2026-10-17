@@ -1,0 +1,40 @@
+T-24 验收证据 — 生成会话精确清理计划
+日期：2026-10-17（Asia/Shanghai）
+任务：docs/implementation-tasks.md T-24（前置 T-07、T-10、T-16、T-21 均已验收）
+修改范围：src/DeepSeekHarnessCleaner.Application/CleanupPlanner.cs（新增）、tests/DeepSeekHarnessCleaner.Tests/CleanupPlanTests.cs（新增）
+
+一、实施摘要
+- CleanupPlanner.Build(sessionRoot, selectedSessions, dedicatedCaches) → CleanupPlanResult{RootErrorCode, Plan, Exclusions}。
+- CleanupTarget(AbsolutePath, Category{SessionLog,DedicatedCache}, OwnerSessionId, ExpectedLength, ExpectedWriteUtc, ExpectedSha256)；CleanupPlan(PlanId, CreatedUtc, RootFingerprint, Targets, RequiresBackup)（design.md §1 草案落位 Application 层）。
+- 分层：Application 不引用 Infrastructure，根内复验采用与 T-21 BackupManifest 相同内联语义（原始路径任何 .. 段先拒 PATH_TRAVERSAL，先于 GetFullPath；根外/跨盘 CROSS_ROOT；根非法 ROOT_INVALID）。
+- 排除规则（逐会话，附原因）：UNVERIFIED_SESSION_ID（无已验证 ID）、DUPLICATE_SESSION_ID（选择集内 ID 重复）、SHARED_FILE（同一物理文件多会话多主）、ABNORMAL_FORMAT（会话 Status≠Valid）、ABNORMAL_GENERATION（任一代际文件 Status≠Valid → 整会话排除）、AMBIGUOUS（同代双编码/header 冲突）、UNKNOWN_FILE（文件名白名单外：session.bak、session.v0.jsonl、大写 Session.JSONL 均拒；白名单=session.jsonl/session.jsonl.zstd/session.vN.jsonl(.zstd)，N 正整数、严格小写）、CROSS_ROOT/PATH_TRAVERSAL（根外/穿越）。
+- 会话不拆分：代际目标先聚合（staged），全部复验通过才提交计划；任一代际失败该会话零目标进入。
+- 专属缓存：仅选择且已规划会话的 Matched 缓存进入（输入即 T-16 SessionCacheIndex Matched 条目转换的 DedicatedCacheEvidence）；未选/被排除会话的缓存不进入；缓存根外复验（CACHE_CROSS_ROOT）。
+- 指纹：RootFingerprint = 规范化根完整路径 UTF-8 SHA-256 小写 hex（同根稳定、异根不同）；PlanId 每计划唯一；RequiresBackup=有目标即 true，空计划 false。
+- 日期筛选（T-11）输出完整 SessionSummary 选择集 → 计划天然只含整会话全部代际，绝不拆内部。
+
+二、命令与退出码
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   BUILD_EXIT=0，0 警告 0 错误
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   TEST_EXIT=0，已通过! - 失败: 0，通过: 197，总计: 197（新增 CleanupPlanTests 16 项；此前 181 项无回归）
+3) UI 冒烟回归：DeepSeekHarnessCleaner.UI.exe --smoke
+   SMOKE_RESULT=PASS，SMOKE_EXIT=0（Process.ExitCode）
+
+三、验收标准逐项
+- 未选会话不进入计划：PASS（Plan_UnselectedSessionsNeverEnterPlan：计划仅含所选会话文件；Plan_DedicatedCacheOnlyForSelectedPlannedSessions：未选/被排除会话缓存不进入）。
+- 异常格式不进入：PASS（Plan_AbnormalFormatExcluded：Corrupt 会话零目标+ABNORMAL_FORMAT；Plan_AbnormalGenerationExcludesWholeSession：单代际 Unreadable → 整会话零目标）。
+- 身份冲突不进入：PASS（Plan_DuplicateSessionIdExcludesBoth、Plan_UnverifiedSessionIdExcluded、Plan_AmbiguousSessionExcluded、Plan_SharedFileBetweenSessionsExcludesBoth）。
+- 未知文件不进入：PASS（Plan_UnknownFileNamesExcluded：session.bak/session.v0.jsonl/Session.JSONL 全部 UNKNOWN_FILE 排除）。
+- 根外路径不进入：PASS（Plan_OutsideRootAndTraversalExcluded：CROSS_ROOT+PATH_TRAVERSAL；Plan_CacheOutsideRootExcluded：CACHE_CROSS_ROOT）。
+- 按日期仅整会话：PASS（Plan_DateFilterSelectionProducesWholeSessionsOnly：选择=完整会话，计划含其全部代际、无内部拆分；TC-08 选择即整会话）。
+- 计划带指纹：PASS（Plan_FingerprintStablePerRootAndDistinctAcrossRoots：^[0-9a-f]{64}$、同根两次 Build 指纹相等、异根不等、PlanId 唯一）。
+- 含全部 generation 与可验证专属缓存：PASS（Plan_SelectedSessionIncludesAllGenerationsOnly：v0+v4 两代际均入计划；缓存用例）。
+- 关联测试 TC-08（选择仅整会话）、TC-11（仅所选目标进入计划，未选不动——规划零写入，执行器二次验证字段 Expected* 由 T-26 使用）：PASS。
+
+四、真实排障记录
+- 首跑 1 失败：Plan_AbnormalGenerationExcludesWholeSession — 实现逐代际即时 targets.Add，后一代际失败时先前目标未回滚，会话被拆分（Assert.Empty 收到 1 个残留目标）。修复：staged 聚合、全部通过才 AddRange。修复后 197/197。
+- 编译期 2 错：xUnit2031（Assert.Single 前用 Where → 改谓词重载）；CS8602（可空 Plan 流分析，补 ! 断言）。
+
+五、安全红线
+- 规划器纯内存零写入；未触碰真实数据根；测试路径全部 C:\synth\ 合成。

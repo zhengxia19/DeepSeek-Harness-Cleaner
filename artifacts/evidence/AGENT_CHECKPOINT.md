@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-17（T-23 轮）
-Git HEAD：docs(T-23) 勾选提交（其前为 feat(T-23)；上上基线 452bfe2 docs(T-22)）
+更新时间：2026-10-17（T-24 轮）
+Git HEAD：docs(T-24) 勾选提交（其前为 feat(T-24)；上上基线 3592948 docs(T-23)）
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -34,9 +34,12 @@ Git HEAD：docs(T-23) 勾选提交（其前为 feat(T-23)；上上基线 452bfe2
 - T-23 Markdown/JSON 可读导出：Application/ReadableExport.cs（Export(ReadableExportInput{Session,TranscriptText,ReferencedAttachmentIds,AttachmentIdsOnDisk})→ReadableExportResult{Markdown,Json,ExportIncomplete,IncompleteReasons}；复用 LegacyPreview.Build 选代际/元数据/MetadataOnly 退化；Markdown 固定声明“不是恢复备份”，消息正文代码块围栏=正文最长反引号串+1（≥3）保证 ```/````/~~~/中文/换行往返不破坏结构，不完整事件用引用块，附件节 存在/缺失/状态未知；JSON Utf8JsonWriter+UnsafeRelaxedJsonEscaping 保留 UTF-8 中文，schemaVersion=1，含 exportIncomplete/incompleteReasons/generations/attachments/projection；exportIncomplete 触发=未知事件/超限截断/附件缺失/磁盘清单不可判定/MetadataOnly/不可读；纯内存无 IO/网络）、tests/ReadableExportTests.cs（7 用例）；build -m:1 exit 0；181/181；UI 冒烟回归 PASS 退出码 0（证据 T-23.txt）。坑：Utf8JsonWriter 须持局部 `using var stream=new MemoryStream()` 再 `stream.ToArray()`（勿内联 new）
 
 
+- T-24 会话精确清理计划：Application/CleanupPlanner.cs（Build(sessionRoot,selectedSessions,dedicatedCaches)→CleanupPlanResult{RootErrorCode,Plan,Exclusions}；CleanupTarget(AbsolutePath,Category{SessionLog,DedicatedCache},OwnerSessionId,Expected*)；CleanupPlan(PlanId,CreatedUtc,RootFingerprint=规范化根 SHA-256 小写 hex,Targets,RequiresBackup)；Application 不引用 Infrastructure→根内复验同 T-21 内联（.. 段先拒 PATH_TRAVERSAL、根外 CROSS_ROOT、根非法 ROOT_INVALID）；排除=UNVERIFIED_SESSION_ID/DUPLICATE_SESSION_ID/SHARED_FILE/ABNORMAL_FORMAT/ABNORMAL_GENERATION(整会话不拆分:staged 聚合全过才提交)/AMBIGUOUS/UNKNOWN_FILE(白名单 session(.vN≥1).jsonl(.zstd) 严格小写)/根外；专属缓存仅选择且已规划会话的 Matched 条目进入(DedicatedCacheEvidence 由调用方从 T-16 转换)；纯内存零写入）、tests/CleanupPlanTests.cs（16 用例）；build -m:1 exit 0；197/197；UI 冒烟回归 PASS 退出码 0（证据 T-24.txt）。坑：逐代际即时 Add 会在后段失败时残留拆分目标，须 staged+AddRange；xUnit2031 禁 Where+Single 用谓词重载
+
+
 ## 下一个任务
-- T-24 生成会话精确清理计划（**前置 T-07,T-10,T-16,T-21**，均已验收）。范围：Application/CleanupPlanner.cs、tests/CleanupPlanTests.cs。要点：由已验证会话 ID 与用户选择集合产生逐文件计划，含该会话全部 generation 与可验证的专属缓存。验收：未选会话、异常格式、身份冲突、未知文件和根外路径不进入计划；按日期仅整会话；计划带指纹。关联 TC-08,TC-11。定义见 docs/implementation-tasks.md:264-271（下轮先读原文）。
-- 可复用 API：PathGuard（T-07）、InventoryService/SessionSummary（T-10）、SessionCacheIndex（T-16，专属缓存证据）、BackupManifestBuilder（T-21）、ReadableExport（T-23）、BackupService（T-22）。
+- T-25 实现 Harness 退出状态检查（**前置 T-03**，已验收）。范围：Infrastructure/HarnessProcessProbe.cs、tests/ProcessProbeTests.cs。要点：通过已知 exe 和可验证的进程路径检测 Harness/可能关联执行者；无法判定时返回 Unknown。验收：模拟 Active/Inactive/Unknown，后两类仅 Inactive 可进入写入；不得主动停止进程。关联 TC-15。定义见 docs/implementation-tasks.md:274-281（下轮先读原文）。注意：Get-CimInstance 可能被拒（用 Get-Process）；测试不得杀真实 Harness 进程，模拟用本项目自启动的合成子进程。
+- 可复用 API：PathGuard（T-07）、CleanupPlanner/CleanupTarget/CleanupPlan（T-24）、BackupService/VerifiedBackup（T-22）、SessionCacheIndex（T-16）。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
@@ -55,4 +58,4 @@ Git HEAD：docs(T-23) 勾选提交（其前为 feat(T-23)；上上基线 452bfe2
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-17 提交已排除二者。
 
 ## 收尾状态
-- T-23 全部验收 PASS（build -m:1 exit 0；181/181 测试含 ReadableExportTests 7 项；UI 冒烟回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-24 开始。
+- T-24 全部验收 PASS（build -m:1 exit 0；197/197 测试含 CleanupPlanTests 16 项；UI 冒烟回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-25 开始。
