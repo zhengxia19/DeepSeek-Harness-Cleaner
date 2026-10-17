@@ -35,7 +35,10 @@ public sealed partial class MainForm : Form
     private readonly ToolStripStatusLabel _statusLabel = new("就绪");
     private readonly Font _baseFont;
     private readonly InventoryPresenter _presenter;
+    private readonly PreviewPresenter _previewPresenter = new();
     private readonly string? _scanRootOverride;
+    private string? _effectiveScanRoot;
+    private CancellationTokenSource? _previewCts;
     private bool _scanning;
 
     public MainForm(string? smokeResultPath = null, string? scanRootPath = null)
@@ -238,6 +241,69 @@ public sealed partial class MainForm : Form
     private void OnSessionGridSelectionChanged(object? sender, EventArgs e)
     {
         _deleteButton.Enabled = _sessionGrid.SelectedRows.Count > 0;
+        _ = RequestPreviewAsync();
+    }
+
+    /// <summary>
+    /// T-19：选中单个会话时触发后台受限预览。重选先取消旧请求；渲染前核对
+    /// 请求令牌与当前选中会话仍是同一对象，取消/重选不会把旧会话内容串进预览。
+    /// </summary>
+    private async Task RequestPreviewAsync()
+    {
+        _previewCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _previewCts = cts;
+
+        var rows = _sessionGrid.SelectedRows.Cast<DataGridViewRow>().ToList();
+        if (rows.Count == 0)
+        {
+            _preview.Text = string.Empty;
+            return;
+        }
+
+        if (rows.Count > 1)
+        {
+            _preview.Text = $"已选择 {rows.Count} 个会话；单选时显示预览（删除按整会话选择）。";
+            return;
+        }
+
+        if (_effectiveScanRoot is null)
+        {
+            _preview.Text = "请先扫描，再预览会话。";
+            return;
+        }
+
+        var session = (SessionSummary)rows[0].Tag!;
+        _preview.Text = "预览加载中…";
+        try
+        {
+            var outcome = await _previewPresenter.PreviewAsync(_effectiveScanRoot, session, cts.Token);
+            if (!ReferenceEquals(_previewCts, cts))
+            {
+                return; // 已被更新的预览请求取代。
+            }
+
+            var current = _sessionGrid.SelectedRows.Count == 1
+                ? _sessionGrid.SelectedRows[0].Tag as SessionSummary
+                : null;
+            if (!ReferenceEquals(current, session))
+            {
+                return; // 当前选中会话已变化，丢弃旧结果（不串会话）。
+            }
+
+            _preview.Text = PreviewPresenter.Render(outcome);
+        }
+        catch (OperationCanceledException)
+        {
+            // 旧请求被新选择取消，保持新请求的显示。
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(_previewCts, cts))
+            {
+                _preview.Text = "预览失败：" + ex.Message;
+            }
+        }
     }
 
     private async void OnScanClick(object? sender, EventArgs e)
@@ -262,6 +328,7 @@ public sealed partial class MainForm : Form
             var result = await _presenter.ScanAsync(root);
             if (result.RootErrorCode is null)
             {
+                _effectiveScanRoot = root;
                 BindSessions(result.Sessions);
             }
 

@@ -1,0 +1,57 @@
+T-19 绑定会话预览与解析状态 — 验收证据
+日期：2026-10-17（宿主本地时间，与任务清单口径一致）
+基线 HEAD：92182c7 docs(T-18)
+
+== 修改文件（均在任务范围内：UI/PreviewPresenter.cs、UI/MainForm.*）==
+- 新增 src/DeepSeekHarnessCleaner.UI/PreviewPresenter.cs：
+  PreviewOutcome(Session, LegacyPreviewResult, Warnings)；
+  PreviewPresenter.PreviewAsync = Task.Run 后台执行；Build：
+  LegacyPreview.SelectPreviewGeneration 选最高规范代际 → PathGuard.Check 白名单复验
+  （拒绝则警告，不读文件）→ 受限读取（明文按 CompressionLimits.MaxSessionDecompressedBytes
+  上限 +1 字节判定；zstd 走 ZstdFrameDecoder.Decode，Success/EmptyInput/TruncatedTail/
+  Corrupt/Limit 分别处理并记警告）→ LegacyPreview.Build（确证代际 v0/v4 投影，
+  未知代际仅元数据，不可读不回退）。Render 输出纯文本：元数据行、预览模式、说明、
+  支持原始备份、警告、事件正文 [role] @时间 文本、截断/不完整计数；无正文时显式说明。
+- 修改 src/DeepSeekHarnessCleaner.UI/MainForm.cs：
+  新增 _previewPresenter/_previewCts/_effectiveScanRoot（扫描成功后缓存）；
+  OnSessionGridSelectionChanged → RequestPreviewAsync：先取消旧 CTS；0 选清空预览；
+  多选显示提示；单选后台预览；渲染前双重核对（ReferenceEquals(_previewCts, cts) 且
+  当前选中行 Tag 仍是同一 SessionSummary），旧请求结果一律丢弃 → 取消/重选不串会话。
+- 修改 src/DeepSeekHarnessCleaner.UI/MainForm.Smoke.cs：
+  新增 RunPreviewChecks（--scan-root 时执行）+ SelectRowBySessionId + PumpUntil；
+  fixture 期望 303→305 会话。
+
+== fixture（.artifacts/tmp/dsh-t18-fixture，根级布局，307 文件 / 305 会话 / 1 异常）==
+本轮新增：
+  projD/smoke-v4-0004/session.v4.jsonl（代际 4 金样：header v4 createdAt 2026-10-02T09:00:00+00:00，
+    user "V4 question" / assistant "V4 answer"，均带 ts，text 字段）
+  projE/smoke-old-0005/session.v7.jsonl（未知代际 7：header v4 + user text "old text"）
+其余同 T-18.txt 规范（重建命令见 T-18.txt；注意根级布局无 projects\ 层；
+PowerShell 函数名勿用 H——与 Get-History 别名冲突）。
+
+== 命令与退出码 ==
+1) . .\scripts\enter-env.ps1; $env:TEMP=$env:TMP="$PWD\.artifacts\tmp"
+   dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   → EXIT=0（0 警告 0 错误；首轮 1 个 CS8820 编译错误已修复：static lambda 捕获局部变量）
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   → EXIT=0，已通过! - 失败: 0，通过: 142，总计: 142（无回归；T-13/T-14 服务级用例覆盖 TC-06 语义）
+3) 冒烟（真实窗口，.NET Process API 同步等待）：
+   src\DeepSeekHarnessCleaner.UI\bin\Release\net10.0-windows\DeepSeekHarnessCleaner.UI.exe
+     --smoke .artifacts\tmp\t19-smoke-result.txt --scan-root .artifacts\tmp\dsh-t18-fixture
+   → SMOKE_EXIT=0，SMOKE_RESULT=PASS，54 项断言全 PASS（含 T-17/T-18 全部回归项）。
+
+== T-19 关键断言（逐项 PASS，摘录）==
+- V4 金样预览显示 user/assistant 角色与文本正确（[user] V4 question / [assistant] V4 answer）
+- V4 金样预览显示预览代际 4 且投影完整
+- 未知旧代际 v7 显示元数据与提示而非空白/崩溃（预览模式：MetadataOnly；"未经脱敏 fixture 确证"；"无事件正文"）
+- 坏头部会话显示不完整事件标记（不空白/不崩溃）（不完整事件：第 1 行；预览模式：Projected）
+- 重选后预览不串会话（先选 smoke-a-0001 立即改选 smoke-b-0002，最终仅呈现 B，A 内容不出现）
+- 取消选择后预览清空
+- 来源与 warning：预览含元数据行（创建时间+日期来源、库存状态、代际明细）与警告行（白名单拒绝/解压异常等路径均有警告文案）
+- 回归：fixture 服务扫描成功（305 会话 / 1 异常文件）；后台扫描/消息泵/列表/统计/筛选/排序稳定性全部 PASS；
+  INFO 扫描等待期间消息泵迭代 1691573 次，等待 875 ms
+
+== 验收结论 ==
+- V4 金样显示正确：PASS；未知旧版显示提示而非空白/崩溃：PASS；取消/重选不串会话：PASS。
+- TC-06（预览）、TC-20（安全失败：未知代际/坏头部/白名单拒绝均不崩溃、不空白、无误删——预览全程只读）：PASS。
+- 全部验收通过，任务勾选 [x]。

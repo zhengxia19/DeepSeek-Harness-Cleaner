@@ -61,6 +61,7 @@ public sealed partial class MainForm
         if (_scanRootOverride is not null)
         {
             RunBindingChecks(_scanRootOverride);
+            RunPreviewChecks();
         }
 
         foreach (var (label, factor) in new[] { ("125%", 1.25f), ("150%", 1.5f) })
@@ -179,8 +180,8 @@ public sealed partial class MainForm
         // 服务侧期望结果：与 UI 同一套 Application/Infrastructure 契约，独立实例。
         var expectedService = new InventoryService(new UiScanSource());
         var expected = expectedService.Scan(fixtureRoot);
-        Check("fixture 服务扫描成功（303 会话 / 1 异常文件）",
-            expected.RootErrorCode is null && expected.Sessions.Count == 303 && expected.AnomalousFiles.Count == 1);
+        Check("fixture 服务扫描成功（305 会话 / 1 异常文件）",
+            expected.RootErrorCode is null && expected.Sessions.Count == 305 && expected.AnomalousFiles.Count == 1);
 
         // 触发 UI 扫描（async void + await 续体经消息泵回到 UI 线程），期间持续泵消息证明 UI 不冻结。
         _smokeScanFinished = false;
@@ -263,6 +264,75 @@ public sealed partial class MainForm
 
         _sessionGrid.ClearSelection();
         Check("取消选择后删除按钮禁用", !_deleteButton.Enabled);
+    }
+
+    /// <summary>
+    /// T-19 预览断言（TC-06/TC-20）：V4 金样（代际 4，fixture 确证）显示 role/文本/预览代际且投影完整；
+    /// 未知旧代际（v7）显示元数据与提示而非空白/崩溃；坏头部会话显示不完整事件标记；
+    /// 快速重选（先选 A 立即改选 B，中间不泵消息）后预览只呈现新会话，不串会话。
+    /// </summary>
+    private void RunPreviewChecks()
+    {
+        SelectRowBySessionId("smoke-v4-0004");
+        PumpUntil(() => _preview.Text.Contains("V4 question", StringComparison.Ordinal), 10_000);
+        Check("V4 金样预览显示 user/assistant 角色与文本正确",
+            _preview.Text.Contains("[user]", StringComparison.Ordinal)
+            && _preview.Text.Contains("V4 question", StringComparison.Ordinal)
+            && _preview.Text.Contains("[assistant]", StringComparison.Ordinal)
+            && _preview.Text.Contains("V4 answer", StringComparison.Ordinal));
+        Check("V4 金样预览显示预览代际 4 且投影完整",
+            _preview.Text.Contains("预览代际：4", StringComparison.Ordinal)
+            && _preview.Text.Contains("投影完整", StringComparison.Ordinal));
+
+        SelectRowBySessionId("smoke-old-0005");
+        PumpUntil(() => _preview.Text.Contains("会话：smoke-old-0005", StringComparison.Ordinal), 10_000);
+        Check("未知旧代际 v7 显示元数据与提示而非空白/崩溃",
+            _preview.Text.Contains("会话：smoke-old-0005", StringComparison.Ordinal)
+            && _preview.Text.Contains("预览模式：MetadataOnly", StringComparison.Ordinal)
+            && _preview.Text.Contains("未经脱敏 fixture 确证", StringComparison.Ordinal)
+            && _preview.Text.Contains("无事件正文", StringComparison.Ordinal));
+
+        SelectRowBySessionId(null); // 坏头部会话（SessionId 未知）。
+        PumpUntil(() => _preview.Text.Contains("不完整事件", StringComparison.Ordinal), 10_000);
+        Check("坏头部会话显示不完整事件标记（不空白/不崩溃）",
+            _preview.Text.Contains("不完整事件：第 1 行", StringComparison.Ordinal)
+            && _preview.Text.Contains("预览模式：Projected", StringComparison.Ordinal));
+
+        // 取消/重选不串会话：选中 A 后立即改选 B（中间不泵消息），最终只呈现 B。
+        SelectRowBySessionId("smoke-a-0001");
+        SelectRowBySessionId("smoke-b-0002");
+        PumpUntil(() => _preview.Text.Contains("会话：smoke-b-0002", StringComparison.Ordinal), 10_000);
+        Check("重选后预览不串会话（仅呈现新会话，旧会话内容不出现）",
+            _preview.Text.Contains("会话：smoke-b-0002", StringComparison.Ordinal)
+            && !_preview.Text.Contains("会话：smoke-a-0001", StringComparison.Ordinal));
+
+        _sessionGrid.ClearSelection();
+        PumpUntil(() => _preview.Text.Length == 0, 5_000);
+        Check("取消选择后预览清空", _preview.Text.Length == 0);
+    }
+
+    private void SelectRowBySessionId(string? sessionId)
+    {
+        _sessionGrid.ClearSelection();
+        foreach (DataGridViewRow row in _sessionGrid.Rows)
+        {
+            if (string.Equals(((SessionSummary)row.Tag!).SessionId, sessionId, StringComparison.Ordinal))
+            {
+                row.Selected = true;
+                return;
+            }
+        }
+
+        throw new InvalidOperationException("未找到会话行: " + (sessionId ?? "(未知)"));
+    }
+
+    private static void PumpUntil(Func<bool> condition, int timeoutMs)
+    {
+        var start = Environment.TickCount64;
+        while (!condition() && Environment.TickCount64 - start < timeoutMs)
+        {
+            System.Windows.Forms.Application.DoEvents();
+        }
     }
 
     private List<string?> SelectedSessionIds() =>
