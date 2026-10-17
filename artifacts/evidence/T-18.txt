@@ -1,0 +1,57 @@
+T-18 绑定会话列表/搜索/日期选择 — 验收证据
+日期：2026-10-17
+Git：feat(T-18) 提交见本文件同轮 feat 提交；基线 HEAD=a709411（docs(T-17)）
+
+== 实施内容 ==
+- 新增 src/DeepSeekHarnessCleaner.UI/InventoryPresenter.cs：
+  * UiScanSource（ISessionScanSource 适配器：SessionLogDiscovery + SessionHeaderReader → Domain 事实，与测试侧适配器同构；记录 LastScanThreadId 供冒烟证明后台线程执行）。
+  * InventoryPresenter：ScanAsync 经 Task.Run 在后台线程执行 InventoryService.Scan；ApplyFilter 调 SessionFilter.Apply（UI 时区）；BuildStatusText 生成可解释总量文本（件数/合计字节+KiB/异常文件数/筛选条数）。
+- 修改 src/DeepSeekHarnessCleaner.UI/MainForm.cs：
+  * 列表控件由 ListView 换为 DataGridView（7 列：会话 ID/项目/创建时间/日期来源/大小/格式（代际）/状态；FullRowSelect + MultiSelect + ReadOnly；每行 Tag 绑定 SessionSummary）。
+  * 过滤面板（Panel1 顶部 FlowLayoutPanel）：关键字/项目/会话 ID 文本框、日期字段下拉（创建时间 | 文件修改时间（非会话活动））、启用日期复选框、起止 DateTimePicker、应用筛选按钮；筛选经 SessionFilter.Apply，无效区间显示错误不落空。
+  * 扫描按钮 async 流程：扫描中禁用按钮、状态栏"扫描中…"，await 续体回 UI 线程绑定列表与统计；扫描根 = --scan-root 覆盖或 RootLocator.Resolve()（根无效时显示错误码，不写入任何目录）。
+  * 选择变化联动删除按钮（SelectedRows.Count>0）。
+- 修改 src/DeepSeekHarnessCleaner.UI/MainForm.Smoke.cs：新增 RunBindingChecks（--scan-root 时执行）；控件引用 ListView→DataGridView；TabIndex 重排（过滤 1-8 < 列表 9 < 预览 10 < 扫描 11 < 删除 12 < 退出 13）。
+- 修改 src/DeepSeekHarnessCleaner.UI/Program.cs：--smoke <文件> [--scan-root <目录>] 参数解析。
+
+== 合成 fixture（项目本地，非真实数据根）==
+.artifacts/tmp/dsh-t18-fixture/
+  projA/smoke-a-0001/session.jsonl（header v4，createdAt 2026-10-01T08:00:00+00:00）
+  projB/smoke-b-0002/session.jsonl + session.v1.jsonl（多代际，createdAt 2026-09-15T00:30:00+00:00）
+  projC/smoke-c-0003/session.jsonl（截断 header → Corrupt，日期未知）
+  projPerf/perf-0001..0300/session.jsonl（有效 header，createdAt 2020-01-01，用于制造可测扫描耗时）
+  stray.txt（根下直放 → UNEXPECTED_LOCATION 异常）
+共 305 文件、303 逻辑会话、1 异常文件。
+
+== 命令与退出码 ==
+1) . .\scripts\enter-env.ps1; $env:TEMP=$env:TMP="$PWD\.artifacts\tmp"
+   dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   → EXIT=0（0 警告 0 错误）
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   → EXIT=0，已通过! - 失败: 0，通过: 142，已跳过: 0，总计: 142（TC-05/TC-07 服务级用例含于既有 InventoryTests/FilterTests，无回归）
+3) 冒烟（真实窗口，.NET Process API 同步等待）：
+   DeepSeekHarnessCleaner.UI.exe --smoke .artifacts\tmp\t18-smoke-result.txt --scan-root .artifacts\tmp\dsh-t18-fixture
+   → SMOKE_EXIT=0，SMOKE_RESULT=PASS，48 项断言全 PASS（含 T-17 全部布局/键盘回归项）。
+
+== 冒烟关键断言（逐项 PASS，摘录）==
+- fixture 服务扫描成功（303 会话 / 1 异常文件）
+- 扫描已完成（15 秒内）；INFO 扫描等待期间消息泵迭代 1028425 次，等待 656 ms
+- 扫描在后台线程执行（非 UI 线程）；扫描期间 UI 消息泵持续运行（未冻结）
+- 列表行数与会话服务结果一致；列表逐行与会话服务结果一致（ID/大小/状态/Tag）
+- 状态栏总量与服务统计一致（件数/合计/异常文件）
+- 关键字筛选列表与服务筛选一致；项目筛选列表与服务筛选一致（多代际归并 1 条）
+- 日期区间筛选列表与服务筛选一致（含当天、排除未知日期）
+- 清空筛选后恢复全量列表
+- 多选两条整会话且删除按钮启用；列排序后多选仍指向原会话（不指向别的会话）；取消选择后删除按钮禁用
+- T-17 回归：窗口/区域/按钮 100%/125%/150% 字体缩放下完整可见未遮挡、Tab 顺序与可达性、助记键，全部保持 PASS
+
+== 验收对照 ==
+- "fixture 下列表/统计/筛选与服务结果一致" → 冒烟逐行/状态栏/三类筛选与服务侧 InventoryService+SessionFilter 结果一致：PASS
+- "UI 不冻结" → 扫描在后台线程（LastScanThreadId≠UI 线程），等待 656ms 期间消息泵持续迭代：PASS
+- "多选不因排序指向别的会话" → 按大小列排序后 SelectedRows 的 Tag.SessionId 集合不变：PASS
+- 关联 TC-05/TC-07/TC-08：服务级由既有 142 用例覆盖（无回归），UI 级由上述冒烟断言覆盖：PASS
+
+== 说明与边界 ==
+- 冒烟消息泵迭代数为 DoEvents 忙等计数，用于证明 UI 线程未被扫描阻塞；非性能指标。
+- 本机 DeviceDpi=96；125%/150% 为字体缩放模拟，真实 DPI 实机验证仍归 T-33。
+- 未触碰真实 %USERPROFILE%\.dsh / %APPDATA%\@deepseek-ai\dsh-desktop（扫描根为项目本地合成 fixture）。

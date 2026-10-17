@@ -203,7 +203,7 @@
 
 ### T-18 — 绑定会话列表/搜索/日期选择
 
-- [ ] **T-18：绑定会话列表/搜索/日期选择**
+- [x] **T-18：绑定会话列表/搜索/日期选择**（2026-10-17，证据 artifacts/evidence/T-18.txt，feat 见 git log）
 - **前置**：T-11,T-17。
 - **修改范围**：`UI/InventoryPresenter.cs、UI/MainForm.*`。
 - **任务边界**：扫描后台执行；绑定 DataGridView、日期/项目/文本过滤和多选；显示总量。

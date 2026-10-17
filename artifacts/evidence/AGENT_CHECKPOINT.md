@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-17（T-17 轮）
-Git HEAD：feat(T-17) 12a644f；docs(T-17) 勾选提交紧随其后
+更新时间：2026-10-17（T-18 轮）
+Git HEAD：feat(T-18)；docs(T-18) 勾选提交紧随其后（基线 a709411 docs(T-17)）
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -20,11 +20,12 @@ Git HEAD：feat(T-17) 12a644f；docs(T-17) 勾选提交紧随其后
 - T-14 旧版本预览安全退化：Application/LegacyPreview.cs + tests/LegacyPreviewTests.cs（11 用例）；全量 122/122（4610b45，证据 T-14.txt）
 - T-15 附件引用证据索引：Application/AttachmentIndex.cs + tests/AttachmentIndexTests.cs（10 用例）；全量 132/132（ddb5093，证据 T-15.txt）
 - T-16 单会话投影缓存只读索引：Infrastructure/SessionCacheIndex.cs + tests/CacheIndexTests.cs（10 用例）；全量 142/142（eaeb8a6，证据 T-16.txt）
-- T-17 WinForms 单窗口布局：UI/MainForm.cs（菜单/列表 ListView/预览 RichTextBox/操作按钮 FlowLayoutPanel/StatusStrip，Dock+AutoSize+AutoScaleMode.Font+PerMonitorV2，删除按钮初始禁用）、UI/MainForm.Smoke.cs（`--smoke <文件>` 自检：窗口显示、区域不遮挡、100/125/150% 字体缩放下按钮完整在客户区且中心未被遮挡（父容器命中测试）、Tab 顺序/助记键/Tab 可达性）、UI/Program.cs（正常 Run + smoke 模式退出码 0/1/2）；冒烟 34 项全 PASS 退出码 0；build -m:1 exit 0；全量 142/142（12a644f，证据 T-17.txt）。坑：SplitContainer 默认宽 ~150，须先设 Size 再设 MinSize/SplitterDistance，否则构造崩溃
+- T-17 WinForms 单窗口布局：UI/MainForm.cs（菜单/列表/预览/操作按钮/StatusStrip，Dock+AutoSize+AutoScaleMode.Font+PerMonitorV2，删除按钮初始禁用）、UI/MainForm.Smoke.cs（`--smoke <文件>` 自检）、UI/Program.cs（smoke 退出码 0/1/2）；冒烟全 PASS（12a644f，证据 T-17.txt）。坑：SplitContainer 默认宽 ~150，须先设 Size 再设 MinSize/SplitterDistance
+- T-18 绑定会话列表/搜索/日期选择：UI/InventoryPresenter.cs（UiScanSource 适配器=测试侧 ScanSource 同构+LastScanThreadId；InventoryPresenter.ScanAsync=Task.Run 后台扫描、ApplyFilter=SessionFilter.Apply、BuildStatusText 总量文本）、MainForm.cs（ListView→DataGridView 7 列、行 Tag=SessionSummary、FullRowSelect/MultiSelect、过滤面板关键字/项目/会话ID/日期字段/启用日期/起止 DTP/应用筛选、扫描 async 后台+状态栏、RootLocator 或 --scan-root 扫描根）、MainForm.Smoke.cs（RunBindingChecks）、Program.cs（--scan-root）；冒烟 48 项全 PASS 退出码 0（含 T-17 回归）；build -m:1 exit 0；142/142（feat 见 git log，证据 T-18.txt）。fixture 根 .artifacts/tmp/dsh-t18-fixture（303 会话/1 异常，重建命令见 T-18.txt；perf-0001..0300 用于制造 656ms 扫描耗时证明 UI 不冻结）
 
 ## 下一个任务
-- T-18 绑定会话列表/搜索/日期选择（**前置 T-11,T-17**，均已验收）。范围：UI/InventoryPresenter.cs、UI/MainForm.*。要点：扫描后台执行；绑定 DataGridView、日期/项目/文本过滤和多选；显示总量。验收：fixture 下列表/统计/筛选与服务结果一致；UI 不冻结；多选不因排序指向别的会话。关联 TC-05,TC-07,TC-08。定义见 docs/implementation-tasks.md:204-211（下轮先读原文；可考虑把列表控件从 ListView 换/适配为 DataGridView，注意 T-17 冒烟自检仍须保持通过）。
-- 可复用 API：InventoryService.Scan（ISessionScanSource 端口，测试侧适配器组合 SessionLogDiscovery+SessionHeaderReader）；SessionFilter.Apply(sessions,request,timeZone)；SessionCacheIndex.Build；AttachmentIndex.Build；TranscriptProjector.Project；LegacyPreview.*；SessionEventReader.Read；ZstdFrameDecoder.Decode；PathGuard.Check；夹具 FixtureRoot/FixtureFactory。
+- T-19 绑定会话预览与解析状态（**前置 T-13,T-14,T-18**，均已验收）。范围：UI/PreviewPresenter.cs、UI/MainForm.*。要点：选中会话触发后台受限预览，显示 role、文本、来源与 warning。验收：V4 金样显示正确；未知旧版显示提示而非空白/崩溃；取消/重选不串会话。关联 TC-06,TC-20。定义见 docs/implementation-tasks.md:214-221（下轮先读原文）。
+- 可复用 API：InventoryService.Scan（ISessionScanSource；UI 侧已有 UiScanSource）；SessionFilter.Apply；TranscriptProjector.Project；LegacyPreview.SelectPreviewGeneration/Build；SessionEventReader.Read；ZstdFrameDecoder.Decode；SessionCacheIndex.Build；AttachmentIndex.Build；PathGuard.Check；夹具 FixtureRoot/FixtureFactory。UI 冒烟数据绑定取证模式：exe `--smoke <res> --scan-root <fixture根>` + Process API；冒烟内 PerformClick+DoEvents 泵等待后台完成。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
@@ -43,4 +44,4 @@ Git HEAD：feat(T-17) 12a644f；docs(T-17) 勾选提交紧随其后
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-17 提交已排除二者。
 
 ## 收尾状态
-- T-17 全部验收 PASS（build -m:1 exit 0；142/142 测试；冒烟 34 项 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-18 开始。
+- T-18 全部验收 PASS（build -m:1 exit 0；142/142 测试；冒烟 48 项 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-19 开始。
