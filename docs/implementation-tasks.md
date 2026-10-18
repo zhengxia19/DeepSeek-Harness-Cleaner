@@ -363,7 +363,7 @@
 
 ### T-34 — 制作发布包并最终复核
 
-- [ ] **T-34：制作发布包并最终复核**
+- [x] **T-34：制作发布包并最终复核**
 - **前置**：T-33。
 - **修改范围**：`scripts/publish.ps1、docs/release.md、README.md、CHANGELOG.md、dist/v0.1.0/**`。
 - **任务边界**：按 release 清单发布，自包含 win-x64、SHA256SUMS、依赖报告、已知限制；归档测试证据。

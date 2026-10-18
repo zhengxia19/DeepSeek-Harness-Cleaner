@@ -1,6 +1,6 @@
 # DeepSeek Harness Cleaner（设计与实施文档）
 
-> 状态：**设计已定稿，尚未实施、构建或在真实数据上执行清理**。文档日期：2026-10-16。目标：Windows 10 x64，DeepSeek Harness 0.2.0.0 本地数据。方案 B：C# / .NET 10 / WinForms。
+> 状态：**已实施并通过 T-01～T-33 验收；0.1.0 发布包已构建（`dist/v0.1.0/win-x64/`），最终发布复核见 `artifacts/evidence/T-34.txt`**。文档日期：2026-10-18。目标：Windows 10 x64，DeepSeek Harness 0.2.0.0 本地数据（0.2.1-rc.2 只读识别、禁止清理）。方案 B：C# / .NET 10 / WinForms。
 
 ## 项目目标
 
