@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
 using DeepSeekHarnessCleaner.Application;
 using DeepSeekHarnessCleaner.Domain;
@@ -36,6 +37,8 @@ public sealed partial class MainForm : Form
     private readonly Font _baseFont;
     private readonly InventoryPresenter _presenter;
     private readonly PreviewPresenter _previewPresenter = new();
+    private readonly ActionsPresenter _actionsPresenter;
+    private CleanupDialog? _lastCleanupDialog;
     private readonly string? _scanRootOverride;
     private string? _effectiveScanRoot;
     private CancellationTokenSource? _previewCts;
@@ -46,6 +49,8 @@ public sealed partial class MainForm : Form
         _smokeResultPath = smokeResultPath;
         _scanRootOverride = scanRootPath;
         _presenter = new InventoryPresenter(new UiScanSource(), TimeZoneInfo.Local);
+        // 冒烟模式注入“无进程”快照，避免开发机上宿主进程使删除门禁恒阻断；真实模式用真实探测。
+        _actionsPresenter = new ActionsPresenter(_smokeResultPath is not null ? static () => [] : null);
         _baseFont = SystemFonts.MessageBoxFont ?? DefaultFont;
         Font = _baseFont;
         AutoScaleMode = AutoScaleMode.Font;
@@ -446,7 +451,64 @@ public sealed partial class MainForm : Form
 
     private void OnDeleteClick(object? sender, EventArgs e)
     {
-        _statusLabel.Text = "删除流程将在 T-20 之后的任务接入。";
+        if (_effectiveScanRoot is null)
+        {
+            _statusLabel.Text = "请先扫描，再删除会话。";
+            return;
+        }
+
+        var sessions = _sessionGrid.SelectedRows.Cast<DataGridViewRow>()
+            .Select(static row => (SessionSummary)row.Tag!)
+            .ToList();
+        if (sessions.Count == 0)
+        {
+            _statusLabel.Text = "未选择会话。";
+            return;
+        }
+
+        var planResult = _actionsPresenter.BuildSessionPlan(_effectiveScanRoot, sessions);
+        if (planResult.Plan is null || planResult.Plan.Targets.Count == 0)
+        {
+            _statusLabel.Text = "无可删除目标：" + (planResult.RootErrorCode
+                ?? string.Join("；", planResult.Exclusions.Select(static x => x.Reason)));
+            return;
+        }
+
+        var zipPath = Path.Combine(
+            Path.GetTempPath(), "dshcleaner-backups", $"cleanup-{DateTime.Now:yyyyMMdd-HHmmss}-{Environment.ProcessId}.zip");
+        // 备份清单以数据根（sessions 的父目录，即 .dsh 主目录）为根。
+        var dataHome = Path.GetDirectoryName(_effectiveScanRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            ?? _effectiveScanRoot;
+        var dialog = new CleanupDialog(planResult, _effectiveScanRoot, dataHome, sessions, _actionsPresenter, zipPath);
+        dialog.CleanupFinished += OnCleanupFinished;
+        _lastCleanupDialog = dialog;
+        dialog.Show(this);
+        _statusLabel.Text = "删除确认对话框已打开：先创建备份，再确认删除。";
+    }
+
+    private async void OnCleanupFinished(object? sender, CleanupExecutionResult result)
+    {
+        if (_effectiveScanRoot is null)
+        {
+            return;
+        }
+
+        _statusLabel.Text = result.Aborted
+            ? $"删除被阻断：{result.AbortCode}。"
+            : $"删除完成：{result.DeletedCount} 个文件 / 跳过 {result.SkippedCount} / 失败 {result.FailedCount}。正在刷新清单…";
+        try
+        {
+            var refresh = await _presenter.ScanAsync(_effectiveScanRoot);
+            if (refresh.RootErrorCode is null)
+            {
+                BindSessions(refresh.Sessions);
+                _statusLabel.Text = _presenter.BuildStatusText(filtered: null) + "（删除后已刷新）";
+            }
+        }
+        catch (Exception ex)
+        {
+            _statusLabel.Text = "刷新失败：" + ex.Message;
+        }
     }
 
     private void OnExitClick(object? sender, EventArgs e)

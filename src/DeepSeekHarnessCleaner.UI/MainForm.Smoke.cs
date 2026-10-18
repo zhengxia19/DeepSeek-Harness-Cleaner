@@ -62,6 +62,7 @@ public sealed partial class MainForm
         {
             RunBindingChecks(_scanRootOverride);
             RunPreviewChecks();
+            RunActionsChecks(_scanRootOverride);
         }
 
         foreach (var (label, factor) in new[] { ("125%", 1.25f), ("150%", 1.5f) })
@@ -309,6 +310,96 @@ public sealed partial class MainForm
         _sessionGrid.ClearSelection();
         PumpUntil(() => _preview.Text.Length == 0, 5_000);
         Check("取消选择后预览清空", _preview.Text.Length == 0);
+    }
+
+    /// <summary>T-30：备份/删除对话框流程断言（取消不删除、未备份禁用确认、确认后精确删除、完成刷新、取消执行不阻塞 UI）。</summary>
+    private void RunActionsChecks(string fixtureRoot)
+    {
+        var service = new InventoryService(new UiScanSource());
+        var scan = service.Scan(fixtureRoot);
+        var sessionA = scan.Sessions.First(static s => s.SessionId == "smoke-a-0001");
+        var sessionB = scan.Sessions.First(static s => s.SessionId == "smoke-b-0002");
+        var untouched = scan.Sessions.First(static s => s.SessionId == "smoke-v4-0004");
+        var expectedPlan = new CleanupPlanner().Build(fixtureRoot, [sessionA, sessionB], []).Plan!;
+
+        Check("删除计划：两会话全部代际文件、要求备份",
+            expectedPlan.Targets.Count >= 2 && expectedPlan.RequiresBackup);
+        Check("删除前目标文件全部存在", expectedPlan.Targets.All(static t => File.Exists(t.AbsolutePath)));
+
+        _sessionGrid.ClearSelection();
+        SelectRowBySessionId("smoke-a-0001");
+        var rowB = _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .First(static r => r.Tag is SessionSummary s && s.SessionId == "smoke-b-0002");
+        rowB.Selected = true;
+        _deleteButton.PerformClick();
+        System.Windows.Forms.Application.DoEvents();
+        var dialog = _lastCleanupDialog!;
+        Check("删除确认对话框打开", dialog.Visible);
+        Check("未备份时确认删除按钮禁用", !dialog.ConfirmButtonEnabled);
+
+        dialog.RequestCancel();
+        PumpUntil(() => !dialog.Visible, 5_000);
+        Check("点击取消即关闭且不删除任何文件",
+            !dialog.Visible && expectedPlan.Targets.All(static t => File.Exists(t.AbsolutePath)));
+
+        _deleteButton.PerformClick();
+        System.Windows.Forms.Application.DoEvents();
+        var dialog2 = _lastCleanupDialog!;
+        Check("重新打开为新的对话框实例", dialog2.Visible && !ReferenceEquals(dialog2, dialog));
+        dialog2.RequestBackup();
+        PumpUntil(() => dialog2.BackupReady, 20_000);
+        _smokeLines.Add($"INFO 备份状态：{dialog2.BackupStatusText}");
+        Check("备份完成并校验后确认删除按钮启用", dialog2.BackupReady && dialog2.ConfirmButtonEnabled);
+
+        var pumps = 0;
+        dialog2.RequestConfirm();
+        var start = Environment.TickCount64;
+        while (!dialog2.RunFinished && Environment.TickCount64 - start < 30_000)
+        {
+            System.Windows.Forms.Application.DoEvents();
+            pumps++;
+        }
+
+        var result = dialog2.LastResult;
+        Check("确认后执行器精确删除全部选定目标",
+            result is { Aborted: false } && result.DeletedCount == expectedPlan.Targets.Count && result.AllSucceeded);
+        Check("已选会话文件删除、未选会话文件不变",
+            expectedPlan.Targets.All(static t => !File.Exists(t.AbsolutePath))
+            && untouched.Generations.All(static g => File.Exists(g.FullPath)));
+        Check("删除在后台执行且消息泵持续运行（UI 未阻塞）", pumps >= 1);
+
+        PumpUntil(() => (_statusLabel.Text ?? string.Empty).Contains("已刷新", StringComparison.Ordinal), 20_000);
+        Check("删除完成后清单自动刷新（会话数减少 2）", _sessionGrid.Rows.Count == scan.Sessions.Count - 2);
+
+        // TC-16：执行中取消 → 逐项 CANCELED 跳过，正常收尾不异常。
+        _sessionGrid.ClearSelection();
+        for (var i = 0; i < 60 && i < _sessionGrid.Rows.Count; i++)
+        {
+            _sessionGrid.Rows[i].Selected = true;
+        }
+
+        _deleteButton.PerformClick();
+        System.Windows.Forms.Application.DoEvents();
+        var dialog3 = _lastCleanupDialog!;
+        dialog3.RequestBackup();
+        PumpUntil(() => dialog3.BackupReady, 60_000);
+        Check("60 会话批量备份完成", dialog3.BackupReady);
+        dialog3.RequestConfirm();
+        dialog3.RequestCancel();
+        var pumps3 = 0;
+        start = Environment.TickCount64;
+        while (!dialog3.RunFinished && Environment.TickCount64 - start < 60_000)
+        {
+            System.Windows.Forms.Application.DoEvents();
+            pumps3++;
+        }
+
+        var result3 = dialog3.LastResult;
+        Check("取消执行正常收尾（部分删除 + 取消跳过，无异常，UI 持续响应）",
+            result3 is { Aborted: false } && (result3.SkippedCount > 0 || result3.DeletedCount > 0) && pumps3 >= 1);
+
+        // 复位选择，保证后续缩放回归检查仍见“删除按钮初始禁用”。
+        _sessionGrid.ClearSelection();
     }
 
     private void SelectRowBySessionId(string? sessionId)
