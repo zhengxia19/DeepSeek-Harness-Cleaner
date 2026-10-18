@@ -1,0 +1,51 @@
+T-33 执行性能与 Win10 兼容性验证 — 验收证据
+=================================================
+日期时间：2026-10-18（UTC 15:57–16:05）
+提交基线：525b397（docs(T-32)）
+SDK：.NET 10.0.402（项目本地 .dotnet）
+系统（WIN10-01 实测记录）：Windows 10 Pro（Edition=Professional）Version=22H2 Build=19045.UBR6466；CPU=Intel64 Family 6 Model 85 Stepping 7, 32 核；DISK=VMware Virtual disk/SSD/SAS
+脚本：scripts/perf.ps1、scripts/smoke-win10.ps1（本轮新增）
+证据文件：artifacts/evidence/T-33.txt、T-33-perf.txt、T-33-win10.txt
+
+== 命令与退出码 ==
+1) .\scripts\perf.ps1 → PERF_EXIT=0（PERF_RESULT=PASS）
+2) .\scripts\smoke-win10.ps1 → WIN10_EXIT=0（WIN10_RESULT=PASS）
+   内含 dotnet publish src/UI -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:NuGetAudit=false → PUB_EXIT=0
+   （NuGetAudit=false 因离线环境漏洞索引不可达；NUGET_HTTP_CACHE_PATH 指向项目内 .artifacts/nuget-http-cache）
+
+== PERF-01（1000 小会话，项目内 fixture .artifacts/tmp/dsh-perf-fixture）==
+fixture：1000 会话目录 × 201 行 v4 明文 JSONL，files=1000，bytes=18,293,000（≈18MB ≤200MB ✓）
+完整元数据初扫（独立子进程冷启动首扫）：scanMs=2766.2 ≤15000 ✓
+筛选响应（日期区间+关键字，10 次均值）：filterAvgMs=0.96 ≤200 ✓（命中 1：零填充 ID 下 perf-1 仅匹配 perf-1000，语义正确）
+扫描进程峰值工作集：197.1MiB <512MiB ✓
+sessions=1000、anomalies=0、totalBytes 与 fixture 一致 ✓
+全部 7 项检查 PASS（T-33-perf.txt）。
+
+== WIN10-01（真实 Win10 实机，非干净 VM——VM 归 T-34）==
+自包含单文件 win-x64 发布成功：EXE=.artifacts/publish/t33-win10/DeepSeekHarnessCleaner.UI.exe，102.8MB
+真实窗口冒烟（fixture 副本 dsh-t33-fixture，中文 UI、操作完成、退出）：SMOKE_EXIT=0，PASS=72 / FAIL=0 ✓
+诚实标注：本机 Win10 Pro 22H2 在 .NET 10 官方支持范围内；干净 VM 验证仍归 T-34。
+
+== TC-18 运行时联网检查 ==
+自包含 EXE 完整冒烟运行期间，每 100ms 轮询 Get-NetTCPConnection -OwningProcess：
+TC18_NETWORK_CONNECTIONS=0 → 运行期零新增主动 TCP 连接 ✓（另有 T-32 静态核查 src 无网络 API，0 命中）
+
+== COMPAT-01（真实 .dsh\sessions 只读，前后快照证明只读）==
+COMPAT sessions=44 totalBytes=16,949,043 anomalies=0 ambiguous=44
+status={"Corrupt":44}；generations gen0=2/gen4=43；encodings zstd=45
+只读证明：snapshot files=45 changed=0 deleted=0 added=0 ✓（扫描未改动任何既有文件）
+诊断补充（详见 T-33-win10.txt 追加段）：
+- 本机 Harness 实测版本 0.2.1-rc.2（规格目标 0.2.0.0 样本不可得，诚实标注版本差异）
+- 物理解码=兼容：session.v4.jsonl.zstd magic 28 b5 2f fd，ZstdFrameDecoder.Decode=Success
+- 语义预览=不支持：真实头部 schema（type=session,id,version,cwd,isSeeded,delegationDepth,agentPreset）与 fixture 确证的 0.2.0.0 V4 头部（type=header,sessionId,formatVersion）不一致 → 44/44 Corrupt、SessionId=null、ambiguous、删除阻断（NFR-07 安全失败，符合发布条件 §4.3）
+- 整改项 R-02：0.2.1-rc.2 头部/事件 schema 适配未实现 → 归 T-34 已知限制；不得对 0.2.1-rc.2 数据执行清理
+
+== 验收逐项结论 ==
+[x] PERF-01 有计时和系统信息（CPU/SSD/Build 已记录，全部门槛 PASS）
+[x] WIN10-01 有 Edition/Version/Build 记录与自包含单文件启动/退出/中文 UI 冒烟 72/72（干净 VM 归 T-34，已标注）
+[x] TC-18 运行时联网检查完成：0 新增连接
+[x] COMPAT-01 报告物理解码/语义预览分开结论（解码兼容；语义未确证→阻断删除）
+[x] 发布门槛未达标项：无（PERF/冒烟/联网全部达标；R-02 为能力缺口非门槛失败，归 T-34 已知限制）
+[x] 真实数据仅只读使用（changed=0 deleted=0），证据不含正文/私人路径
+
+结论：PASS。整改项 R-01（format，T-32 记录）与 R-02（0.2.1-rc.2 schema 适配）归 T-34 处理。
