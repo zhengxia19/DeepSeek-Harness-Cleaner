@@ -177,75 +177,75 @@ public sealed class BackupService
 
         using (zip)
         {
-        var byName = new Dictionary<string, ZipArchiveEntry>(StringComparer.Ordinal);
-        foreach (var entry in zip.Entries)
-        {
-            if (!byName.TryAdd(entry.FullName, entry))
+            var byName = new Dictionary<string, ZipArchiveEntry>(StringComparer.Ordinal);
+            foreach (var entry in zip.Entries)
             {
-                return $"zip 内重复条目：{entry.FullName}";
-            }
-        }
-
-        if (zip.Entries.Count != manifest.Entries.Count + 1)
-        {
-            return $"条目数量不符：zip={zip.Entries.Count}，期望={manifest.Entries.Count + 1}";
-        }
-
-        if (!byName.TryGetValue(ManifestEntryName, out var manifestEntry))
-        {
-            return "缺少 manifest.json 条目";
-        }
-
-        string manifestJson;
-        try
-        {
-            using var reader = new StreamReader(manifestEntry.Open(), Encoding.UTF8);
-            manifestJson = reader.ReadToEnd();
-        }
-        catch (InvalidDataException ex)
-        {
-            return $"manifest.json 条目损坏：{ex.Message}";
-        }
-
-        var loaded = BackupManifestBuilder.FromJson(manifestJson);
-        if (!loaded.Success)
-        {
-            return "manifest.json 内容非法";
-        }
-
-        if (BackupManifestBuilder.ComputeSignature(loaded.Manifest!) != BackupManifestBuilder.ComputeSignature(manifest))
-        {
-            return "manifest.json 签名与预期清单不一致";
-        }
-
-        foreach (var expected in manifest.Entries)
-        {
-            if (!byName.TryGetValue(expected.ZipPath, out var actual))
-            {
-                return $"缺少条目：{expected.ZipPath}";
+                if (!byName.TryAdd(entry.FullName, entry))
+                {
+                    return $"zip 内重复条目：{entry.FullName}";
+                }
             }
 
-            if (actual.Length != expected.Length)
+            if (zip.Entries.Count != manifest.Entries.Count + 1)
             {
-                return $"条目长度不符：{expected.ZipPath}（zip={actual.Length}，期望={expected.Length}）";
+                return $"条目数量不符：zip={zip.Entries.Count}，期望={manifest.Entries.Count + 1}";
             }
 
-            string sha;
+            if (!byName.TryGetValue(ManifestEntryName, out var manifestEntry))
+            {
+                return "缺少 manifest.json 条目";
+            }
+
+            string manifestJson;
             try
             {
-                using var entryStream = actual.Open();
-                sha = Convert.ToHexString(SHA256.HashData(entryStream)).ToLowerInvariant();
+                using var reader = new StreamReader(manifestEntry.Open(), Encoding.UTF8);
+                manifestJson = reader.ReadToEnd();
             }
             catch (InvalidDataException ex)
             {
-                return $"条目数据损坏：{expected.ZipPath}（{ex.Message}）";
+                return $"manifest.json 条目损坏：{ex.Message}";
             }
 
-            if (!string.Equals(sha, expected.Sha256, StringComparison.Ordinal))
+            var loaded = BackupManifestBuilder.FromJson(manifestJson);
+            if (!loaded.Success)
             {
-                return $"条目 SHA-256 不符：{expected.ZipPath}";
+                return "manifest.json 内容非法";
             }
-        }
+
+            if (BackupManifestBuilder.ComputeSignature(loaded.Manifest!) != BackupManifestBuilder.ComputeSignature(manifest))
+            {
+                return "manifest.json 签名与预期清单不一致";
+            }
+
+            foreach (var expected in manifest.Entries)
+            {
+                if (!byName.TryGetValue(expected.ZipPath, out var actual))
+                {
+                    return $"缺少条目：{expected.ZipPath}";
+                }
+
+                if (actual.Length != expected.Length)
+                {
+                    return $"条目长度不符：{expected.ZipPath}（zip={actual.Length}，期望={expected.Length}）";
+                }
+
+                string sha;
+                try
+                {
+                    using var entryStream = actual.Open();
+                    sha = Convert.ToHexString(SHA256.HashData(entryStream)).ToLowerInvariant();
+                }
+                catch (InvalidDataException ex)
+                {
+                    return $"条目数据损坏：{expected.ZipPath}（{ex.Message}）";
+                }
+
+                if (!string.Equals(sha, expected.Sha256, StringComparison.Ordinal))
+                {
+                    return $"条目 SHA-256 不符：{expected.ZipPath}";
+                }
+            }
 
             return null;
         }
