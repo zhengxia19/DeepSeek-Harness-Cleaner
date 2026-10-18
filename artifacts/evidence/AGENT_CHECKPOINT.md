@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-18（T-30 轮）
-Git HEAD：docs(T-30) 勾选提交（其前为 feat(T-30)；上上基线 e7d4f3f docs(T-29)）
+更新时间：2026-10-18（T-31 轮）
+Git HEAD：docs(T-31) 勾选提交（其前为 feat(T-31)；上上基线 8d920fd docs(T-30)）
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -49,9 +49,12 @@ Git HEAD：docs(T-30) 勾选提交（其前为 feat(T-30)；上上基线 e7d4f3f
 
 - T-30 集成 UI 备份/清理及二次确认：UI/ActionsPresenter.cs（包装 CleanupPlanner/BackupManifestBuilder/BackupService/CleanupExecutor 为异步操作；ctor 可注入 processSnapshotOverride=() => [] 供冒烟放行进程门禁，真实模式用真实 probe）、UI/BackupDialog.cs（清单条目数/字节/ZIP 路径，Shown 即后台 CreateBackup+校验，可取消，终态经 Completed 事件）、UI/CleanupDialog.cs（逐文件最终清单+排除计数+进程警告+备份状态；确认按钮仅备份 Ready（VerifyZip 复核）后启用；取消未执行=关闭零删除、执行中=ct 逐项 CANCELED；CleanupFinished 事件）、MainForm.cs（OnDeleteClick 完整流程+OnCleanupFinished 重扫刷新）、MainForm.Smoke.cs（RunActionsChecks 14 项）；build exit 0；259/259；冒烟 63 项全 PASS 退出码 0（证据 T-30.txt）。坑：①BackupManifestBuilder 条目名须 sessions//attachments/ 前缀→清单根=数据根（sessions 父目录），计划/指纹根=扫描根（sessions 目录），两根分离传参；②Task.Run(…, ct) 任务未启动即取消→await 抛 TaskCanceledException 丢逐项结果→ct 只传 Execute；③冒烟末尾须 ClearSelection（否则 125%/150% 回归“删除按钮初始禁用”失败）；④冒烟 fixture 具破坏性（smoke-a/b 被删），每轮须从 dsh-t18-fixture 重建 .artifacts/tmp/dsh-t30-fixture（数据根布局：sessions/ 子目录= t18 fixture 副本 + storages/ + attachments/，--scan-root 指 sessions/）；备份 ZIP 落 %TEMP%\dshcleaner-backups（TEMP 已重定向项目本地）
 
+- T-31 不泄露正文的执行报告：Application/OutcomeReport.cs（OutcomeItem/OutcomeReportInput/OutcomeReport；BuildLog 脱敏结构化日志=1 run_summary+1 backup+每项 1 item 行，key=value；白名单：会话 ID ^[A-Za-z0-9._-]{1,64}$ 否则 "-"、错误码 ^[A-Za-z0-9_.:-]{1,80}$ 否则 UNSAFE_CODE、备份只记 zip 文件名、签名 ^[0-9a-f]{64}$ 否则 "-"；路径/自由文本绝不入日志）、UI/ResultsDialog.cs（UI 显示完整路径/类别/会话/状态/错误码/释放字节+备份完整 ZIP+签名；Shown 写日志到 --log-dir 或 %LOCALAPPDATA%\DeepSeekHarnessCleaner\logs；暴露 LogFilePath/DisplayedItemCount/SummaryText/BackupText）、接线（ActionsPresenter.BuildReport 按路径 OrdinalIgnoreCase 回查计划；CleanupDialog 暴露 Plan/Backup/ZipPath；MainForm.OnCleanupFinished 刷新后非模态打开报告；Program.cs --log-dir）、tests/OutcomeTests.cs（8 用例）；build exit 0；267/267；冒烟 72 项全 PASS 退出码 0（证据 T-31.txt）。坑：①OnCleanupFinished 先 await 刷新再开报告→冒烟须 PumpUntil _lastResultsDialog 新实例替换旧实例；②中文路径字面量须 verbatim（CS1009）
+
+
 ## 下一个任务
-- T-31 实现不泄露正文的执行报告（**前置 T-26,T-30**，均已验收）。范围：Application/OutcomeReport.cs、UI/ResultsDialog.cs、tests/OutcomeTests.cs（下轮先读 docs/implementation-tasks.md:334-341 原文）。要点：显示每项成功/跳过/失败、实际释放字节、备份位置和错误码；工具日志仅脱敏结构化信息。验收：模拟部分失败时 UI 与日志一致；日志无 fixture 正文/secret/敏感 token。关联 TC-16,TC-18（TC-18=运行 EXE 期间零新增主动网络请求、无自动更新，testing.md:30）。可复用：CleanupExecutionResult/ItemOutcome（T-26，含 Status/Reason/DeletedBytes）、CleanupDialog.LastResult + CleanupFinished 事件（T-30 已接线，ResultsDialog 可从删除终态结果构建）。注意：报告/日志不得含会话正文；纯内存无网络。
-- 可复用 API：PathGuard（T-07）、CleanupPlanner（T-24）、CleanupExecutor（T-26）、CacheCleanupSelection（T-27）、DesktopCleanupSelection（T-28）、AttachmentCleanupSelection（T-29）、BackupService/BackupManifestBuilder（T-21/22）、SessionCacheIndex（T-16）、HarnessProcessProbe（T-25）、ActionsPresenter/BackupDialog/CleanupDialog（T-30）。
+- T-32 执行完整安全与功能回归（**前置 T-31**，已验收）。范围：tests/**、artifacts/evidence/T-32-*。要点：运行所有可自动执行的 TC-01..20 子用例及 SEC-01..03；TC-17 实机发布部分与 TC-18 运行时联网检查交由 T-33；核对 REQ→TC→任务映射，缺陷另列整改项；保留命令/时间/commit/结果；失败不得继续 T-33。（下轮先读 docs/implementation-tasks.md:344-351 原文与 docs/testing.md 全文）
+- 可复用 API：PathGuard（T-07）、CleanupPlanner（T-24）、CleanupExecutor（T-26）、CacheCleanupSelection（T-27）、DesktopCleanupSelection（T-28）、AttachmentCleanupSelection（T-29）、BackupService/BackupManifestBuilder（T-21/22）、SessionCacheIndex（T-16）、HarnessProcessProbe（T-25）、ActionsPresenter/BackupDialog/CleanupDialog/ResultsDialog/OutcomeReport（T-30/31）。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
@@ -70,4 +73,4 @@ Git HEAD：docs(T-30) 勾选提交（其前为 feat(T-30)；上上基线 e7d4f3f
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-17 提交已排除二者。
 
 ## 收尾状态
-- T-30 全部验收 PASS（build exit 0；259/259 无回归；UI 冒烟 63 项全 PASS 退出码 0，含取消不删除/未备份禁用确认/完成刷新/后台不阻塞），已勾选；本轮结束。下一轮从 T-31 开始。
+- T-31 全部验收 PASS（build exit 0；267/267 无回归；UI 冒烟 72 项全 PASS 退出码 0，含部分失败 UI/日志一致性、日志无正文/路径/用户名泄露），已勾选；本轮结束。下一轮从 T-32 开始。

@@ -1,0 +1,78 @@
+T-31 实现不泄露正文的执行报告 — 验收证据
+=================================================
+日期：2026-10-18（本机时钟；日志 UTC 15:32）
+前置：T-26、T-30（均已验收）
+关联测试：TC-16（部分失败/取消/权限拒绝/统计准确）、TC-18（零网络：纯内存渲染，无任何 HTTP 调用；运行时联网实测归 T-33）
+
+== 实施内容 ==
+新增 src/DeepSeekHarnessCleaner.Application/OutcomeReport.cs：
+  * OutcomeItemStatus{Deleted,Skipped,Failed}、OutcomeItem(DisplayPath,Category,OwnerSessionId,Status,ErrorCode,FreedBytes)、
+    OutcomeReportInput(Aborted,AbortCode,BackupZipPath,BackupSignature,BackupEntryCount,BackupTotalBytes,Items)。
+  * OutcomeReport：DeletedCount/SkippedCount/FailedCount/FreedBytes(仅 Deleted 项)/PartialFailure；
+    BuildLog(nowUtc?) 脱敏结构化日志 = 1 行 run_summary + 1 行 backup + 每项 1 行 item（key=value，固定 ts=UTC）。
+  * 脱敏规则（白名单，不匹配即占位符）：
+    - 路径与自由文本绝不入日志（DisplayPath 仅 UI）；
+    - 会话 ID ^[A-Za-z0-9._-]{1,64}$ 否则 "-"；错误码 ^[A-Za-z0-9_.:-]{1,80}$ 否则 UNSAFE_CODE；
+    - 备份位置只记文件名 ^[A-Za-z0-9._-]{1,128}\.zip$（目录含用户名不入日志）；签名 ^[0-9a-f]{64}$ 否则 "-"。
+新增 src/DeepSeekHarnessCleaner.UI/ResultsDialog.cs：
+  * UI 显示每项 文件(完整路径)/类别/会话/状态/错误码/释放字节 + 汇总行 + 备份完整 ZIP 路径/条目数/字节/清单签名；
+  * Shown 时把 BuildLog() 写入日志目录（默认 %LOCALAPPDATA%\DeepSeekHarnessCleaner\logs，--log-dir 可注入夹具目录），
+    暴露 LogFilePath/DisplayedItemCount/SummaryText/BackupText 供冒烟断言；写失败仅提示不崩溃。
+接线（最小改动）：
+  * ActionsPresenter.BuildReport(plan, backup, result, zipPath)：逐项按路径 OrdinalIgnoreCase 回查计划目标取类别/所属会话；
+    ItemStatus→OutcomeItemStatus 映射。
+  * CleanupDialog 暴露 Plan/Backup/ZipPath（报告数据源）。
+  * MainForm.OnCleanupFinished：刷新后 BuildReport + ResultsDialog.Show(this)（非模态，不阻塞）。
+  * Program.cs 新增 --log-dir 参数（仅注入日志目录）。
+  * MainForm.Smoke.cs 新增 RunResultsChecks 9 项断言；dialog3 终态后 PumpUntil 等待新报告实例替换旧实例。
+新增 tests/DeepSeekHarnessCleaner.Tests/OutcomeTests.cs（8 用例）：
+  计数/释放字节；部分失败日志逐项状态/码/字节与 UI 数据源一致 + 汇总一致；
+  泄露负向（路径含 SECRET-USER-DIR/张三/会话正文机密、正文 hello world、token abc123SECRET、自由文本错误码
+  → 日志均不含，不安全 token 变 session=- / code=UNSAFE_CODE）；安全 token 保留；
+  Aborted 报告（aborted=true + code + items=0）；备份行只记 ZIP 文件名不含目录；无备份占位符；
+  每行固定 ts 且无 \r 与反斜杠。
+
+== 命令与退出码 ==
+1) . .\scripts\enter-env.ps1; $env:TEMP=$env:TMP="$PWD\.artifacts\tmp"
+   dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   → BUILD_EXIT=0（0 警告 0 错误；首轮 6 错：CS8820 static lambda 捕获 result ×3、CS1009 非 verbatim 中文路径转义 ×3，修复后过）
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   → TEST_EXIT=0，已通过! - 失败: 0，通过: 267，总计: 267（259 回归 + 8 新增，无回归）
+3) fixture 重建：Remove-Item sessions/ ← Copy-Item dsh-t18-fixture（307 文件）；清空 dshcleaner-logs
+   冒烟（真实窗口，Process API 同步等待）：
+   DeepSeekHarnessCleaner.UI.exe --smoke .artifacts\tmp\t31-smoke.txt
+     --scan-root .artifacts\tmp\dsh-t30-fixture\sessions --log-dir .artifacts\tmp\dshcleaner-logs
+   → SMOKE_EXIT=0，SMOKE_RESULT=PASS，72 项断言全 PASS / 0 FAIL（63 项 T-17..T-30 回归 + 9 项 T-31 新增）。
+   首轮冒烟 4 FAIL：_lastResultsDialog 仍为 dialog2 旧报告（OnCleanupFinished 异步刷新后才创建新实例）
+   → 冒烟改为捕获 prevResultsDialog 并 PumpUntil 新实例替换；修复后全 PASS。
+
+== T-31 新增冒烟断言（逐项 PASS 摘录）==
+- 执行完成后自动打开结果报告对话框
+- 报告逐项行数与执行结果逐项数一致（60=60）
+- 报告汇总计数与执行结果一致（部分失败如实显示：删除 0 / 跳过 60 / 失败 0）
+- 报告展示备份 ZIP 完整位置（含 .zip 完整路径）
+- 脱敏日志已写入 --log-dir 夹具目录
+- 日志逐项行数与 UI 逐项行数一致（UI 与日志同源一致）
+- 日志汇总行计数与 UI 汇总一致（deleted=/skipped=/failed= 精确匹配）
+- 日志不含 fixture 会话正文（hello smoke）
+- 日志不含数据根/备份目录路径与用户名（dsh-t30-fixture / dshcleaner-backups / Users / $env:UserName 均不出现）
+
+== 真实日志样本（.artifacts/tmp/dshcleaner-logs/outcome-20261018-233239-8484.log，60 会话取消场景）==
+ts=2026-10-18T15:32:39Z event=run_summary aborted=false deleted=0 skipped=60 failed=0 freed_bytes=0 items=60
+ts=2026-10-18T15:32:39Z event=backup zip_name=cleanup-20261018-233238-8484.zip entries=60 bytes=9255 sig=7bc66ecf…ae90
+ts=2026-10-18T15:32:39Z event=item category=SessionLog status=skipped code=CANCELED bytes=0 session=smoke-v4-0004
+（共 62 行 = 2 + 60 逐项；无任何路径分隔符）
+
+== 验收逐项结论 ==
+[x] 显示每项成功/跳过/失败、实际释放字节、备份位置和错误码（ResultsDialog UI + 冒烟断言）
+[x] 工具日志仅脱敏结构化信息（白名单规则 + 单测负向 + 冒烟日志内容断言）
+[x] 模拟部分失败时 UI 和日志一致（冒烟 dialog3 取消场景：逐项行数、汇总计数两侧精确一致）
+[x] 日志无 fixture 正文、secret、敏感 token（单测 SECRET-USER-DIR/张三/hello world/abc123SECRET 均不出现；冒烟 hello smoke/路径/用户名不出现）
+[x] TC-18 侧：报告/日志纯内存零网络（无 HttpClient/网络 API；运行时联网实测归 T-33）
+
+结论：PASS（全部验收项通过，证据落盘）。
+
+== 坑 ==
+- static lambda 不能捕获局部变量（CS8820，logLines.Any 内插 result）；中文 Windows 路径字面量必须 verbatim（CS1009）。
+- OnCleanupFinished 先 await 刷新再开报告 → 冒烟不能立即读 _lastResultsDialog，须 PumpUntil 新实例（ReferenceEquals 对比旧实例）。
+- 本轮冒烟 dialog3 取消发生在任何删除前（deleted=0/skipped=60），仍属部分失败（PartialFailure）场景，一致性断言不受影响。

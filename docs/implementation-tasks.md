@@ -333,7 +333,7 @@
 
 ### T-31 — 实现不泄露正文的执行报告
 
-- [ ] **T-31：实现不泄露正文的执行报告**
+- [x] **T-31：实现不泄露正文的执行报告**（2026-10-18，证据 artifacts/evidence/T-31.txt，feat 见 git log）
 - **前置**：T-26,T-30。
 - **修改范围**：`Application/OutcomeReport.cs、UI/ResultsDialog.cs、tests/OutcomeTests.cs`。
 - **任务边界**：显示每项成功/跳过/失败、实际释放字节、备份位置和错误码；工具日志仅记录脱敏结构化信息。
