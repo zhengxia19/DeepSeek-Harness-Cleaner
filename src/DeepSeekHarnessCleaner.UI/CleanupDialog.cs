@@ -132,6 +132,13 @@ public sealed class CleanupDialog : Form
 
     public CleanupExecutionResult? LastResult { get; private set; }
 
+    /// <summary>本对话框使用的计划与备份事实（T-31 结果报告构建源）。</summary>
+    public CleanupPlan Plan => _plan;
+
+    public VerifiedBackup? Backup => _backup;
+
+    public string ZipPath => _zipPath;
+
     // 冒烟/自动化入口：等价于点击对应按钮。
     public void RequestBackup() => OnBackupClick(this, EventArgs.Empty);
 

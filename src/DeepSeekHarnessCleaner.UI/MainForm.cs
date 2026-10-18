@@ -39,15 +39,18 @@ public sealed partial class MainForm : Form
     private readonly PreviewPresenter _previewPresenter = new();
     private readonly ActionsPresenter _actionsPresenter;
     private CleanupDialog? _lastCleanupDialog;
+    private ResultsDialog? _lastResultsDialog;
     private readonly string? _scanRootOverride;
+    private readonly string? _logDirOverride;
     private string? _effectiveScanRoot;
     private CancellationTokenSource? _previewCts;
     private bool _scanning;
 
-    public MainForm(string? smokeResultPath = null, string? scanRootPath = null)
+    public MainForm(string? smokeResultPath = null, string? scanRootPath = null, string? logDirPath = null)
     {
         _smokeResultPath = smokeResultPath;
         _scanRootOverride = scanRootPath;
+        _logDirOverride = logDirPath;
         _presenter = new InventoryPresenter(new UiScanSource(), TimeZoneInfo.Local);
         // 冒烟模式注入“无进程”快照，避免开发机上宿主进程使删除门禁恒阻断；真实模式用真实探测。
         _actionsPresenter = new ActionsPresenter(_smokeResultPath is not null ? static () => [] : null);
@@ -508,6 +511,17 @@ public sealed partial class MainForm : Form
         catch (Exception ex)
         {
             _statusLabel.Text = "刷新失败：" + ex.Message;
+        }
+
+        // T-31：打开不泄露正文的执行结果报告（逐项状态/释放字节/备份位置/错误码 + 脱敏日志）。
+        if (_lastCleanupDialog is { } source)
+        {
+            var report = _actionsPresenter.BuildReport(
+                source.Plan, source.Backup, result, source.ZipPath);
+            var results = new ResultsDialog(report, _logDirOverride);
+            _lastResultsDialog = results;
+            results.Show(this);
+            _statusLabel.Text += " 结果报告已打开（含脱敏日志）。";
         }
     }
 

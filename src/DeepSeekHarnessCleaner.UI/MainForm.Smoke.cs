@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using DeepSeekHarnessCleaner.Application;
 using DeepSeekHarnessCleaner.Domain;
+using DeepSeekHarnessCleaner.Infrastructure;
 
 namespace DeepSeekHarnessCleaner.UI;
 
@@ -381,6 +382,7 @@ public sealed partial class MainForm
         _deleteButton.PerformClick();
         System.Windows.Forms.Application.DoEvents();
         var dialog3 = _lastCleanupDialog!;
+        var prevResultsDialog = _lastResultsDialog; // dialog2 全成功报告（若有）；dialog3 终态后应替换为新实例。
         dialog3.RequestBackup();
         PumpUntil(() => dialog3.BackupReady, 60_000);
         Check("60 会话批量备份完成", dialog3.BackupReady);
@@ -398,8 +400,61 @@ public sealed partial class MainForm
         Check("取消执行正常收尾（部分删除 + 取消跳过，无异常，UI 持续响应）",
             result3 is { Aborted: false } && (result3.SkippedCount > 0 || result3.DeletedCount > 0) && pumps3 >= 1);
 
+        // T-31：部分失败场景下结果报告 UI 与脱敏日志一致，且日志不泄露正文/路径。
+        if (result3 is not null)
+        {
+            PumpUntil(() => !ReferenceEquals(_lastResultsDialog, prevResultsDialog), 20_000);
+            RunResultsChecks(result3, fixtureRoot);
+        }
+
         // 复位选择，保证后续缩放回归检查仍见“删除按钮初始禁用”。
         _sessionGrid.ClearSelection();
+    }
+
+    /// <summary>T-31：执行结果报告断言（逐项一致、汇总一致、备份位置可见、脱敏日志无正文/路径泄露）。</summary>
+    private void RunResultsChecks(CleanupExecutionResult result, string fixtureRoot)
+    {
+        var results = _lastResultsDialog;
+        Check("执行完成后自动打开结果报告对话框", results is { Visible: true });
+        if (results is null)
+        {
+            return;
+        }
+
+        Check("报告逐项行数与执行结果逐项数一致", results.DisplayedItemCount == result.Outcomes.Count);
+        Check("报告汇总计数与执行结果一致（部分失败如实显示）",
+            results.SummaryText.Contains($"删除 {result.DeletedCount} 个", StringComparison.Ordinal)
+            && results.SummaryText.Contains($"跳过 {result.SkippedCount} 个", StringComparison.Ordinal)
+            && results.SummaryText.Contains($"失败 {result.FailedCount} 个", StringComparison.Ordinal));
+        Check("报告展示备份 ZIP 完整位置", results.BackupText.Contains(".zip", StringComparison.Ordinal));
+
+        PumpUntil(() => results.LogFilePath is not null, 5_000);
+        var logPath = results.LogFilePath;
+        Check("脱敏日志已写入 --log-dir 夹具目录",
+            logPath is not null && File.Exists(logPath)
+            && Path.GetDirectoryName(Path.GetFullPath(logPath))
+               == Path.GetFullPath(_logDirOverride ?? string.Empty));
+        if (logPath is null || !File.Exists(logPath))
+        {
+            return;
+        }
+
+        var logLines = File.ReadAllLines(logPath);
+        var itemLines = logLines.Count(static l => l.Contains("event=item", StringComparison.Ordinal));
+        Check("日志逐项行数与 UI 逐项行数一致（UI 与日志同源一致）", itemLines == result.Outcomes.Count);
+        Check("日志汇总行计数与 UI 汇总一致",
+            logLines.Any(l => l.Contains("event=run_summary", StringComparison.Ordinal))
+            && logLines.Any(l => l.Contains($" deleted={result.DeletedCount}", StringComparison.Ordinal)
+                && l.Contains($" skipped={result.SkippedCount}", StringComparison.Ordinal)
+                && l.Contains($" failed={result.FailedCount}", StringComparison.Ordinal)));
+        var logText = string.Join('\n', logLines);
+        var fixtureName = Path.GetFileName(Path.GetFullPath(fixtureRoot).TrimEnd(Path.DirectorySeparatorChar));
+        Check("日志不含 fixture 会话正文（hello smoke）", !logText.Contains("hello smoke", StringComparison.Ordinal));
+        Check("日志不含数据根/备份目录路径与用户名",
+            !logText.Contains(fixtureName, StringComparison.OrdinalIgnoreCase)
+            && !logText.Contains("dshcleaner-backups", StringComparison.OrdinalIgnoreCase)
+            && !logText.Contains("Users", StringComparison.OrdinalIgnoreCase)
+            && !logText.Contains(Environment.UserName, StringComparison.OrdinalIgnoreCase));
     }
 
     private void SelectRowBySessionId(string? sessionId)

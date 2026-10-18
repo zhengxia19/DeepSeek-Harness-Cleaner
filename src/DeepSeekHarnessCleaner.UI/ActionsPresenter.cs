@@ -68,4 +68,46 @@ public sealed class ActionsPresenter
         bool userConfirmed,
         CancellationToken ct) =>
         Task.Run(() => _executor.Execute(plan, manifest, backup, root, userConfirmed, ct));
+
+    /// <summary>
+    /// T-31：把执行结果 + 计划 + 备份事实组装为可展示/可脱敏日志的执行报告。
+    /// 逐项按路径（不区分大小写）回查计划目标，取类别与所属会话；查不到按 SessionLog 保守标注。
+    /// </summary>
+    public OutcomeReport BuildReport(
+        CleanupPlan plan,
+        VerifiedBackup? backup,
+        CleanupExecutionResult result,
+        string zipPath)
+    {
+        var byPath = plan.Targets.ToDictionary(static t => t.AbsolutePath, StringComparer.OrdinalIgnoreCase);
+        var items = new List<OutcomeItem>(result.Outcomes.Count);
+        foreach (var outcome in result.Outcomes)
+        {
+            byPath.TryGetValue(outcome.AbsolutePath, out var target);
+            items.Add(new OutcomeItem(
+                outcome.AbsolutePath,
+                target?.Category ?? CleanupCategory.SessionLog,
+                target?.OwnerSessionId,
+                MapStatus(outcome.Status),
+                outcome.Reason,
+                outcome.DeletedBytes));
+        }
+
+        return new OutcomeReport(new OutcomeReportInput(
+            result.Aborted,
+            result.AbortCode,
+            backup?.ZipPath ?? zipPath,
+            backup?.ManifestSignature,
+            backup?.FileEntryCount ?? 0,
+            backup?.TotalBytes ?? 0,
+            items));
+    }
+
+    private static OutcomeItemStatus MapStatus(ItemStatus status) => status switch
+    {
+        ItemStatus.Deleted => OutcomeItemStatus.Deleted,
+        ItemStatus.Skipped => OutcomeItemStatus.Skipped,
+        ItemStatus.Failed => OutcomeItemStatus.Failed,
+        _ => OutcomeItemStatus.Failed,
+    };
 }
