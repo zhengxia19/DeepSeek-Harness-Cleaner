@@ -1,0 +1,67 @@
+T-32 执行完整安全与功能回归 — 验收证据
+=================================================
+日期时间：2026-10-18（UTC 15:36–15:44）
+提交 hash：a758cbe2ea819317f73b80475025c6c1f7abddf9（docs(T-31)，回归基线）
+SDK：.NET 10.0.402（项目本地 .dotnet）；Windows：10.0.19045.0（沙箱内注册表 Edition 不可读，Edition/Build 实测记录归 T-33 WIN10-01）
+证据文件：artifacts/evidence/T-32.txt、T-32-testlist.txt（267 用例全名单）、T-32-results.trx（已脱敏机器用户名，SHA256 81096E68…BAFF）、T-32-smoke.txt（72 项冒烟逐项 PASS）
+
+== 命令与退出码 ==
+1) dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1 → BUILD_EXIT=0（0 警告 0 错误）
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build --logger "trx;LogFileName=t32-results.trx"
+   → TEST_EXIT=0，失败 0 / 通过 267 / 总计 267
+3) dotnet test … --list-tests → 267 用例名单（T-32-testlist.txt，25 个测试类）
+4) 冒烟（真实窗口，fixture 副本重建 307 文件）：
+   DeepSeekHarnessCleaner.UI.exe --smoke … --scan-root .artifacts\tmp\dsh-t30-fixture\sessions --log-dir …
+   → SMOKE_EXIT=0，PASS=72 / FAIL=0
+5) TC-18 静态零网络核查：grep src/**/*.cs 'HttpClient|WebRequest|Socket|HttpListener|NetworkStream|Dns\.|Ping\.' → 0 命中
+6) dotnet format .\DeepSeekHarnessCleaner.sln --verify-no-changes --no-restore → FORMAT_EXIT=2（见整改项 R-01）
+
+== TC-01..TC-20 自动化映射与结果（全部 PASS）==
+TC-01 根发现：RootLocatorTests(10)（默认/自定义/不存在/假目录归类）✓
+TC-02 只读扫描：DiscoveryTests.Discovery_IsReadOnly_TreeAndSentinelUnchanged；HeaderTests.Read_IsReadOnly_SourceBytesUnchanged；FixtureIsolationTests.RealDshRoot_UnchangedByFullFixtureLifecycle（真实 .dsh 根全生命周期不变）✓【安全必选，无豁免】
+TC-03 代际聚合：DiscoveryTests.MultiGeneration_SameDirectory_GroupedAsOneSession / SameGenerationDualEncoding_FlaggedAmbiguous；InventoryTests.MultiGeneration_MergedIntoSingleLogicalRecord / HeaderIdentityConflict…Ambiguous_SessionIdNull；HeaderTests.ConflictingHeaders…/MultiGeneration_ZstdAndPlain_BothExtracted ✓
+TC-04 Zstd/JSONL：CompressionTests(15)（多帧按序/明文/截断/损坏）；EventReaderTests(13)（Partial/Corrupt/未知事件）；HeaderTests.TruncatedZstd_Partial ✓
+TC-05 列表：InventoryTests(10)（件数/字节/日期/异常可解释）+ 冒烟 RunBindingChecks（列表/统计与服务一致）✓
+TC-06 预览：TranscriptV4Tests(11) + LegacyPreviewTests(11) + 冒烟 RunPreviewChecks（v4 正文/旧代际元数据退化/坏头部不完整标记/不串会话）✓
+TC-07 日期/搜索：FilterTests(11)（inclusive 起止、跨时区 SameInstant_DifferentOffsets、无日期排除、ID/项目/关键字）+ 冒烟筛选断言 ✓
+TC-08 多选：FilterTests.Filter_KeepsWholeSessionsIntact_NoEventTrimming + 冒烟（多选整会话、排序不改选中会话、取消/重选）✓
+TC-09 ZIP 备份：ManifestTests(14) + BackupTests(8)（全量入包/逐文件一致/失败无副作用/拒绝覆写旧备份）+ 冒烟备份校验 ✓【安全必选】
+TC-10 可读导出：ReadableExportTests(7)（Markdown/JSON 安全编码、incomplete 标记）✓
+TC-11 精确删除：CleanupPlanTests(16) + CleanupExecutorTests.Execute_DeletesPlannedTargets_KeepsUnselectedAndOutsideUntouched + 冒烟（选定删除/未选不变/逐项列明）✓【安全必选】
+TC-12 会话缓存：CacheIndexTests(10) + CacheCleanupTests(14)（只删匹配 JSON、workspace.json SHA 不变、全量需显式）✓
+TC-13 桌面缓存日志：DesktopCleanupTests(12)（6 白名单目录、Local/Session Storage 与 Network SHA 不变）✓
+TC-14 附件：AttachmentIndexTests(10) + AttachmentCleanupTests(13)（Unknown 不推断、单文件备份+确认门禁）✓
+TC-15 强制阻断：PathGuardTests(13)（出根/reparse）+ ProcessProbeTests(9)（Active/ReadOnly/Unknown）+ CleanupExecutorTests.Execute_ProcessActive/Unknown_Aborts、FingerprintChanged_Aborts、ReparseJunctionPath_Skips + ManifestTests PATH_TRAVERSAL ✓【安全必选】
+TC-16 结果：OutcomeTests(8) + CleanupExecutorTests（部分失败/取消/权限拒绝逐项）+ 冒烟 RunResultsChecks（UI/日志逐项与汇总一致、释放字节统计、删除后重扫刷新）✓
+TC-17 环境发布：自动化部分=本地 SDK/包缓存隔离与不改全局（T-02/T-03 证据 + 本轮 build 复用 --no-restore 成功）✓；干净 Win10 VM 启动/退出 → T-33/T-34 现场
+TC-18 离线：静态核查 src 无任何网络 API 调用（命令 5，0 命中）✓；运行 EXE 期间联网实测 → T-33
+TC-19 配置：SettingsTests(10)（默认/损坏/未知 schema 回退、rememberRoots=false 根一律 null）✓
+TC-20 安全失败：EventReaderTests（坏压缩/坏 JSON/未知 event）+ InventoryTests.Scan_ContinuesDespiteCorruption + CleanupExecutorTests（MISSING/CHANGED_* 跳过、空清单）+ 冒烟（异常文件/未知代际 v7 不删不崩）✓【安全必选】
+
+== SEC-01..03 映射与结果（全部 PASS）==
+SEC-01 根外逃逸：PathGuardTests（.. / reparse / 盘符切换 / 大小写前缀陷阱）；ManifestTests 条目 .. → PATH_TRAVERSAL；CleanupExecutorTests.Execute_ReparseJunctionPath_SkipsItem_TargetUntouched（目标 hash 不变）；Cache/Desktop 清理 CROSS_ROOT 阻断 ✓
+SEC-02 进程/占用阻断：ProcessProbeTests(9)；Execute_ProcessActive_Aborts / ProcessUnknown_Aborts（零删除）；Execute_ReadOnlyFile_ReportsFailed（占用失败逐项列明）；CorruptZip/MissingZip/NullBackup_Aborts ✓
+SEC-03 ZIP 破坏/删前变化：BackupTests.VerifyZip_PassesOnPublishedZip_AndDetectsSingleByteCorruption（单字节破坏必失败）；Execute_CorruptZip_AbortsZeroDeletions；ChangedLength/ChangedMtime/ShaMismatch_SkipsItem（删前复验变化即不删，要求重新备份）✓
+
+== REQ→TC→任务映射核对 ==
+REQ-001..020 与 TC-01..20 一一对应（requirements.md §2）；implementation-tasks.md 34 条“关联测试”行核对：
+TC-01→T-06；TC-02→T-04(+T-08/09/10 链路)；TC-03→T-04/08/09/10；TC-04→T-04/05/09/12；TC-05→T-10/18；TC-06→T-13/14/19；TC-07→T-11/18；TC-08→T-11/18/24；TC-09→T-21/22/30；TC-10→T-23；TC-11→T-24/26/30；TC-12→T-16/27；TC-13→T-28；TC-14→T-15/29；TC-15→T-07/25/26；TC-16→T-26/30/31；TC-17→T-01/02/03/17/33/34；TC-18→T-31/33；TC-19→T-17/20；TC-20→T-05/07/09/12/14/19/22/34。
+结论：每个 REQ 有 TC、每个 TC 有已验收任务与自动化/冒烟证据，无缺口。
+
+== T-33/T-34 待现场验证清单（明确不豁免）==
+- TC-17：干净 Win10 VM 自包含启动/退出（T-33/T-34）
+- TC-18：运行 EXE 期间零新增主动网络请求实测（T-33）
+- PERF-01（1000 样本计时）、COMPAT-01（脱敏 0.2.0.0 只读样本）、WIN10-01（Edition/Build 记录与自包含 UI 实测）→ T-33
+- 发布 SHA-256 记录、dist 清洁度 → T-34
+
+== 整改项（缺陷另列，不阻塞 T-32 的 TC/SEC 结论）==
+R-01 发布级门槛（testing.md §4）：dotnet format --verify-no-changes --no-restore exit 2，仅 BackupService.cs 60 处 WHITESPACE（T-22 引入的续行缩进偏差）。修复命令：dotnet format src\DeepSeekHarnessCleaner.Infrastructure\DeepSeekHarnessCleaner.Infrastructure.csproj --no-restore 后重跑 build+test。属 src 修改，超出 T-32 修改范围（tests/**、T-32-*），归 T-34 发布复核轮处理；发布放行前必须清零。
+
+== 验收逐项结论 ==
+[x] 所有可自动执行 TC-01..20 子用例已运行（267 单测 + 72 冒烟断言，全 PASS）
+[x] SEC-01..03 全部通过（映射见上，安全必选 TC-02/09/11/15/20 无豁免）
+[x] 未完成现场用例明确列为 T-33/T-34 待验证（清单见上）
+[x] 命令/时间/commit/退出码/结果已保留（trx+testlist+smoke 归档 artifacts/evidence/）
+[x] 危险行为无豁免；TC/SEC 无失败（唯一失败为发布级 format 门槛，记整改项 R-01，非危险行为）
+
+结论：PASS（TC/SEC 全部通过；R-01 整改项须在 T-34 发布放行前清零）。
