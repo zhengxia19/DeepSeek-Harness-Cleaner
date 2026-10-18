@@ -323,7 +323,7 @@
 
 ### T-30 — 集成 UI 备份/清理及二次确认
 
-- [ ] **T-30：集成 UI 备份/清理及二次确认**
+- [x] **T-30：集成 UI 备份/清理及二次确认**（2026-10-18，证据 artifacts/evidence/T-30.txt，feat 见 git log）
 - **前置**：T-18,T-19,T-20,T-22,T-23,T-26,T-27,T-28,T-29。
 - **修改范围**：`UI/ActionsPresenter.cs、UI/BackupDialog.cs、UI/CleanupDialog.cs`。
 - **任务边界**：展示最终清单/备份状态/警告；用户确认后才调用 executor；后台进度可取消。

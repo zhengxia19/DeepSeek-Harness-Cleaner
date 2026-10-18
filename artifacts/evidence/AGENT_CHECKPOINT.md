@@ -1,7 +1,7 @@
 # AGENT 检查点
 
-更新时间：2026-10-18（T-29 轮）
-Git HEAD：docs(T-29) 勾选提交（其前为 feat(T-29)；上上基线 ef480a0 docs(T-28)）
+更新时间：2026-10-18（T-30 轮）
+Git HEAD：docs(T-30) 勾选提交（其前为 feat(T-30)；上上基线 e7d4f3f docs(T-29)）
 
 ## 已完成（已验收 [x]）
 - T-01 仓库基线（6cc56f1）
@@ -47,9 +47,11 @@ Git HEAD：docs(T-29) 勾选提交（其前为 feat(T-29)；上上基线 ef480a0
 
 - T-29 显式附件备份与独立清理：Application/AttachmentCleanupSelection.cs（Select(dataRoot,AttachmentCandidate[FullPath,EvidenceStatus,IsRegularFile,Expected*],selectedPaths)→{RootErrorCode,Plan,Exclusions[AttachmentExclusion],Statuses[AttachmentStatusNote]}；仅数据根 attachments\ 任意深度+人工选择(OrdinalIgnoreCase)进入，Category=Attachment(CleanupCategory 再扩展)，RequiresBackup=true 走 T-26 完整备份门禁；Unknown 状态经 Statuses 明确标注不推断孤儿；非普通文件 ATTACHMENT_NOT_REGULAR_FILE；其他域 OUT_OF_ATTACHMENTS_SCOPE；重复 ATTACHMENT_DUPLICATE_PATH）、tests/AttachmentCleanupTests.cs（13 用例，含备份+确认删除、未备份 GATE_BACKUP_REQUIRED、未确认 GATE_NOT_CONFIRMED、Active 阻断）；build exit 0；259/259；UI 冒烟 PASS（证据 T-29.txt）。坑：BackupService.CreateBackup 拒绝写入不存在的目标目录（“目标目录不存在”），测试须先建 backups 目录
 
+- T-30 集成 UI 备份/清理及二次确认：UI/ActionsPresenter.cs（包装 CleanupPlanner/BackupManifestBuilder/BackupService/CleanupExecutor 为异步操作；ctor 可注入 processSnapshotOverride=() => [] 供冒烟放行进程门禁，真实模式用真实 probe）、UI/BackupDialog.cs（清单条目数/字节/ZIP 路径，Shown 即后台 CreateBackup+校验，可取消，终态经 Completed 事件）、UI/CleanupDialog.cs（逐文件最终清单+排除计数+进程警告+备份状态；确认按钮仅备份 Ready（VerifyZip 复核）后启用；取消未执行=关闭零删除、执行中=ct 逐项 CANCELED；CleanupFinished 事件）、MainForm.cs（OnDeleteClick 完整流程+OnCleanupFinished 重扫刷新）、MainForm.Smoke.cs（RunActionsChecks 14 项）；build exit 0；259/259；冒烟 63 项全 PASS 退出码 0（证据 T-30.txt）。坑：①BackupManifestBuilder 条目名须 sessions//attachments/ 前缀→清单根=数据根（sessions 父目录），计划/指纹根=扫描根（sessions 目录），两根分离传参；②Task.Run(…, ct) 任务未启动即取消→await 抛 TaskCanceledException 丢逐项结果→ct 只传 Execute；③冒烟末尾须 ClearSelection（否则 125%/150% 回归“删除按钮初始禁用”失败）；④冒烟 fixture 具破坏性（smoke-a/b 被删），每轮须从 dsh-t18-fixture 重建 .artifacts/tmp/dsh-t30-fixture（数据根布局：sessions/ 子目录= t18 fixture 副本 + storages/ + attachments/，--scan-root 指 sessions/）；备份 ZIP 落 %TEMP%\dshcleaner-backups（TEMP 已重定向项目本地）
+
 ## 下一个任务
-- T-30 集成 UI 备份/清理及二次确认（**前置 T-18,T-19,T-20,T-22,T-23,T-26,T-27,T-28,T-29**，均已验收）。范围：UI/ActionsPresenter.cs、UI/BackupDialog.cs、UI/CleanupDialog.cs（下轮先 glob src/DeepSeekHarnessCleaner.UI 看现有文件与 T-18/19/20 已建的 presenter/dialog 结构，勿重复创建）。要点：展示最终清单/备份状态/警告；用户确认后才调用 executor；后台进度可取消（CancellationToken → executor ct，取消产生 CANCELED 跳过）。验收：点击取消不删除；未备份的会话删除按钮禁用；完成刷新清单；过程未阻塞 UI。关联 TC-09,TC-11,TC-16。定义见 docs/implementation-tasks.md:324-331（下轮先读原文）。注意 UI 冒烟 --smoke 机制（54 项）须扩展覆盖新对话框逻辑；executor Execute(plan, manifest?, backup?, root, userConfirmed, ct)；根字符串须无尾分隔符（指纹一致性）。
-- 可复用 API：PathGuard（T-07）、CleanupPlanner（T-24）、CleanupExecutor（T-26）、CacheCleanupSelection（T-27）、DesktopCleanupSelection（T-28）、AttachmentCleanupSelection（T-29）、BackupService/BackupManifestBuilder（T-21/22）、SessionCacheIndex（T-16）、HarnessProcessProbe（T-25）。
+- T-31 实现不泄露正文的执行报告（**前置 T-26,T-30**，均已验收）。范围：Application/OutcomeReport.cs、UI/ResultsDialog.cs、tests/OutcomeTests.cs（下轮先读 docs/implementation-tasks.md:334-341 原文）。要点：显示每项成功/跳过/失败、实际释放字节、备份位置和错误码；工具日志仅脱敏结构化信息。验收：模拟部分失败时 UI 与日志一致；日志无 fixture 正文/secret/敏感 token。关联 TC-16,TC-18（TC-18=运行 EXE 期间零新增主动网络请求、无自动更新，testing.md:30）。可复用：CleanupExecutionResult/ItemOutcome（T-26，含 Status/Reason/DeletedBytes）、CleanupDialog.LastResult + CleanupFinished 事件（T-30 已接线，ResultsDialog 可从删除终态结果构建）。注意：报告/日志不得含会话正文；纯内存无网络。
+- 可复用 API：PathGuard（T-07）、CleanupPlanner（T-24）、CleanupExecutor（T-26）、CacheCleanupSelection（T-27）、DesktopCleanupSelection（T-28）、AttachmentCleanupSelection（T-29）、BackupService/BackupManifestBuilder（T-21/22）、SessionCacheIndex（T-16）、HarnessProcessProbe（T-25）、ActionsPresenter/BackupDialog/CleanupDialog（T-30）。
 
 ## 关键环境事实（勿重复排障）
 - 运行方式：`. .\scripts\enter-env.ps1` 后用 `dotnet`（10.0.402）。**任何 build/test 前必须**设 `TEMP=$PWD\.artifacts\tmp`、`TMP` 同值（否则 MSBuild 崩溃 -532462766）。
@@ -68,4 +70,4 @@ Git HEAD：docs(T-29) 勾选提交（其前为 feat(T-29)；上上基线 ef480a0
 - AGENTS.md 已修改（用户改写）；docs/agent-execution.md 未跟踪。T-17 提交已排除二者。
 
 ## 收尾状态
-- T-29 全部验收 PASS（build exit 0；259/259 测试含 AttachmentCleanupTests 13 项；UI 冒烟回归 PASS 退出码 0），已勾选；本轮结束。下一轮从 T-30 开始。
+- T-30 全部验收 PASS（build exit 0；259/259 无回归；UI 冒烟 63 项全 PASS 退出码 0，含取消不删除/未备份禁用确认/完成刷新/后台不阻塞），已勾选；本轮结束。下一轮从 T-31 开始。

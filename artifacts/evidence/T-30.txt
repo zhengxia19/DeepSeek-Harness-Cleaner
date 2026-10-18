@@ -1,0 +1,91 @@
+T-30 UI 备份/清理集成及二次确认 — 验收证据（2026-10-18）
+
+== 实施内容 ==
+新增 src/DeepSeekHarnessCleaner.UI/ActionsPresenter.cs：
+  * ActionsPresenter：包装 CleanupPlanner/BackupManifestBuilder/BackupService/CleanupExecutor 为
+    对话框可用的异步操作（RunBackupAsync/RunCleanupAsync 经 Task.Run 后台执行 + CancellationToken）。
+  * 构造参数 processSnapshotOverride：冒烟注入 () => [] 使进程门禁恒放行（开发机宿主进程名与
+    KnownExecutableName 相同，真实模式仍用真实 HarnessProcessProbe）。
+  * RunCleanupAsync 的 ct 只传给 Execute（逐项 CANCELED 跳过），不传给 Task.Run——否则任务尚未
+    启动即整体取消会丢失逐项结果（实测踩坑，见下）。
+新增 src/DeepSeekHarnessCleaner.UI/BackupDialog.cs：
+  * 显示清单条目数/合计字节/目标 ZIP；Shown 即后台创建并校验 ZIP；可取消（ct）；
+    终态 Ready/Failed/Canceled 经 Completed 事件通知；BackupUiState 可观察。
+新增 src/DeepSeekHarnessCleaner.UI/CleanupDialog.cs：
+  * 展示最终删除清单（逐文件相对路径/大小/类别）、排除项计数、进程门禁警告、备份状态；
+  * “确认删除”初始禁用，仅当备份 Ready 且经 VerifyZip 复核（ReopenVerifiedBackup）后启用；
+  * 取消：未开始执行→直接关闭（零删除）；执行中→ct 取消，剩余逐项 CANCELED 跳过；
+  * 确认后后台执行，完成触发 CleanupFinished（携带逐项结果）供主窗刷新；
+  * RequestBackup/RequestConfirm/RequestCancel 为冒烟自动化入口（等价点击）。
+修改 src/DeepSeekHarnessCleaner.UI/MainForm.cs：
+  * OnDeleteClick：由占位提示改为完整流程——选中会话→CleanupPlanner 建计划→打开 CleanupDialog
+    （modeless）；ZIP 目标 = %TEMP%\dshcleaner-backups\cleanup-<时间戳>-<pid>.zip（RunBackupAsync
+    先 CreateDirectory）；备份清单根 = 数据根（sessions 的父目录 .dsh 主目录），删除计划/指纹根 =
+    扫描根（sessions 目录），两者分离（BackupManifestBuilder 要求条目名 sessions/… 类别前缀）。
+  * OnCleanupFinished：删除终态后自动重扫并 BindSessions 刷新清单。
+修改 src/DeepSeekHarnessCleaner.UI/MainForm.Smoke.cs：
+  * 新增 RunActionsChecks（--scan-root 时执行）14 项断言 + 备份状态 INFO；末尾 ClearSelection
+    复位，保证后续 125%/150% 缩放回归仍见“删除按钮初始禁用”。
+
+== 合成 fixture（项目本地，非真实数据根）==
+.artifacts/tmp/dsh-t30-fixture/（数据根布局：sessions/ + storages/ + attachments/）
+  sessions/ ← 复制自 dsh-t18-fixture（307 文件：305 会话 + stray.txt 异常 + 金样）
+冒烟 --scan-root 指向 sessions/；每次冒烟前重建副本（删除断言具破坏性）。
+备份 ZIP 落在 .artifacts/tmp/dshcleaner-backups/（TEMP 已重定向到项目本地）。
+
+== 命令与退出码 ==
+1) . .\scripts\enter-env.ps1; $env:TEMP=$env:TMP="$PWD\.artifacts\tmp"
+   dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   → BUILD_EXIT=0（0 警告 0 错误）
+2) dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
+   → TEST_EXIT=0，已通过! - 失败: 0，通过: 259，已跳过: 0，总计: 259（无回归）
+3) 冒烟（真实窗口，.NET Process API 同步等待，fixture 副本）：
+   DeepSeekHarnessCleaner.UI.exe --smoke .artifacts\tmp\t30-smoke.txt
+     --scan-root .artifacts\tmp\dsh-t30-fixture\sessions
+   → SMOKE_EXIT=0，SMOKE_RESULT=PASS，63 项断言全 PASS / 0 FAIL（含 T-17/T-18/T-19 全部回归项）。
+4) 备份产物核对：.artifacts/tmp/dshcleaner-backups/ 下 4 个 ZIP
+   （cleanup-20261018-121719-25248.zip 1306 B = 2 会话 3 文件；
+    cleanup-20261018-121720-25248.zip 19925 B = 60 会话批量）。
+
+== 冒烟关键断言（逐项 PASS，T-30 新增摘录）==
+- 删除计划：两会话全部代际文件、要求备份
+- 删除前目标文件全部存在
+- 删除确认对话框打开
+- 未备份时确认删除按钮禁用
+- 点击取消即关闭且不删除任何文件（取消后全部目标文件仍在）
+- 重新打开为新的对话框实例
+- 备份完成并校验后确认删除按钮启用（INFO：已备份并校验 3 个文件 486 B）
+- 确认后执行器精确删除全部选定目标（DeletedCount=计划目标数，AllSucceeded）
+- 已选会话文件删除、未选会话文件不变（smoke-v4-0004 全部代际文件仍在）
+- 删除在后台执行且消息泵持续运行（UI 未阻塞）
+- 删除完成后清单自动刷新（会话数减少 2）
+- 60 会话批量备份完成
+- 取消执行正常收尾（部分删除 + 取消跳过，无异常，UI 持续响应）
+- 回归：100%/125%/150% 布局、键盘导航、绑定/筛选/预览全部保持 PASS
+
+== 验收对照 ==
+- "点击取消不删除" → 冒烟“点击取消即关闭且不删除任何文件”：PASS
+- "未备份的会话删除按钮禁用" → 冒烟“未备份时确认删除按钮禁用”（确认按钮仅备份 Ready 后启用）：PASS
+- "完成刷新清单" → 冒烟“删除完成后清单自动刷新（会话数减少 2）”：PASS
+- "过程未阻塞 UI" → 备份/删除均 Task.Run 后台 + 消息泵计数断言（扫描等待期泵迭代 105 万次）：PASS
+- "展示最终清单/备份状态/警告" → CleanupDialog 逐文件清单 + 备份状态标签 + 进程门禁警告标签：PASS
+- "用户确认后才调用 executor" → 仅 OnConfirmClick 调 RunCleanupAsync(userConfirmed: true)；
+  executor 内部再门禁兜底（GATE_NOT_CONFIRMED/GATE_BACKUP_REQUIRED）：PASS
+- TC-09（ZIP 备份全量入包/逐文件 SHA/失败无副作用）→ 服务级由 BackupTests 8 用例覆盖（259 全过），
+  UI 级由冒烟“备份完成并校验”断言覆盖：PASS
+- TC-11（精确删除、未选文件不变）→ 冒烟“确认后精确删除全部选定目标”“未选会话文件不变”：PASS
+- TC-16（取消/部分失败状态准确）→ 冒烟“取消执行正常收尾（部分删除 + 取消跳过）”：PASS
+
+== 踩坑与修复（真实过程）==
+1) 首轮冒烟备份失败：BackupManifestBuilder 要求条目名以 sessions/ 或 attachments/ 开头，
+   而扫描根=sessions 目录；修复为清单根=数据根（sessions 父目录）、计划/指纹根=扫描根分离传参，
+   并把冒烟 fixture 改为数据根布局（sessions/ 子目录）。
+2) 取消执行收尾断言失败：Task.Run(…, ct) 在任务尚未启动时取消 → await 抛 TaskCanceledException
+   → 逐项结果丢失；修复为 ct 只传 Execute。
+3) 125%/150% 回归“删除按钮初始禁用”失败：RunActionsChecks 遗留 60 行选中；末尾 ClearSelection 复位。
+4) 冒烟 fixture 会被删除断言消耗（smoke-a/b 被删）；每轮冒烟前从 dsh-t18-fixture 重建副本。
+
+== 说明与边界 ==
+- 未触碰真实 %USERPROFILE%\.dsh / %APPDATA%\@deepseek-ai\dsh-desktop（扫描根为项目本地 fixture）。
+- 附件不参与本流程删除（design.md §5，T-29 已单列选择器，UI 接入归后续任务）。
+- Windows 10 实机 DPI/兼容性验证仍归 T-33，此处不宣称通过。
