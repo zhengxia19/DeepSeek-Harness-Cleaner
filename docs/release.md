@@ -3,6 +3,7 @@
 ## 1. 发布版本和产物
 
 - 当前发布：**`0.1.1`**（真实格式修正维护版，见 §7）；首发 `0.1.0`，方案为 `win-x64` 自包含 WinForms EXE；单文件优先，但若 ZstdSharp 与 single-file 组合造成真实问题，保留自包含目录发布并追加 ADR，不能偷偷改路线。
+- **自 v0.2.0 起发布改为 framework-dependent（N-08/R9）**：`publish.ps1` 使用 `-p:SelfContained=false`（保留 `-r win-x64 -p:PublishSingleFile=true`），EXE 不捆绑 .NET 运行时（体积 ~103MB → ~1MB），需预装 .NET 10 Windows Desktop Runtime（x64）；THIRD-PARTY-NOTICES 移除“.NET 运行时捆绑”条目。0.1.x 历史产物仍为自包含。
 - 发布目录 `dist/v<版本>/win-x64/`，包含程序 EXE、README 摘要、LICENSE/THIRD-PARTY-NOTICES（如适用）、`SHA256SUMS.txt`。
 - 不分发 NuGet 缓存、SDK、真实会话数据、配置或测试 fixtures。
 
@@ -29,7 +30,7 @@ dotnet format .\DeepSeekHarnessCleaner.sln --verify-no-changes --no-restore
 Get-FileHash .\dist\v0.1.1\win-x64\DeepSeekHarnessCleaner.UI.exe -Algorithm SHA256
 ```
 
-发布产物实际文件名为 `DeepSeekHarnessCleaner.UI.exe`（以 `*.csproj` 的 AssemblyName 为准）。本版本**未签名**（无代码签名证书），禁止暗示已签名。注意：`publish.ps1` 以 `-p:Version=<版本>` 注入版本，会使 `packages.lock.json` 项目引用版本改写为 `[<版本>, )`，属副作用，发布后应 `git checkout -- src/*/packages.lock.json` 复原，不提交。
+发布产物实际文件名为 `DeepSeekHarnessCleaner.UI.exe`（以 `*.csproj` 的 AssemblyName 为准）。本版本**未签名**（无代码签名证书），禁止暗示已签名。注意：`publish.ps1` 以 `-p:Version=<版本>` 注入版本，会使 `packages.lock.json` 项目引用版本改写为 `[<版本>, )`，属副作用，发布后应 `git checkout -- src/*/packages.lock.json` 复原，不提交。自 v0.2.0 起 `publish.ps1` 为 framework-dependent（`-p:SelfContained=false`，N-08）：发布 EXE 需预装 .NET 10 Windows Desktop Runtime（x64）；`scripts/smoke-win10.ps1` 仍自行发布自包含副本用于目标机验证，与发布产物形态独立。
 
 ## 7. 0.1.1 发布记录（真实格式修正，M 系列维护）
 

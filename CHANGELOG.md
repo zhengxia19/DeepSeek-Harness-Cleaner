@@ -14,6 +14,7 @@
 - **删除门禁放宽：备份改为可选（N-04，决策 D1/D4）**：会话与附件删除不再强制先创建 ZIP 备份——删除确认对话框“确认删除”初始即可用，备份状态显示“未备份（可选，建议）/已备份并校验”。保留全部其余安全机制：明确确认必需、Harness 进程运行阻断、逐文件路径白名单/重解析点/根指纹/SHA-256 指纹复验；提供备份时仍逐项校验 ZIP（校验失败 `GATE_BACKUP_INVALID` 中止零删除）。即“可以不备份，但不是盲删”（新增 ADR-0003，修订 ADR-0002 第 2 条；见 docs/requirements.md REQ-011/REQ-014、docs/testing.md TC-11/TC-14）。
 - **会话列表结构与选择语义（N-02）**：列表列序改为 `[勾选][序号][会话 ID][项目][创建时间][日期来源][大小][格式][状态][归档]`。勾选框列（不可排序）为删除/备份的操作对象：删除按钮按“勾选行数>0”启用，删除计划仅取勾选行；行选中仅驱动预览。序号列为绑定顺序的 1 基序号（只读、不可排序），点列头排序后序号随行走、不重新编号。`项目/创建时间/大小` 三列按内容自适应宽度（含表头，绑定后全行测量兜底，覆盖虚拟化未显示行）（见 docs/requirements.md REQ-005/REQ-008、docs/testing.md §2.4）。
 - **删除确认对话框自适应布局与居中（N-07，R6/R4）**：对话框绝对坐标布局改为 Dock/TableLayoutPanel 三区——标签区顶部、删除清单 `Dock=Fill`（列宽 FillWeight 随窗伸缩，ListView 换为只读 DataGridView）、结果与按钮行底部；窗体可缩放并设 `MinimumSize`，640×420 与 1280×800 两档冒烟断言按钮完整可见、清单随窗伸缩。居中实证：`CenterParent` 对非模态 `Show(owner)` 在 .NET 10 WinForms 实测不按 owner 居中，改为打开时按主窗矩形显式居中（冒烟断言矩形中心一致 ±3px）并钳制到所在屏工作区（见 docs/design.md §7、docs/interfaces.md §5、docs/testing.md UX-01）。
+- **发布改为 framework-dependent（N-08，R9）**：`scripts/publish.ps1` 由 `--self-contained` 改为 `-p:SelfContained=false`（保留 `-r win-x64 -p:PublishSingleFile=true`）：发布 EXE 不再捆绑 .NET 运行时，体积 102.8MB → 0.9MB，需预装 .NET 10 Windows Desktop Runtime（x64）；包内 THIRD-PARTY-NOTICES 移除“.NET 运行时捆绑”条目、README 摘要改为“需预装运行时”。发布 EXE 在装有该运行时的机器上冒烟 94/94 PASS；未装运行时负向场景本机无机可测，如实标注未验证（见 docs/release.md §1/§3、docs/requirements.md REQ-017、docs/testing.md TC-17）。
 
 ## [0.1.0] — 2026-10-18（首个发布，win-x64 自包含单文件，未签名）
 

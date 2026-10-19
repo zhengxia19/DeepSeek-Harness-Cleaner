@@ -1,0 +1,42 @@
+N-08 framework-dependent 发布（R9）证据
+=========================================
+分支: docs/post-release-maintenance-20261019（基线 HEAD a618a9b = N-07）
+日期: 2026-10-19（本地）
+
+一、改动文件
+- scripts/publish.ps1：
+  · dotnet publish 参数 `--self-contained` → `-p:SelfContained=false`（保留 `-r win-x64 -p:PublishSingleFile=true`）
+  · THIRD-PARTY-NOTICES 模板：移除“.NET 10 Runtime / Windows Desktop Runtime — 自包含捆绑”条目，
+    改为“framework-dependent：不捆绑 .NET 运行时，需预装 .NET 10 Windows Desktop Runtime（x64）”+ 运行时第三方声明链接
+  · 包内 README 摘要：标题改“win-x64 framework-dependent 单文件”；运行行改“需预装 .NET 10 Windows Desktop Runtime（x64）”；
+    安全默认行同步 N-04 语义（“删除前必须明确确认，ZIP 备份可选（建议）、提供时逐项 SHA-256 校验”——修正旧“必须备份”表述）
+  · 头部注释同步 framework-dependent
+- docs/release.md §1：新增“自 v0.2.0 起发布改为 framework-dependent（N-08/R9）”条目（体积 ~103MB→~1MB、需预装运行时、0.1.x 历史产物仍自包含）；
+  §3：补注 publish.ps1 framework-dependent 与 smoke-win10.ps1 自包含验证副本相互独立
+- docs/requirements.md REQ-017：“可独立运行”→“EXE 为 framework-dependent（自 v0.2.0 起，N-08：依赖已安装的 .NET 10 Windows Desktop Runtime（x64），不捆绑运行时）”
+- docs/testing.md TC-17：补 framework-dependent 验收口径（体积下降、预装机冒烟 PASS、未装运行时负向无机可测如实标注）
+- CHANGELOG.md [Unreleased] Changed：新增 N-08 条目
+- 边界（不改）遵守：SHA256SUMS/LICENSE 生成逻辑、TC-18 离线门禁、enter-env.ps1 均未触碰；smoke-win10.ps1 仍自包含发布（目标机验证用途，独立于发布产物）
+
+二、验收逐项
+1) publish.ps1 成功：`.\scripts\publish.ps1 -Version 0.2.0` → PUBLISH_OK，PUBLISH_EXIT=0
+   产物 dist/v0.2.0/win-x64/：DeepSeekHarnessCleaner.UI.exe, LICENSE.txt, README.md, SHA256SUMS.txt, THIRD-PARTY-NOTICES.txt
+2) EXE 体积显著下降：EXE_MB=0.9（0.1.1 自包含为 102.8 MB；预期“数 MiB 量级”达成）
+   EXE_SHA256=290fada8b2ce009cafd29d66c721b50d283300a8c59eec96f87b5c69b0ba2357（发布哈希；dist/ 被 .gitignore 排除，另见包内 SHA256SUMS.txt）
+3) 装有 .NET 10 Desktop Runtime 的机器（本机，SDK 10.0.402 含 Desktop Runtime）启动冒烟：
+   dist EXE --smoke（全新 fixture 副本 n08-fixture\sessions + storages\workspace.json utf8NoBOM）
+   → EXIT=0，PASS=94 FAIL=0（framework-dependent 发布产物本体，非 bin 目录副本）
+4) 未装运行时的负向说明：本机即运行时宿主，无“未装 .NET 10 Desktop Runtime”的机器可测——未验证（如实标注）。
+   预期行为（未实测）：apphost 找不到兼容框架时弹出“framework not found”类错误并非零退出，不静默降级。
+
+三、门禁命令与退出码
+1) build: .\.dotnet\dotnet.exe build DeepSeekHarnessCleaner.sln -c Release -warnaserror --nologo → 0 警告 0 错误，BUILD_EXIT=0
+2) test: …test… --no-build → 失败 0 / 通过 310 / 总计 310，TEST_EXIT=0（基线保持）
+3) format: …format --verify-no-changes → FMT_EXIT=0
+4) 冒烟（发布 EXE，见上）：EXIT=0，94 PASS / 0 FAIL
+5) scripts/smoke-win10.ps1 -EvidencePath artifacts/evidence/N-08-win10-smoke.txt → 13/13 PASS，WIN10_RESULT=PASS，SCRIPT_EXIT=0
+   （该脚本仍按自包含副本验证目标机形态；真实根只读快照零变更零删除、附件根零变更）
+
+四、备注
+- publish.ps1 的 -p:Version 注入会改写 packages.lock.json（已知副作用），提交前 git checkout 还原，不入库。
+- dist/v0.2.0 当前为本任务验证产物；N-09 发布时将以最终 commit 重新生成并记录最终哈希。
