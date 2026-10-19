@@ -10,7 +10,7 @@
 
 - [x] 任务 T-01～T-34 均验收并附证据（`artifacts/evidence/T-01.txt`～`T-34.txt`）；TC-01～TC-20、PERF-01、SEC-01～03、COMPAT-01、WIN10-01 见 `artifacts/evidence/T-32.txt`、`T-33*.txt`、`T-34.txt`。
 - [x] 源码/依赖审计：无任何联网 API/遥测（TC-18 运行期 0 条 TCP 连接）；依赖仅 ZstdSharp.Port 0.8.8（MIT，已核准）+ .NET 10 运行时；`dotnet package list --vulnerable --include-transitive` 两工程均“没有易受攻击的包”（见 `artifacts/evidence/T-34.txt`）。
-- [x] 目标 OS：Windows 10 Pro 22H2 (19045.6466) x64 实机（VMware 隔离 VM）；.NET 10（SDK 10.0.402，项目本地）官方支持期内；实测结果见 `artifacts/evidence/T-33-win10.txt`、`T-34.txt`。
+- [x] 目标 OS：Windows 10 Pro 22H2 (19045.6466) x64 VMware 隔离虚拟机（非物理裸机，亦非全新预置干净 VM）；.NET 10（SDK 10.0.402，项目本地）官方支持期内；实测结果见 `artifacts/evidence/T-33-win10.txt`、`T-34.txt`。
 - [x] 冷启动/退出/重复扫描、fixture 备份/删除/失败回退：内置 Smoke 72 断言全过（含备份→校验→删除→回退路径），见 `artifacts/evidence/T-34.txt`。
 - [x] 安全路径测试：UNC、软链/junction、未退出进程、文件变化均拒绝写入（TC-13～TC-16，见 `artifacts/evidence/T-32.txt`）。
 - [x] CHANGELOG 已更新为真实 Added/Changed/Fixed 与已知限制，不含未实现功能。
@@ -48,5 +48,5 @@ Get-FileHash .\dist\v0.1.0\win-x64\DeepSeekHarnessCleaner.UI.exe -Algorithm SHA2
 完整发布记录（含逐项命令、退出码、SHA-256、扫描结果）见 `artifacts/evidence/T-34.txt`。摘要：
 
 - 版本 0.1.0，日期 2026-10-18/19；产物 `dist/v0.1.0/win-x64/DeepSeekHarnessCleaner.UI.exe`（102.8 MB，SHA-256 `c5464a2df7fc7b04d99520c790b0706dffcd51abc670089adf68a7cf91cf6eea`）；`dist/` 被 `.gitignore` 排除，哈希以 `SHA256SUMS.txt` 与证据文件记录。
-- 验证环境：Windows 10 Pro 22H2 (19045.6466) x64，VMware 隔离 VM（实机验证）。Windows Sandbox 不可用，未做“全新预置（freshly-provisioned）干净 VM”验证；以等效证据替代：自包含单文件 EXE 复制到任意非仓库目录、`DOTNET_ROOT` 指向不存在目录仍 72/72 通过、运行期 0 条 TCP 连接、真实 `%USERPROFILE%\.dsh\sessions` 前后快照 0 改动。残余风险（全新 VM 首启）已列入 CHANGELOG 已知限制。
+- 验证环境：Windows 10 Pro 22H2 (19045.6466) x64，VMware 隔离 VM（目标系统环境验证，非物理裸机）。Windows Sandbox 不可用，未做“全新预置（freshly-provisioned）干净 VM”验证；以等效证据替代：自包含单文件 EXE 复制到任意非仓库目录、`DOTNET_ROOT` 指向不存在目录仍 72/72 通过、运行期 0 条 TCP 连接、真实 `%USERPROFILE%\.dsh\sessions` 前后快照 0 改动。残余风险（全新 VM 首启）已列入 CHANGELOG 已知限制。
 - 删除操作仅对测试 fixtures 执行；真实会话数据全程只读。
