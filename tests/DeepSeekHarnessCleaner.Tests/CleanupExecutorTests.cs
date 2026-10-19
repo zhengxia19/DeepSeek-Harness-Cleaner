@@ -8,7 +8,8 @@ using Xunit;
 
 namespace DeepSeekHarnessCleaner.Tests;
 
-/// <summary>T-26：备份门禁 + 删除前复验 + 逐项删除与真实部分结果（TC-11,TC-15,TC-16）。</summary>
+/// <summary>T-26：删除前复验 + 逐项删除与真实部分结果（TC-11,TC-15,TC-16）；N-04（D1/D4）后备份门禁改为可选，
+/// 确认/进程/指纹/ZIP 校验（提供时）门禁保留。</summary>
 public sealed class CleanupExecutorTests
 {
     private const string Project = "proj-a";
@@ -131,16 +132,37 @@ public sealed class CleanupExecutorTests
     }
 
     [Fact]
-    public void Execute_NullBackup_AbortsZeroDeletions()
+    public void Execute_ManifestWithoutBackup_DeletesBackupOptional()
     {
+        // N-04（D1）：备份可选——仅清单无 ZIP 不再中止（RequiresBackup=false）。
         var ctx = Setup();
         using (ctx.Fx)
         {
             var result = Run(ctx, omitBackup: true);
 
-            Assert.True(result.Aborted);
-            Assert.Equal(CleanupExecutor.GateBackupRequiredCode, result.AbortCode);
-            Assert.True(File.Exists(ctx.SessionFile) && File.Exists(ctx.V4File));
+            Assert.False(result.Aborted);
+            Assert.Equal(2, result.DeletedCount);
+            Assert.False(File.Exists(ctx.SessionFile) && File.Exists(ctx.V4File));
+        }
+    }
+
+    [Fact]
+    public void Execute_NoBackupAtAll_DeletesWithPerItemOutcomes()
+    {
+        // N-04 验收：无备份删除成功且逐项报告。
+        var ctx = Setup();
+        using (ctx.Fx)
+        {
+            var result = new CleanupExecutor(ctx.InactiveProbe)
+                .Execute(ctx.Plan, null, null, ctx.Fx.DshHome, userConfirmed: true);
+
+            Assert.False(result.Aborted);
+            Assert.True(result.AllSucceeded);
+            Assert.Equal(2, result.DeletedCount);
+            Assert.Equal(2, result.Outcomes.Count);
+            Assert.All(result.Outcomes, o => Assert.Equal(ItemStatus.Deleted, o.Status));
+            Assert.False(File.Exists(ctx.SessionFile));
+            Assert.False(File.Exists(ctx.V4File));
         }
     }
 

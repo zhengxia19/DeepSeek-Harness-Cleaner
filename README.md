@@ -9,7 +9,7 @@
 ## 安全默认值
 
 - 启动与扫描不修改 Harness 目录；所有写入仅发生在用户明确启动的备份/清理操作中。
-- 清理会话必须先完成 ZIP 原始备份及逐文件 SHA-256 校验；用户不能关闭该保护（v1）。
+- 清理会话/附件必须经确认对话框明确确认，删除前逐文件复验路径白名单与 SHA-256 指纹；ZIP 原始备份为可选（建议），自 v0.2.0 起不再强制（见 docs/decisions/0003-session-delete-backup-optional.md）。
 - Harness 未完全退出、运行状态不明、路径越界或文件扫描后已变化时，禁止清理。
 - 保留 `.credentials.yaml`、`profiles/`、`dsh-runtimes/`、`workspace.json`、`Local Storage/`、`Session Storage/`、`Network/` 及匿名身份标识；这些均不属于默认可删除目标。
 - 不调用模型 API、DeepSeek 云端、浏览器或联网遥测；不处理服务器端已上报历史。

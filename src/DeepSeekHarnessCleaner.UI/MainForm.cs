@@ -660,7 +660,7 @@ public sealed partial class MainForm : Form
         dialog.CleanupFinished += OnCleanupFinished;
         _lastCleanupDialog = dialog;
         dialog.Show(this);
-        _statusLabel.Text = "删除确认对话框已打开：先创建备份，再确认删除。";
+        _statusLabel.Text = "删除确认对话框已打开：备份可选（建议），确认删除后执行。";
     }
 
     private async void OnCleanupFinished(object? sender, CleanupExecutionResult result)

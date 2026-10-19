@@ -185,12 +185,13 @@ public sealed class CleanupPlanner
 
         targets.Sort(static (a, b) => string.CompareOrdinal(a.AbsolutePath, b.AbsolutePath));
 
+        // N-04（D1/D4）：备份改为可选；确认、进程门禁、路径/指纹复验保留。
         var plan = new CleanupPlan(
             Guid.NewGuid(),
             DateTimeOffset.UtcNow,
             ComputeRootFingerprint(rootFull),
             targets,
-            RequiresBackup: targets.Count > 0);
+            RequiresBackup: false);
         return new CleanupPlanResult(null, plan, exclusions);
     }
 

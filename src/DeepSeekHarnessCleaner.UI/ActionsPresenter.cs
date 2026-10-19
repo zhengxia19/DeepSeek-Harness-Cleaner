@@ -58,12 +58,12 @@ public sealed class ActionsPresenter
             },
             ct);
 
-    /// <summary>后台执行删除（executor 内部再门禁：确认/备份/进程/指纹 + 逐项复验）。
-    /// ct 只传给 Execute（逐项 CANCELED 跳过），不传给 Task.Run，避免任务尚未启动即整体取消丢失逐项结果。</summary>
+    /// <summary>后台执行删除（executor 内部再门禁：确认/进程/指纹 + 逐项复验；N-04 后 manifest/backup 可为 null=未备份，
+    /// 提供时仍校验 ZIP）。ct 只传给 Execute（逐项 CANCELED 跳过），不传给 Task.Run，避免任务尚未启动即整体取消丢失逐项结果。</summary>
     public Task<CleanupExecutionResult> RunCleanupAsync(
         CleanupPlan plan,
-        BackupManifest manifest,
-        VerifiedBackup backup,
+        BackupManifest? manifest,
+        VerifiedBackup? backup,
         string root,
         bool userConfirmed,
         CancellationToken ct) =>

@@ -7,8 +7,8 @@ using DeepSeekHarnessCleaner.Infrastructure;
 namespace DeepSeekHarnessCleaner.UI;
 
 /// <summary>
-/// 删除确认对话框（T-30）：展示最终删除清单（逐文件路径/大小）、排除项与进程警告、备份状态；
-/// “确认删除”在备份完成前禁用；确认后后台执行删除（可取消），完成触发 <see cref="CleanupFinished"/>。
+/// 删除确认对话框（T-30，N-04 调整）：展示最终删除清单（逐文件路径/大小）、排除项与进程警告、备份状态；
+/// 备份可选（建议）：“确认删除”初始即可用；确认后后台执行删除（可取消），完成触发 <see cref="CleanupFinished"/>。
 /// 取消（未开始执行时）直接关闭，不产生任何删除。
 /// </summary>
 public sealed class CleanupDialog : Form
@@ -71,7 +71,7 @@ public sealed class CleanupDialog : Form
 
         _backupLabel.AutoSize = true;
         _backupLabel.Location = new Point(12, 58);
-        _backupLabel.Text = "备份状态：未备份（删除前必须先完成原始文件 ZIP 备份）。";
+        _backupLabel.Text = "备份状态：未备份（可选，建议）。";
 
         _targetList.Location = new Point(12, 84);
         _targetList.Size = new Size(616, 250);
@@ -102,7 +102,7 @@ public sealed class CleanupDialog : Form
         _confirmButton.AutoSize = true;
         _confirmButton.Location = new Point(240, 344);
         _confirmButton.TabIndex = 21;
-        _confirmButton.Enabled = false; // 未备份不得删除。
+        // N-04（D1/D4）：备份可选，确认按钮初始可用；确认本身仍是删除的必需门禁。
         _confirmButton.Click += OnConfirmClick;
 
         _cancelButton.Text = "取消(&C)";
@@ -189,7 +189,8 @@ public sealed class CleanupDialog : Form
 
     private async void OnConfirmClick(object? sender, EventArgs e)
     {
-        if (_manifest is null || _backup is null)
+        // N-04：manifest/backup 允许为 null（未备份直接确认）；提供备份时 executor 仍逐项校验。
+        if (_running)
         {
             return;
         }

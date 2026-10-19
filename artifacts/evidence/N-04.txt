@@ -1,0 +1,47 @@
+N-04 会话/附件删除备份改为可选（D1/D4）— 验收证据
+日期：2026-10-19（UTC）  分支：docs/post-release-maintenance-20261019
+前置：N-01(12a3bb3)、N-02(2de6a48)、N-03(c4d3840) 已提交推送。
+
+== 改动范围（边界内） ==
+代码：
+- src/DeepSeekHarnessCleaner.Application/CleanupPlanner.cs：会话删除计划 RequiresBackup: false（仅改计划标志+注释；执行器行为不变）。
+- src/DeepSeekHarnessCleaner.Application/AttachmentCleanupSelection.cs：附件选择计划 RequiresBackup: false（同上）。
+- src/DeepSeekHarnessCleaner.UI/CleanupDialog.cs：确认按钮初始可用（移除初始禁用）；备份状态标签初始“备份状态：未备份（可选，建议）。”；备份完成后仍显示“已备份并校验…”；OnConfirmClick 允许 manifest/backup 为 null 传入执行。
+- src/DeepSeekHarnessCleaner.UI/ActionsPresenter.cs：RunCleanupAsync 参数改为 BackupManifest?/VerifiedBackup?（可空传递）。
+- src/DeepSeekHarnessCleaner.UI/MainForm.cs：删除确认对话框打开状态文案改为“备份可选（建议），确认删除后执行。”
+- src/DeepSeekHarnessCleaner.Infrastructure/CleanupExecutor.cs：仅文档注释更新；行为不变（进程门禁/PathGuard/根指纹/SHA-256+mtime 复验/确认必需/GATE_BACKUP_INVALID/逐项结果报告全部保留）。
+- src/DeepSeekHarnessCleaner.UI/MainForm.Smoke.cs：冒烟断言反转 2 条（计划 RequiresBackup=false；未备份时确认按钮可用），保留“备份完成并校验后确认删除按钮启用”。
+测试：
+- CleanupPlanTests：会话计划 Assert.False(RequiresBackup)。
+- AttachmentCleanupTests：两处 Assert.False(plan.RequiresBackup)；新增无备份确认后删除断言（GateNotConfirmedCode 仍先行阻断未确认）。
+- CleanupExecutorTests：Execute_ManifestWithoutBackup_DeletesBackupOptional（RequiresBackup=false 缺备份可删）；新增 Execute_NoBackupAtAll_DeletesWithPerItemOutcomes（manifest/backup 均 null → 不中止、Outcomes 逐项 Deleted）。
+文档：
+- docs/requirements.md REQ-011/REQ-014；docs/design.md §5 附件行、§8 备份节、备份-确认间变化条款；docs/interfaces.md §5 BACKUP_INVALID 行 + 备份门禁注记；docs/testing.md TC-11/TC-14/SEC-03；README.md 安全默认值；CHANGELOG.md [Unreleased] Changed。
+- 新增 docs/decisions/0003-session-delete-backup-optional.md（ADR-0003）；docs/decisions/0002-safe-deletion-and-backup.md 状态行加注（第 2 条被 ADR-0003 修订）。
+- AGENTS.md §2 删除红线修订（goal objective 按已确认 D1/D4 授权）：确认必需、备份可选（建议）、提供时仍校验。
+
+== 门禁命令与结果 ==
+1) 构建：$env:NUGET_PACKAGES='D:\Code\DeepSeek-Harness-Cleaner\.nuget'; .\.dotnet\dotnet.exe build DeepSeekHarnessCleaner.sln -c Release -warnaserror --nologo
+   BUILD_EXIT=0（0 warning / 0 error）
+2) 测试：.\.dotnet\dotnet.exe test DeepSeekHarnessCleaner.sln -c Release --no-build --nologo
+   已通过! - 失败: 0，通过: 310，已跳过: 0，总计: 310（基线 309 + 净增 1：Execute_NoBackupAtAll_DeletesWithPerItemOutcomes）
+3) 格式：.\.dotnet\dotnet.exe format --verify-no-changes
+   FORMAT_EXIT=0（首轮多行参数注释引发 WHITESPACE 规则，已按规范将注释移至语句上方并 dotnet format 修复）
+4) 直接冒烟（合成 fixture 副本 .artifacts\tmp\n04-fixture*，golden dsh-t18-fixture 305 会话/1 异常 + 同级 storages\workspace.json）：
+   Start-Process ...UI.exe --smoke <report> --scan-root <fixtureCopy>\sessions --log-dir <dir> -Wait
+   第 1 次：SMOKE_EXIT=1，PASS=77 FAIL=2（“关键字筛选列表与服务筛选一致”“项目筛选列表…一致”两条，非 N-04 相关断言；筛选路径为纯同步代码，N-04 未触碰；判定为环境偶发——两次独立扫描在 IO/AV 干扰下分叉）
+   第 2 次（全新副本 n04-fixture2）：SMOKE_EXIT=0，PASS=79 FAIL=0（断言总数不变，仅 2 条标签反转）
+   注：偶发 1 次未达“同一验收项两次失败”停止线；N-09 全量回归若复现将按红线停止上报。
+5) Win10 脚本：$env:PATH = "D:\Code\DeepSeek-Harness-Cleaner\.dotnet;$env:PATH"; .\scripts\smoke-win10.ps1 -EvidencePath artifacts\evidence\N-04-win10-smoke.txt
+   SCRIPT_EXIT=0；12/12 PASS；自包含发布冒烟 SMOKE_EXIT=0 PASS=79 FAIL=0；TC-18 零新增 TCP 连接；COMPAT-01 真实根只读（sessions=54、archived=19、wsStampBefore=After=4824|639279880895552083、changed=0 deleted=0）。详见 N-04-win10-smoke.txt。
+
+== 验收逐项 ==
+- 无备份删除成功且逐项报告：Execute_NoBackupAtAll_DeletesWithPerItemOutcomes（Outcomes=2 全部 Deleted）+ 附件无备份确认删除断言 → 通过
+- GATE_BACKUP_INVALID 仍生效：备份篡改/缺失校验既有测试在 310 全绿中保持通过；RequiresBackup=true 计划缺备份仍 GATE_BACKUP_REQUIRED（缓存测试 with { RequiresBackup = true } 通过）→ 通过
+- 附件 RequiresBackup=false 且确认仍必需：AttachmentCleanupTests 未确认 → GateNotConfirmedCode 且文件仍在；确认后无备份删除成功 → 通过
+- 全部测试 + 冒烟 PASS：310/310；冒烟 79/79（第 2 次）；脚本 12/12 → 通过
+- 真实根红线：全程未对真实 %USERPROFILE%\.dsh / %APPDATA% 写入；COMPAT 只读，workspace.json 零写入 → 通过
+
+== 未验证项（如实标注）==
+- 直接冒烟筛选两条第 1 次偶发失败未复现根因（同步代码路径，疑环境干扰）；已复跑通过并留记。
+- UI 手工目视（确认按钮初始可用、备份标签文案）未人工操作，仅冒烟断言覆盖。

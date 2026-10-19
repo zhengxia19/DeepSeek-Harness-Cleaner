@@ -363,7 +363,7 @@ public sealed partial class MainForm
         Check("取消选择后预览清空", _preview.Text.Length == 0);
     }
 
-    /// <summary>T-30：备份/删除对话框流程断言（取消不删除、未备份禁用确认、确认后精确删除、完成刷新、取消执行不阻塞 UI）。</summary>
+    /// <summary>T-30/N-04：备份/删除对话框流程断言（取消不删除、未备份可直接确认、已备份校验后才删、确认后精确删除、完成刷新、取消执行不阻塞 UI）。</summary>
     private void RunActionsChecks(string fixtureRoot)
     {
         var service = new InventoryService(new UiScanSource());
@@ -373,8 +373,8 @@ public sealed partial class MainForm
         var untouched = scan.Sessions.First(static s => s.SessionId == "smoke-v4-0004");
         var expectedPlan = new CleanupPlanner().Build(fixtureRoot, [sessionA, sessionB], []).Plan!;
 
-        Check("删除计划：两会话全部代际文件、要求备份",
-            expectedPlan.Targets.Count >= 2 && expectedPlan.RequiresBackup);
+        Check("删除计划：两会话全部代际文件、备份可选（不强制）",
+            expectedPlan.Targets.Count >= 2 && !expectedPlan.RequiresBackup);
         Check("删除前目标文件全部存在", expectedPlan.Targets.All(static t => File.Exists(t.AbsolutePath)));
 
         _sessionGrid.ClearSelection();
@@ -387,7 +387,7 @@ public sealed partial class MainForm
         Check("删除计划仅含勾选两会话（未勾选行不进入计划）",
             dialog.Plan.Targets.Select(static t => t.AbsolutePath).OrderBy(static p => p, StringComparer.Ordinal)
                 .SequenceEqual(expectedPlan.Targets.Select(static t => t.AbsolutePath).OrderBy(static p => p, StringComparer.Ordinal)));
-        Check("未备份时确认删除按钮禁用", !dialog.ConfirmButtonEnabled);
+        Check("未备份时确认删除按钮可用（备份可选，N-04）", dialog.ConfirmButtonEnabled);
 
         dialog.RequestCancel();
         PumpUntil(() => !dialog.Visible, 5_000);

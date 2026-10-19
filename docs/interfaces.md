@@ -71,7 +71,7 @@ interface ICleanupExecutor { Task<CleanupResult> ExecuteAsync(CleanupPlan plan, 
 | PROCESS_UNKNOWN | 无法可靠确定退出状态 | 禁止清理 |
 | FORMAT_UNSUPPORTED | 格式未验证 | 仅只读、原始备份 |
 | FORMAT_CORRUPT | Zstd/JSON 破损 | 不进入自动清理 |
-| BACKUP_INVALID | 归档未通过校验 | 不删除 |
+| BACKUP_INVALID | 提供备份时归档未通过校验 | 不删除（中止，零删除） |
 | FILE_CHANGED | 计划/备份后文件变化 | 停止或跳过 |
 | FILE_ACCESS_DENIED | 文件权限拒绝/被占用 | 报告，禁止提权 |
 | OP_CANCELLED | 用户取消 | 停止于安全边界并报告部分结果 |
@@ -80,6 +80,8 @@ interface ICleanupExecutor { Task<CleanupResult> ExecuteAsync(CleanupPlan plan, 
 | ARCHIVE_FILE_UNREADABLE | `workspace.json` 权限拒绝/被占用 | 同上 |
 | ARCHIVE_JSON_INVALID | `workspace.json` JSON 解析失败 | 同上 |
 | ARCHIVE_STRUCTURE_UNKNOWN | 根/`global` 非对象、`archivedSessionIds` 非数组或含非字符串元素 | 同上 |
+
+- **备份门禁（N-04/ADR-0003）**：会话/附件删除备份可选——未备份不触发备份类错误码，确认（`GATE_NOT_CONFIRMED` 仍必需）、进程、根指纹与逐文件复验不变；提供 manifest+ZIP 时仍校验，失败按 `BACKUP_INVALID`（`GATE_BACKUP_INVALID:*`）中止零删除；`RequiresBackup=true` 的计划（调用方显式要求）缺备份仍报 `GATE_BACKUP_REQUIRED`。
 
 ## 6. 兼容性与版本
 

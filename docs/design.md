@@ -55,7 +55,7 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 
 - 建立所有已成功解析会话中的显式附件 ID/路径引用证据；引用关系必须匹配本机附件布局，并经白名单验证。
 - 如有旧格式无法解析或缺少全局会话，**绝不可声明任何附件为全局孤儿**；显示 `Unknown`。
-- 会话删除不自动删除附件，无论是否被引用；用户可在附件页单独选择，先进行原始备份后再精确删除，且展示“引用不可判定”警告。
+- 会话删除不自动删除附件，无论是否被引用；用户可在附件页单独选择，确认后精确删除（备份可选、建议，N-04/ADR-0003），且展示“引用不可判定”警告。
 - 对目录级附件、外部软链和未知类型禁止自动删除。附件删除不能扩大到其他 Harness 配置/缓存。
 
 ## 6. 缓存策略
@@ -77,7 +77,7 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 
 ## 8. 备份设计与状态机
 
-会话删除和附件删除必须强制先备份。ZIP 保存“原始文件”而不是只保存解析出的 Markdown，记录：
+会话删除和附件删除的 ZIP 备份为**可选（建议）**（N-04/ADR-0003，修订 ADR-0002 第 2 条）：确认、进程门禁与逐文件复验仍必需；提供备份时 executor 仍校验下列 ZIP 事实。ZIP 保存“原始文件”而不是只保存解析出的 Markdown，记录：
 
 ```json
 {
@@ -95,7 +95,7 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 - `sourceRoots` 仅包含类别名，**不把用户完整绝对路径写到清单**；zip entry 必须是 POSIX 风格相对路径，禁止 `..`、绝对路径和重名。
 - ZIP 内路径：`sessions/<relative>`、`attachments/<relative>`、`manifest.json`；允许未来 schemaVersion 追加兼容字段。缓存不是会话备份必要组成，可单独选择备份缓存，不宣称完整可回导。
 - 校验：生成临时 ZIP → 遍历 ZIP entries 对比 manifest 的数量/长度/SHA-256 → 校验 manifest 自身结构 → 用户指定最终路径下无覆盖发布。失败绝不开始删除。
-- 备份完成与用户确认之间源文件若变化，**停止删除并要求重备份**；不能用陈旧备份覆盖变动的源文件。
+- 提供备份时：备份完成与用户确认之间源文件若变化，**停止删除并要求重备份**；不能用陈旧备份覆盖变动的源文件。未备份时此约束不适用（逐文件 SHA-256/mtime 复验仍按计划在删除前执行）。
 - 若附件引用不明，必须在导出摘要写入“附件未完整保全”，并阻断“保证附件完整”的承诺；会话原始文件备份仍可执行。
 
 ```text
