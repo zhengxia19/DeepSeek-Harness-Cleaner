@@ -414,6 +414,25 @@ public sealed partial class MainForm
             dialog2.BackupStatusText.Contains("已备份并校验", StringComparison.Ordinal)
             && dialog2.Backup is not null && dialog2.ConfirmButtonEnabled);
 
+        // N-07（R4/R6）：CenterParent 居中实证 + 自适应布局两档缩放断言。
+        _smokeLines.Add($"INFO 居中实测：parent={Bounds} dialog={dialog2.Bounds}");
+        Check("删除对话框居中：矩形中心与父窗中心一致（±3px，R4 CenterParent）",
+            DialogCenteredOnParent(dialog2, this));
+        var listAtDefault = dialog2.ListBounds;
+        dialog2.Size = new Size(640, 420);
+        System.Windows.Forms.Application.DoEvents();
+        Check("640×420：操作按钮完整可见、清单随窗收缩（Dock=Fill）",
+            dialog2.ActionButtonsFullyVisible()
+            && dialog2.ListBounds.Height > 0 && dialog2.ListBounds.Height < listAtDefault.Height);
+        var listAtSmall = dialog2.ListBounds;
+        dialog2.Size = new Size(1280, 800);
+        System.Windows.Forms.Application.DoEvents();
+        Check("1280×800：操作按钮完整可见、清单高度随窗增大",
+            dialog2.ActionButtonsFullyVisible() && dialog2.ListBounds.Height > listAtSmall.Height);
+        _smokeLines.Add($"INFO 删除对话框清单高度：默认={listAtDefault.Height} / 640×420={listAtSmall.Height} / 1280×800={dialog2.ListBounds.Height}");
+        dialog2.Size = new Size(640, 420);
+        System.Windows.Forms.Application.DoEvents();
+
         var pumps = 0;
         dialog2.RequestConfirm();
         var start = Environment.TickCount64;
@@ -610,6 +629,14 @@ public sealed partial class MainForm
         {
             System.Windows.Forms.Application.DoEvents();
         }
+    }
+
+    /// <summary>N-07（R4）：对话框窗体矩形中心与父窗窗体矩形中心一致（±3px 容差）。</summary>
+    private static bool DialogCenteredOnParent(Form dialog, Form parent)
+    {
+        var dc = new Point((dialog.Bounds.Left + dialog.Bounds.Right) / 2, (dialog.Bounds.Top + dialog.Bounds.Bottom) / 2);
+        var pc = new Point((parent.Bounds.Left + parent.Bounds.Right) / 2, (parent.Bounds.Top + parent.Bounds.Bottom) / 2);
+        return Math.Abs(dc.X - pc.X) <= 3 && Math.Abs(dc.Y - pc.Y) <= 3;
     }
 
     /// <summary>N-02：当前勾选行对应的会话 ID（按 ID 排序，用于排序前后一致性比较）。</summary>

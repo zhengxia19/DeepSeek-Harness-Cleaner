@@ -1,0 +1,60 @@
+N-07 删除对话框自适应布局 + 居中实证（R6 + R4）证据
+=====================================================
+分支: docs/post-release-maintenance-20261019（基线 HEAD becf185 = N-06）
+日期: 2026-10-19（本地）
+
+一、改动文件
+- src/DeepSeekHarnessCleaner.UI/CleanupDialog.cs
+  · 绝对坐标布局 → Dock/TableLayoutPanel 三区：标签区（TableLayoutPanel Dock=Top，AutoSize 行高）、
+    清单 Dock=Fill、结果+按钮行（TableLayoutPanel Dock=Bottom，按钮 FlowLayoutPanel RightToLeft 右对齐）
+  · 清单控件 ListView → 只读 DataGridView（AutoSizeColumnsMode=Fill，列 FillWeight 470/80/60，随窗伸缩）
+  · FormBorderStyle=Sizable、MinimumSize=480×320（窗体尺寸）；ClientSize 默认 640×420 不变
+  · OnLoad 按 owner 矩形显式居中并钳制到所在屏工作区（R4 修复，见下）
+  · 新增冒烟访问器 ListBounds / ActionButtonsFullyVisible()
+  · 数据流与事件（RequestConfirm/RequestCancel/CleanupFinished/备份展示）零改动（边界（不改）遵守）
+- src/DeepSeekHarnessCleaner.UI/MainForm.Smoke.cs：新增 3 项断言（居中 ±3px、640×420、1280×800）+ INFO 实测矩形；
+  冒烟总数 91→94；新增 DialogCenteredOnParent 辅助
+- scripts/smoke-win10.ps1：冒烟期望 91→94
+- 文档：docs/design.md §7 第 7 条补布局与居中契约；docs/interfaces.md §5 新增 N-07 条目；
+  docs/testing.md UX-01 补两档缩放+居中冒烟断言；CHANGELOG.md [Unreleased] Changed 新增 N-07 条目
+
+二、R4 结论：已修复（CenterParent 已设但实测不居中，定位原因后修复）
+- 首轮冒烟 FAIL：parent={X=1293,Y=712,W=1122,H=736} dialog={X=342,Y=342}——对话框完全未按 owner 居中。
+- 最小 WinForms 探针复现（同机 .NET 10）：
+  · CenterParent + 非模态 Show(owner)：child=(182,182)（期望 (333,238)）→ 不居中，复现
+  · CenterParent + ShowDialog(owner)：child=(333,238) → 精确居中
+  · Manual + 显式 Location=(333,238)：(333,238) → 生效
+- 定位原因：.NET 10 WinForms 的 CenterParent 对非模态 Show(owner) 不按 owner 居中（仅 ShowDialog 生效）。
+- 修复：CleanupDialog.OnLoad 按 Owner 矩形显式居中（Location = owner 中心 − 半窗），并钳制到 Screen.FromControl(this).WorkingArea；
+  CenterParent 属性保留（模态打开仍正确）。修复后冒烟实测：
+  parent={X=722,Y=440,W=1116,H=719}（中心 1280,799）dialog={X=952,Y=570,W=656,H=459}（中心 1280,799）→ 偏差 0px。
+
+三、门禁命令与退出码
+1) build: $env:NUGET_PACKAGES='D:\Code\DeepSeek-Harness-Cleaner\.nuget'; .\.dotnet\dotnet.exe build DeepSeekHarnessCleaner.sln -c Release -warnaserror --nologo
+   → 0 个警告 0 个错误，BUILD_EXIT=0（首轮 1 个 CS8820 静态 lambda 捕获错误，修复后 0）
+2) test: .\.dotnet\dotnet.exe test DeepSeekHarnessCleaner.sln -c Release --no-build --nologo
+   → 失败: 0，通过: 310，总计: 310，TEST_EXIT=0（基线保持）
+3) format: .\.dotnet\dotnet.exe format --verify-no-changes → FMT_EXIT=0（全部改动后重跑）
+4) 直接冒烟（全新 fixture 副本 n07-fixture3\sessions + 同级 storages\workspace.json utf8NoBOM）:
+   DeepSeekHarnessCleaner.UI.exe --smoke …\n07-report3\smoke.txt --scan-root …\n07-fixture3\sessions --log-dir …
+   → EXIT=0，PASS=94 FAIL=0
+5) scripts/smoke-win10.ps1 -EvidencePath artifacts/evidence/N-07-win10-smoke.txt（PATH 前缀 .dotnet）
+   → 13/13 PASS，WIN10_RESULT=PASS，SCRIPT_EXIT=0（冒烟 94/0；真实根只读快照零变更零删除；附件根零变更）
+
+四、验收逐项（矩形断言，替代截图）
+- 居中断言 PASS：删除对话框窗体矩形中心与主窗窗体矩形中心一致（±3px；实测偏差 0px，见上）
+- 640×420 PASS：确认/取消按钮完整位于客户区（RectangleToScreen 包含判定）、清单高度随窗收缩
+- 1280×800 PASS：按钮完整可见、清单高度随窗增大
+- INFO 清单高度实录：默认(640×420 客户区)=273px / 窗体 640×420=234px / 窗体 1280×800=614px（Dock=Fill 随窗伸缩）
+- 冒烟 94 项全 PASS、ExitCode=0；smoke-win10 13 项全 PASS、ExitCode=0
+
+五、开发期迭代（非门禁失败，如实记录）
+- 首轮 build CS8820（静态 lambda 捕获局部变量）→ 去 static，重编译 0 警告。
+- 首轮冒烟 93 PASS / 1 FAIL（居中断言）→ 探针定位 CenterParent 非模态缺陷 → OnLoad 显式居中 → 全新副本重跑 94/94。
+- fixture 副本 n07-fixture、n07-fixture2 被删除检查消耗，最终证据以 n07-fixture3 全新副本运行。
+- packages.lock.json 出现已知 build/publish 往返抖动，提交前 git checkout 还原，不入库。
+
+六、边界与未验证项（如实标注）
+- 边界（不改）遵守：对话框数据流与事件未动；其余对话框（BackupDialog/ResultsDialog/AttachmentListDialog）仍仅 CenterParent，未改动。
+  观察项：它们同样以非模态 Show(this) 打开，理论上存在同样的 CenterParent 非模态不居中问题——按 N-07 边界未修复，留待后续决策。
+- 未验证：真实 125%/150% DPI 实机（冒烟以字体缩放模拟，同既往口径）；未保存人工截图（验收允许矩形断言）。
