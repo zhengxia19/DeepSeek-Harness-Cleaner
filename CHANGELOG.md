@@ -20,6 +20,15 @@
 - 未签名 EXE；无自动更新；不提供云端历史删除。
 - 兼容性实测于 Windows 10 Pro 22H2（19045.6466）；未在 freshly-provisioned 干净 VM 上验证（见 docs/release.md §6）。
 
-## [Unreleased] — 2026-10-16
+## [0.1.1] — 2026-10-19（真实格式修正维护版，win-x64 自包含单文件，未签名）
 
-> 历史计划条目已于 0.1.0 全部实现并移入上方条目。本文件按 Added / Changed / Fixed / Removed 记录用户可见变化。
+> 历史计划条目已于 0.1.0 全部实现并移入上方条目。本文件按 Added / Changed / Fixed / Removed 记录用户可见变化。发布记录与验证环境见 docs/release.md §7。
+
+### Fixed
+- **会话 header 解析对齐真实 DSH 格式（M-02）**：首行契约改为 `{"type":"session","id":…,"version":…,"createdAt":<epoch-millis 数值>}`（`version` 0–4；`createdAt` 仅接受 epoch-millis JSON 数值）。此前真实 `%USERPROFILE%\.dsh\sessions` 会话 100% 被判 `HEADER_MISSING` → Corrupt/Ambiguous、无法按日期筛选或进入可清理状态；现已可正常解析、显示创建时间。
+- 旧假设格式（`type:"header"`/`sessionId`/`formatVersion`/ISO 字符串日期）不再接受，按 `HEADER_MISSING` 安全失败（不放宽门禁）；新增 header 负向测试（见 docs/testing.md §2.1）。
+- **事件类型/角色/时间映射对齐真实 DSH 格式（M-03）**：事件信封契约确证为 `{"type":…,"seq":…,"time":<epoch-millis 数值>,"data":…}`；消息正文按真实位置读取——`user/message` 在 `data`，`assistant/system/developer/message` 与 `tool/result` 在 `data.message`；预览仅提取 `content[]` 中 `type:"text"` 块。此前真实根 v4 会话预览几乎全部显示为“未知事件/不完整”；现可显示 user/assistant/system/developer/tool 角色与文本正文，事件时间正确解析（epoch-millis）。已知事件类型表由真实根实测 47 类硬编码；未知事件仍按“类型/行号 + 不完整”摘要，v0–v3 仍仅提供元数据级最小保证（见 docs/design.md §2、docs/testing.md §2.2）。
+
+### Known limitations（0.1.1 已知限制）
+- 语义投影仅覆盖已确证的 0.2.x 事件类型；无文本块的消息（如仅 `tool-call`/`reasoning` 块）按“不完整”标记，不猜测正文；v0–v3 旧代际仅元数据级预览。
+- 未签名 EXE；无自动更新；未在 freshly-provisioned 干净 VM 上验证（见 docs/release.md §7）。

@@ -96,6 +96,8 @@ foreach ($s in $res.Sessions) { foreach ($g in $s.Generations) {
     $gk = 'gen' + $g.Generation; $gens[$gk] = 1 + $gens[$gk]
     $ek = if ($g.Compressed) { 'zstd' } else { 'plain' }; $enc[$ek] = 1 + $enc[$ek] } }
 $amb = @($res.Sessions | Where-Object { $_.IsAmbiguous }).Count
+$corrupt = @($res.Sessions | Where-Object { $_.Status -eq 'Corrupt' }).Count
+$dateSessions = 0; foreach ($s in $res.Sessions) { if ($null -ne $s.CreatedAt) { $dateSessions++ } }
 $proj = New-Object DeepSeekHarnessCleaner.Application.TranscriptProjector
 $semOk = 0; $semPartial = 0; $semFail = 0; $sampled = 0
 foreach ($s in ($res.Sessions | Where-Object { $_.Status -eq 'Valid' -and -not $_.IsAmbiguous } | Select-Object -First 25)) {
@@ -117,6 +119,7 @@ foreach ($s in ($res.Sessions | Where-Object { $_.Status -eq 'Valid' -and -not $
 @{
     sessions = $res.Sessions.Count; totalBytes = $res.TotalBytes; anomalies = $res.AnomalousFiles.Count
     status = $status; generations = $gens; encodings = $enc; ambiguous = $amb
+    corrupt = $corrupt; dateSessions = $dateSessions
     semanticSampled = $sampled; semanticComplete = $semOk; semanticPartial = $semPartial; semanticFail = $semFail
 } | ConvertTo-Json -Compress -Depth 5
 '@ | Set-Content -Path $harness -Encoding utf8
@@ -135,6 +138,8 @@ $checks = [ordered]@{
     'WIN10-01 冒烟 72 PASS / 0 FAIL'        = ($smokePass -eq 72 -and $smokeFail -eq 0)
     'TC-18 运行期零新增 TCP 连接'           = ($netHits -eq 0)
     'COMPAT-01 真实根存在且完成只读扫描'    = ($null -ne $compat -and $compat.sessions -gt 0)
+    'COMPAT-01 真实根会话无 Corrupt'        = ($null -ne $compat -and $compat.corrupt -eq 0)
+    'COMPAT-01 真实根会话全部带 createdAt（日期可筛选）' = ($null -ne $compat -and $compat.dateSessions -eq $compat.sessions)
     'COMPAT-01 真实根既有文件零变更零删除（新增允许）' = ($null -ne $compat -and $diff.Changed -eq 0 -and $diff.Deleted -eq 0)
 }
 $allPass = -not ($checks.Values -contains $false)
@@ -147,7 +152,7 @@ $lines = @(
     "TC18_NETWORK_CONNECTIONS=$netHits"
 )
 if ($null -ne $compat) {
-    $lines += "COMPAT sessions=$($compat.sessions) totalBytes=$($compat.totalBytes) anomalies=$($compat.anomalies) ambiguous=$($compat.ambiguous)"
+    $lines += "COMPAT sessions=$($compat.sessions) totalBytes=$($compat.totalBytes) anomalies=$($compat.anomalies) ambiguous=$($compat.ambiguous) corrupt=$($compat.corrupt) dateSessions=$($compat.dateSessions)"
     $lines += "COMPAT status=$($compat.status | ConvertTo-Json -Compress -Depth 3)"
     $lines += "COMPAT generations=$($compat.generations | ConvertTo-Json -Compress) encodings=$($compat.encodings | ConvertTo-Json -Compress)"
     $lines += "COMPAT semantic sampled=$($compat.semanticSampled) complete=$($compat.semanticComplete) partial=$($compat.semanticPartial) fail=$($compat.semanticFail)"

@@ -1,0 +1,62 @@
+M-03 事件类型/角色/时间映射对齐真实格式 — 执行证据
+生成时间：2026-10-19（本地）
+分支：docs/post-release-maintenance-20261019（HEAD 起点 9b5b3b3；工作树含 M-02+M-03 未提交改动，开始前已核对 git status --short，无未知改动被覆盖）
+证据仅含结构信息（类型名/键名/计数/退出码），不含真实会话正文、UUID、参数值。
+
+== 1. 诊断（只读，真实根 %USERPROFILE%\.dsh\sessions）==
+临时探针 artifacts/msg-probe（M-04 删除）对真实根聚合 *\/message 与 tool/result 的 data 形状（仅键名/值类型/块类型名）：
+- user/message（558 行）：正文直接在 data：role=String("user")、content=Array；块类型 text=634、image=1。
+- assistant/message（3142 行）：正文嵌套在 data.message：role=String("assistant")、content=Array；块类型 reasoning=3134、tool-call=3745、text=671。
+- system/message（50 行）：正文在 data.message，role="system"，块类型 text=49。
+- developer/message（4 行）：正文在 data.message，role="developer"，块类型 tool-addition=27（无文本块）。
+- tool/result（3798 行）：正文在 data.message，role="tool"（3777；另有 21 行 role="user"、块类型 tool-result，按未确证处理为不完整）。
+- 事件时间一律为 epoch-millis JSON 数值（真实根 ISO 字符串 0 次出现，M-01 已证）。
+结论：M-01 DIAG 中“消息正文一律在 data.role+data.content”仅对 user/message 成立；assistant/system/developer/message 正文在 data.message（与 tool/result 同布局）。
+
+== 2. 代码/测试/fixture 修改 ==
+- src/DeepSeekHarnessCleaner.Infrastructure/SessionEventReader.cs：KnownEventTypes 扩为真实根实测 47 类 + attachment_ref（D7 保留）= 48 项；未列出类型仍按 Unknown。
+- src/DeepSeekHarnessCleaner.Application/TranscriptProjector.cs：
+  * 消息事件 user/message、assistant/message、system/message、developer/message：正文取 data.message（若为对象）否则 data；role ∈ {user,assistant,system,developer} 且存在文本块才投影；否则不完整“消息缺字段、非文本或未确证角色”。
+  * tool/result：data.message（role="tool"）+ 文本块。
+  * 仅提取 content[] 中 type=="text" 块的 text，多块以换行拼接；reasoning/tool-call/image/tool-result/tool-addition 块不进入正文。
+  * time：epoch-millis 数值（ValueKind 守卫 + TryGetInt64 + 范围异常捕获）；缺失/非法 → At=null 仍投影。
+  * 聚合分块事件 reasoning-chunks/tool-call-chunks/text-chunks：跳过且不标不完整（流式碎片，正文由最终消息事件承载）。
+  * 预览上限不变：≤2000 项；行 ≤8MiB、解压 ≤256MiB 门禁不变；header 契约（M-02）与删除门禁未动。
+- tests/.../Fixtures/FixtureFactory.cs：MessageLine 改为真实信封（user/message 正文在 data；其余嵌套 data.message；time 为 epoch-millis，非法 ts 省略 time）。
+- tests/.../EventReaderTests.cs：词表断言更新为 session/user/message；新增 KnownEventTypes_MatchesRealRootVocabulary_M03（48 项 + 关键类型存在）。
+- tests/.../TranscriptV4Tests.cs：既有用例改为真实信封；新增 8 个用例：多文本块换行拼接、assistant 仅 tool-call 块→不完整、system/developer 投影、tool/result 投影与缺 message→不完整、聚合分块跳过、epoch time 解析/缺失→At=null、未知类型不完整摘要含类型名+行号。
+- tests/.../ReadableExportTests.cs、scripts/perf.ps1：内联事件行改为真实信封。
+- 合成 fixture .artifacts/tmp/dsh-t18-fixture（备份 .bak-preM03）：305 个会话文件事件行转换为真实信封（CHANGED=305，OLD_LEFT=0）；assistant/message 行再嵌套 data.message（CHANGED=1）。正文文本与角色语义保持（smoke 断言不变）。
+
+== 3. 门禁（真实命令与退出码）==
+$env:NUGET_PACKAGES='D:\Code\DeepSeek-Harness-Cleaner\.nuget'
+.\.dotnet\dotnet.exe build DeepSeekHarnessCleaner.sln -c Release -warnaserror --nologo   → 0 警告 0 错误，BUILD_EXIT=0
+.\.dotnet\dotnet.exe test DeepSeekHarnessCleaner.sln -c Release --no-build --nologo      → 通过 282/282（273 基线 + 9 新增），TEST_EXIT=0
+.\.dotnet\dotnet.exe format --verify-no-changes                                          → FORMAT_EXIT=0
+
+== 4. 真实根只读预览验收（临时 harness artifacts/preview-check，M-04 删除；镜像 PreviewPresenter 的代际选择/读取/Build 路径）==
+.\artifacts\preview-check\bin\Release\net10.0\preview-check.exe "$env:USERPROFILE\.dsh\sessions" → REAL_EXIT=0
+- SESSIONS 51 ANOMALIES 0（M-02 时 49；真实根为活动根，两次运行间自然增长，如实记录漂移）
+- AGG_MODE Projected=51；AGG_GEN gen0=1 gen4=50
+- AGG_ROLES assistant=641 system=49 tool=3637 user=530 (unknown)=15368；AGG_PROJECTED_ITEMS 20225 TEXT_CHARS 7149844 INCOMPLETE 15368 TRUNCATED 2 EXCEPTIONS 0
+- DETAIL_V4 idx=1 gen=4 mode=Projected items=173（含 system 等角色，前 12 项多为无文本块的 assistant 事件→不完整标记）firstTextLen=7273 atShown=35 incomplete=138 complete=False reason=投影含138个不完整事件标记。
+- DETAIL_V0 idx=51 gen=0 mode=Projected items=4 incomplete=4 metadataLines=7 reason=投影含4个不完整事件标记。
+验收对照：
+- v4 会话预览显示角色/文本正文并带正确代际标注（gen=4，mode=Projected）：满足（assistant/user/system/tool 角色与文本正文均出现）。
+- v0 会话显示元数据（7 行）+“不完整”摘要，不空白不崩溃：满足。
+- 未知事件仍按“类型/行号 + 不完整”摘要：满足（INCOMPLETE 计数与摘要 reason 存在；EXCEPTIONS=0）。
+- 说明：assistant/message 多数仅含 tool-call/reasoning 块（无 type:"text" 正文），按设计标记“非文本”不完整，不猜测正文——INCOMPLETE 15368 属预期，非缺陷。
+fixture 根（合成）：preview-check → FIXTURE_EXIT=0；SESSIONS 305 ANOMALIES 1（projC HEADER_MALFORMED→不完整“第 1 行”）；projD gen=4 Projected user+assistant 正文完整；v1/v7 MetadataOnly；AGG_ROLES user=302 assistant=1 (unknown)=1。
+
+== 5. 合成根冒烟（唯一破坏性测试处）==
+复制 fixture 至 .artifacts/tmp/smoke-m03/sessions，Start-Process UI.exe --smoke --scan-root <合成副本> --log-dir <合成日志>：
+报告 PASS=72 FAIL=0（与 M-02 基线一致；含预览角色/正文断言、代际标注“预览代际：4”、bad-header 不完整、隐私检查“日志不含 fixture 会话正文”）。真实根全程只读。
+
+== 6. 文档同步 ==
+docs/design.md §2 新增事件信封契约（M-03）、§4 角色映射细化；docs/interfaces.md 输入类型补事件行契约；docs/testing.md 新增 §2.2 事件信封契约用例；CHANGELOG.md Unreleased/Fixed 新增 M-03 条目。
+
+== 7. 未验证项 / 限制 ==
+- Windows 10 干净 VM 未验证（沿用 release.md §6 声明）。
+- 真实根为活动根：M-02（49 会话）与 M-03（51 会话）间存在自然漂移；本证据为 M-03 运行时点快照。
+- developer/message 真实样本仅含 tool-addition 块（4 行），其文本投影路径由合成 fixture 确证，真实根未出现文本正文。
+- 临时 harness（artifacts/msg-probe、preview-check、scan-check、event-check）待 M-04 删除。

@@ -1,0 +1,56 @@
+M-04 全量回归 + 冒烟 + 发布 v0.1.1 — 执行证据
+生成时间：2026-10-19（本地）
+分支：docs/post-release-maintenance-20261019（HEAD 起点 9b5b3b3；本轮开始前 git status --short 核对，无未知改动被覆盖）
+证据仅含结构信息（计数/退出码/哈希），不含真实会话正文、UUID、参数值。
+
+== 1. 门禁（真实命令与退出码）==
+$env:NUGET_PACKAGES='D:\Code\DeepSeek-Harness-Cleaner\.nuget'
+.\.dotnet\dotnet.exe build DeepSeekHarnessCleaner.sln -c Release -warnaserror --nologo   → 0 警告 0 错误，BUILD_EXIT=0
+.\.dotnet\dotnet.exe test DeepSeekHarnessCleaner.sln -c Release --no-build --nologo      → 通过 282/282，TEST_EXIT=0
+.\.dotnet\dotnet.exe format --verify-no-changes                                          → FORMAT_EXIT=0
+.\.dotnet\dotnet.exe list src\DeepSeekHarnessCleaner.UI package --vulnerable --include-transitive            → “没有易受攻击的包”，VULN_UI_EXIT=0
+.\.dotnet\dotnet.exe list src\DeepSeekHarnessCleaner.Infrastructure package --vulnerable --include-transitive → “没有易受攻击的包”，VULN_INFRA_EXIT=0
+（漏洞源 nuget.org 可访问，非“无法访问漏洞源”情形。）
+
+== 2. 冒烟 + TC-18 + COMPAT-01（scripts/smoke-win10.ps1，本轮新增两项判定：无 Corrupt、全部带 createdAt）==
+.\scripts\smoke-win10.ps1 -EvidencePath artifacts\evidence\M-04-win10.txt → SMOKE_SCRIPT_EXIT=0，WIN10_RESULT=PASS（完整输出见 M-04-win10.txt）
+- 环境：Windows 10 Pro 22H2 Build 19045.UBR6466（VMware 隔离 VM）；HARNESS_VERSION=0.2.1-rc.2。
+- 自包含单文件发布 PUBLISH_EXIT=0，EXE sizeMB=102.8。
+- 冒烟（合成根副本 .artifacts/tmp/dsh-t33-fixture/sessions，含备份→校验→删除→回退删除测试）：SMOKE_EXIT=0 PASS=72 FAIL=0。
+- TC-18 运行期新增 TCP 连接 = 0。
+- COMPAT-01 真实根 %USERPROFILE%\.dsh\sessions 只读扫描：sessions=51 status={"Valid":51} corrupt=0 ambiguous=0 anomalies=0 dateSessions=51（日期可筛选）；generations gen0=2 gen4=50；encodings zstd=52；语义抽样 sampled=25 complete=0 partial=25 fail=0（partial 为含“不完整”标记的会话，符合 M-03 设计：多数 assistant 事件无文本块）。
+- 只读证明：扫描前后真实根快照 files=52 changed=0 deleted=0 added=0。
+- 逐项判定 9/9 PASS（含新增两项：COMPAT-01 无 Corrupt；全部带 createdAt）。
+- 说明：任务书预期“45 会话”为诊断时点计数；真实根为活动根，核验时点为 51 会话，如实记录漂移。
+
+== 3. 发布 v0.1.1 ==
+.\scripts\publish.ps1 -Version 0.1.1 → PUBLISH_OK version=0.1.1 out=dist/v0.1.1/win-x64，PUBLISH_EXIT=0
+- EXE_MB=102.8；EXE_SHA256=0b5f2e0fa674e7f606e0c35bf92c7a74d4306fe874a04f649b19058439eb9046
+- FILES=DeepSeekHarnessCleaner.UI.exe, LICENSE.txt, README.md, SHA256SUMS.txt, THIRD-PARTY-NOTICES.txt
+- SHA256SUMS.txt 落盘（4 文件哈希，EXE 哈希与上列一致）。
+- 发布包 EXE 本身冒烟（全新合成副本 .artifacts/tmp/dist-smoke/sessions）：PASS=72 FAIL=0。
+- 发布后复原：git checkout -- src/*/packages.lock.json → LOCK_CLEAN=True。
+  注：普通 dotnet build 也会改写 lock（ILLink/win-x64 条目增删），故复原在全部构建之后执行；最终 git status 中 4 个 lock 文件无改动。
+
+== 4. 文档/脚本同步 ==
+- docs/release.md：§1 当前发布 0.1.1；§3 命令更新；新增 §7 0.1.1 发布记录（哈希、门禁、冒烟、真实根核验、环境限制）。
+- CHANGELOG.md：[Unreleased] → [0.1.1] — 2026-10-19，含 M-02/M-03 Fixed 与 0.1.1 已知限制。
+- scripts/publish.ps1：默认版本 0.1.1；包内 README 摘要已知限制改为“已确证 0.2.x header/消息事件；未知事件仅摘要；v0–v3 元数据级预览”。
+- scripts/smoke-win10.ps1：COMPAT harness 新增 corrupt/dateSessions 统计与两项判定（对应 M-04 验收“状态非 Corrupt、日期可筛选”）。
+
+== 5. 临时目录清理 ==
+已删除：artifacts/scan-check/、artifacts/event-check/、artifacts/preview-check/、artifacts/msg-probe/（exists=False 逐项确认）。
+保留：artifacts/evidence/（M-01～M-04、M-04-win10、DIAG-*）、.artifacts/tmp/（gitignore 内工作副本）。
+
+== 6. 验收对照（docs/maintenance-tasks.md M-04）==
+- 冒烟逐项 PASS、ExitCode=0：满足（72/0，两处：smoke-win10 发布副本 + dist 包 EXE）。
+- 测试全绿：满足（282/282）。
+- 真实根只读核验记录在证据：满足（§2 COMPAT-01：51 会话全 Valid、无 Corrupt、51/51 带 createdAt、快照零写入）。
+- 发布哈希落盘：满足（SHA256SUMS.txt + 本证据）。
+- 清理临时 artifacts：满足（§5）。
+
+== 7. 未验证项 / 限制（如实声明）==
+- freshly-provisioned Windows 10 干净 VM 未验证（沿用等效证据：自包含单文件、TC-18 零连接、快照零写入）；不宣称兼容通过。
+- 真实根核验经 COMPAT-01 harness（与发布包同一源码、同一 Release 配置的 bin DLL）+ 发布包 EXE 冒烟组合完成；exe --smoke 直接指向真实根属破坏性（冒烟含删除测试），按红线未执行。
+- GUI 交互手工验收未在本轮执行（冒烟为自动化断言替代，与 T-33/T-34 先例一致）。
+- 工作树未提交（维护任务未要求提交；改动清单见 git status：8 源码/测试文件、4 文档、3 脚本、证据文件）。

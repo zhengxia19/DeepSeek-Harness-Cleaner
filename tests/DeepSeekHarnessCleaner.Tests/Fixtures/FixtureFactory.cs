@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Text;
 using DeepSeekHarnessCleaner.Infrastructure.Compression;
@@ -40,11 +41,34 @@ public sealed class FixtureFactory
 
     // ---- 合成 JSONL 行（模式由 T-09/T-12 固化，此处仅合成占位） ----
 
-    public static string HeaderLine(string sessionId, int formatVersion, string createdAt) =>
-        "{\"type\":\"header\",\"sessionId\":\"" + sessionId + "\",\"formatVersion\":" + formatVersion + ",\"createdAt\":\"" + createdAt + "\"}";
+    /// <summary>
+    /// 真实 header 契约（M-02）：<c>{"type":"session","id":…,"version":…,"createdAt":<epoch-millis 数值>}</c>。
+    /// <paramref name="createdAt"/> 为合法 ISO 日期时换算为 epoch-millis；否则原样写成 JSON 字符串
+    /// （用于构造 HEADER_DATE_INVALID 负向用例）。
+    /// </summary>
+    public static string HeaderLine(string sessionId, int formatVersion, string createdAt)
+    {
+        var createdAtJson = DateTimeOffset.TryParse(createdAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+            ? parsed.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture)
+            : "\"" + createdAt + "\"";
+        return "{\"type\":\"session\",\"id\":\"" + sessionId + "\",\"version\":" + formatVersion + ",\"createdAt\":" + createdAtJson + "}";
+    }
 
-    public static string MessageLine(string role, string text, string ts) =>
-        "{\"type\":\"message\",\"role\":\"" + role + "\",\"text\":\"" + text + "\",\"ts\":\"" + ts + "\"}";
+    /// <summary>
+    /// 真实消息事件信封（M-03，msg-probe 对真实根确证）：
+    /// <c>{"type":"&lt;role&gt;/message","seq":…,"time":&lt;epoch-millis 数值&gt;,"data":…}</c>；
+    /// user/message 正文直接在 data（role+content[]），assistant/system/developer/message 嵌套在 data.message。
+    /// <paramref name="ts"/> 为合法 ISO 日期时换算为 epoch-millis；否则省略 time 字段（构造缺时间用例）。
+    /// </summary>
+    public static string MessageLine(string role, string text, string ts)
+    {
+        var time = DateTimeOffset.TryParse(ts, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+            ? ",\"time\":" + parsed.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
+        var body = "{\"role\":\"" + role + "\",\"content\":[{\"type\":\"text\",\"text\":\"" + text + "\"}]}";
+        var data = role == "user" ? body : "{\"message\":" + body + "}";
+        return "{\"type\":\"" + role + "/message\",\"seq\":1" + time + ",\"data\":" + data + "}";
+    }
 
     public static string AttachmentRefLine(string attachmentId) =>
         "{\"type\":\"attachment_ref\",\"attachmentId\":\"" + attachmentId + "\"}";

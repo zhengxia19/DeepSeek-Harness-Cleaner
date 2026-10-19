@@ -1,28 +1,28 @@
-# AGENT 检查点（Round 4 结束 · 2026-10-19）
+# AGENT_CHECKPOINT — DeepSeek Harness Cleaner 维护任务（M 系列）
 
-## 状态：T-01～T-34 全部已验收勾选，项目任务清单完成
+更新：M-01～M-04 全部完成，v0.1.1 已发布。任务来源 docs/maintenance-tasks.md 已闭环。
 
-- 本轮任务：T-34 制作发布包并最终复核 → 已验收，`docs/implementation-tasks.md` 已勾 [x]。
-- 证据：`artifacts/evidence/T-34.txt`（门禁、发布包、SHA、冒烟 4×72/72+安装模拟、TC-18、真实数据只读、干净 VM 诚实标注）。
+## 状态
+- 分支 docs/post-release-maintenance-20261019，HEAD 起点 9b5b3b3；工作树含全部 M 系列改动**未提交**（8 源码/测试 + 4 文档 + 3 脚本 + 证据；packages.lock.json ×4 已复原干净）。
+- M-01 ✅ DIAG-event-format.txt；M-02 ✅ M-02.txt（header 契约）；M-03 ✅ M-03.txt（事件信封/角色/时间映射）；M-04 ✅ M-04.txt + M-04-win10.txt（发布 v0.1.1）。
 
-## Git
+## v0.1.1 发布要点
+- 产物：dist/v0.1.1/win-x64/DeepSeekHarnessCleaner.UI.exe（102.8 MB，SHA-256 0b5f2e0f…9046，见 SHA256SUMS.txt 与 release.md §7）。
+- 门禁：build 0 警告；tests 282/282；format 干净；vulnerability 两工程无漏洞包；smoke-win10.ps1 9/9 PASS（含新增“无 Corrupt”“全部带 createdAt”判定）；dist EXE 冒烟 72/0。
+- 真实根只读核验：51 会话全 Valid（corrupt=0/ambiguous=0/anomalies=0），51/51 带 createdAt，快照 changed=0 deleted=0 added=0。
+- 临时 harness（scan-check/event-check/preview-check/msg-probe）已删除；evidence 与 .artifacts/tmp 保留。
 
-- HEAD：`docs(T-34)` 提交（含 README/CHANGELOG/release.md/T-34.txt/勾选/本检查点）← `8af8f70 feat(T-34)`（publish.ps1 + BackupService R-01 格式修复）← `f746e2e build(T-33)`。
-- 永久不提交：`M AGENTS.md`、`?? docs/agent-execution.md`。
-- `dist/` 被 .gitignore 排除；发布哈希在 `dist/.../SHA256SUMS.txt` 与 T-34.txt 存档。
+## 已固化的真实格式契约（勿再动摇）
+- Header：{"type":"session","id":"session-<uuid>","version":0–4,"createdAt":<epoch-millis 数值>,…}；旧假设格式 → HEADER_MISSING。
+- 事件信封：{"type":…,"seq":…,"time":<epoch-millis>,"data":…}；user/message 正文在 data；assistant/system/developer/message 与 tool/result 在 data.message；预览仅取 content[] 的 type=="text" 块；分块事件跳过；KnownEventTypes=48（47 实测 + attachment_ref）。
 
-## 发布产物（0.1.0）
+## 未验证 / 遗留（如实）
+- freshly-provisioned Win10 干净 VM 未验证（release.md §7 已声明）。
+- 工作树未提交；如需提交按 git-commit-push.cmd 或手工 commit（提交信息建议引用 M-01～M-04 证据）。
+- 真实根为活动根：会话数随时间漂移（45→49→51），证据均为时点快照。
 
-- `dist/v0.1.0/win-x64/`：DeepSeekHarnessCleaner.UI.exe（102.8 MB，SHA-256 c5464a2df7fc7b04d99520c790b0706dffcd51abc670089adf68a7cf91cf6eea）+ LICENSE.txt/README.md/THIRD-PARTY-NOTICES.txt/SHA256SUMS.txt；未签名。
-- 门禁：build -warnaserror 0；test 267/267；format verify 0；漏洞查询两工程均无易受攻击包。
-
-## 关键注意事项（若需返工）
-
-- 冒烟调用：exe `--smoke <out> --scan-root <fixture>\sessions --log-dir <dir>`；fixture 须把 dsh-t18-fixture 内容放入 `sessions` 子目录；冒烟含删除测试，每次须重建 fixture；文件在进程退出时才写。
-- 同步 `&` 启动可靠；Start-Process 分离实例会被沙箱作业对象级联 kill。TC-18 轮询用 tasklist+netstat（原生），勿用 Get-NetTCPConnection（CIM 挂起）。
-- publish.ps1 注入 -p:Version 会改写 packages.lock.json 为 [0.1.0,)，发布后须 `git checkout -- src/*/packages.lock.json`。
-- 已知限制（CHANGELOG/release.md §6）：0.2.1-rc.2 只读（R-02）；未签名；freshly-provisioned 干净 VM 未验证（Windows Sandbox 不可用），以等效证据通过并诚实标注。
-
-## 下一步
-
-- 任务清单无未完成任务。如继续，仅为用户新需求或外部复核反馈；不自动开启新任务。
+## 命令备忘
+- 构建/测试/格式：$env:NUGET_PACKAGES='D:\Code\DeepSeek-Harness-Cleaner\.nuget'; .\.dotnet\dotnet.exe build DeepSeekHarnessCleaner.sln -c Release -warnaserror --nologo；dotnet test … --no-build；dotnet format --verify-no-changes（无 --nologo）。
+- 冒烟：.\scripts\smoke-win10.ps1 -EvidencePath <file>（需 PATH 含 .dotnet）；或 Start-Process <exe> --smoke "<report>" --scan-root "<fixtureCopy>\sessions" --log-dir "<dir>" -Wait（72 PASS/0 FAIL 基线）。
+- 发布：.\scripts\publish.ps1 -Version 0.1.1；发布后（且全部构建之后）git checkout -- src/*/packages.lock.json。
+- fixture：.artifacts/tmp/dsh-t18-fixture（根即 sessions 根；备份 .bak-preM03/.bak-preM02）。

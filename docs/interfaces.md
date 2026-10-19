@@ -21,7 +21,7 @@ interface ICleanupExecutor { Task<CleanupResult> ExecuteAsync(CleanupPlan plan, 
 
 ### 输入类型
 
-- 会话目录：每个会话的规范代际日志文件 `session.jsonl[.zstd]` 或 `session.vN.jsonl[.zstd]`；遍历时只读读取 `SessionHeader` / 事件。
+- 会话目录：每个会话的规范代际日志文件 `session.jsonl[.zstd]` 或 `session.vN.jsonl[.zstd]`；遍历时只读读取 `SessionHeader` / 事件。首行 header 契约为 `{"type":"session","id":…,"version":0–4,"createdAt":<epoch-millis 数值>}`（M-02，详见 design.md §2）。事件行契约为 `{"type":…,"seq":…,"time":<epoch-millis 数值>,"data":…}`；消息正文在 `data`（`user/message`）或 `data.message`（`assistant/system/developer/message`、`tool/result`）（M-03，详见 design.md §2）。
 - 投影缓存：`storages/session_projcache/sessions/<id>.json`、`storages/session_projcache.json`；不是权威会话日志。
 - 桌面清理目录：`Cache`、`Code Cache`、`GPUCache`、`DawnGraphiteCache`、`DawnWebGPUCache`、`logs`。
 

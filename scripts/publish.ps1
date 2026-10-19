@@ -1,10 +1,10 @@
-# publish.ps1 — T-34 发布包构建：dist/v0.1.0/win-x64/（自包含单文件 win-x64 + SHA256SUMS + 许可 + README 摘要）
-# 用法：.\scripts\publish.ps1 [-Version 0.1.0]
+# publish.ps1 — 发布包构建：dist/v<版本>/win-x64/（自包含单文件 win-x64 + SHA256SUMS + 许可 + README 摘要）
+# 用法：.\scripts\publish.ps1 [-Version 0.1.1]
 # 依据 docs/release.md §1/§3：产物 = EXE + README 摘要 + LICENSE/THIRD-PARTY-NOTICES + SHA256SUMS.txt；
 # 不分发 NuGet 缓存、SDK、真实会话数据、配置或测试 fixtures。未签名，明确标注。
 #Requires -Version 5
 [CmdletBinding()]
-param([string]$Version = '0.1.0')
+param([string]$Version = '0.1.1')
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
@@ -44,7 +44,7 @@ DeepSeek Harness Cleaner v$Version（win-x64 自包含单文件，未签名）
 - 运行：双击 DeepSeekHarnessCleaner.UI.exe（Windows 10 x64，无需安装 .NET）。
 - 离线工具：运行期不进行任何主动 TCP 联网（TC-18 已验证）。
 - 安全默认：扫描只读；删除前必须完成原始 ZIP 备份与 SHA-256 校验；Harness 未退出时阻断删除。
-- 已知限制：仅确证 DeepSeek Harness 0.2.0.0 V4 语义；0.2.1-rc.2 数据只读识别、禁止清理（详见仓库 docs/release.md）。
+- 已知限制：语义投影仅覆盖已确证的 DeepSeek Harness 0.2.x 事件（header 契约与消息/tool-result 事件，v0.1.1 实测确证）；未知事件仅按“类型/行号 + 不完整”摘要；v0–v3 旧代际仅提供元数据级预览（详见仓库 docs/release.md）。
 - 校验：SHA256SUMS.txt（Get-FileHash 对比）。许可：LICENSE.txt（MIT）。
 "@ | Set-Content (Join-Path $out 'README.md') -Encoding utf8
 

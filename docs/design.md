@@ -26,6 +26,8 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 ## 2. 会话发现与物理格式
 
 - 只进入由用户认可的 `SessionRoot` 下的普通目录，不跟随 NTFS junction / symbolic link / reparse point；禁止层级越界。
+- **Header 契约（M-02，真实 0.2.x 实测格式）**：首行 JSON 对象为 `{"type":"session","id":"session-<uuid>","version":<int>,"createdAt":<epoch-millis 数值>,…}`；`id` 为非空字符串；`version` 为 int（`<0`/缺失/非整数 → `HEADER_VERSION_INVALID`，`>4` → `Unsupported`）；`createdAt` **仅接受 epoch-millis JSON 数值**（字符串/缺失/超范围 → `HEADER_DATE_INVALID`）；其余字段（`cwd`/`isSeeded`/`delegationDepth`/`agentPreset`…）可选、不校验语义。旧假设格式（`type:"header"`/`sessionId`/`formatVersion`/ISO 字符串日期）不再接受，按 `HEADER_MISSING` 安全失败，不放宽门禁。
+- **事件信封契约（M-03，真实 0.2.x 实测格式）**：每行事件为 `{"type":<事件名>,"seq":<int>,"time":<epoch-millis 数值>,…,"data":{…}}`；聚合分块事件（`reasoning-chunks`/`tool-call-chunks`/`text-chunks`）使用 `seq0`/`time0` + `data.dt[]`/`data.texts[]`，为流式碎片，正文由最终消息事件承载。消息正文位置：`user/message` 直接在 `data`（`role`+`content[]`）；`assistant/system/developer/message` 嵌套在 `data.message`（与 `tool/result` 布局相同，`role="tool"`）。`content[]` 为类型化块（`text`/`reasoning`/`tool-call`/`image`/`tool-result`/`tool-addition`…），预览仅提取 `type:"text"` 块的 `text`。事件时间一律为 epoch-millis 数值（真实根 ISO 字符串 0 次出现）；缺失/非法 `time` 投影为无时间戳而非失败。已知事件类型表由真实根实测 47 类（另保留 `attachment_ref`）硬编码；未列出类型仍按 Unknown 处理，不放宽门禁。
 - 会话目录名称不能替代逻辑身份；读取 header `id` 后确认目录与头标识的映射；无有效 header 的日志列入“异常文件”，允许原始备份但不允许自动清理。
 - 文件名白名单：`session.jsonl`、`session.jsonl.zstd`、`session.vN.jsonl`、`session.vN.jsonl.zstd`（N 为正整数）；大写/临时/备份/不匹配项不自动删除。
 - 同一会话保留多个 format generation 是正常的；扫描归组，同一目录不应把多个代际计为多个会话。用于预览的代际为 numerically highest canonical generation；**最高代际无法读取时显示异常，不回退到旧代际假装当前内容**。
@@ -44,8 +46,8 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 
 ## 4. 消息预览
 
-- 标准显示用户/助手/工具角色和文本块；工具参数、隐藏推理内容等默认不展开，避免 UI 混淆与过度显示。
-- 事件类型/角色映射由脱敏 fixture 的断言绑定，不以看到字段 `role` 为充分证明；对于删除无影响的未知事件输出简洁摘要。
+- 标准显示用户/助手/工具角色和文本块（真实数据确证角色：`user`/`assistant`/`system`/`developer`/`tool`，映射见 §2 事件信封契约）；工具参数、隐藏推理内容等默认不展开，避免 UI 混淆与过度显示。
+- 事件类型/角色映射由脱敏 fixture 的断言绑定，不以看到字段 `role` 为充分证明；对于删除无影响的未知事件输出简洁摘要（类型/行号 + “不完整”）。无文本块的完整消息（如仅 `tool-call`/`reasoning` 块的 assistant/message）按“非文本”标记不完整，不猜测正文。
 - 文本控件使用纯文本赋值，禁止 Markdown/HTML 脚本执行或自动加载远程内容；不渲染外部图片 URL。对大型会话可取消/分页。
 
 ## 5. 附件引用策略

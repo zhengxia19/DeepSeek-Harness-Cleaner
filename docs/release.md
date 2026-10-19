@@ -2,8 +2,8 @@
 
 ## 1. 发布版本和产物
 
-- 首次发布候选：`0.1.0`，方案为 `win-x64` 自包含 WinForms EXE；单文件优先，但若 ZstdSharp 与 single-file 组合造成真实问题，保留自包含目录发布并追加 ADR，不能偷偷改路线。
-- 发布目录 `dist/v0.1.0/win-x64/`，包含程序 EXE、README 摘要、LICENSE/THIRD-PARTY-NOTICES（如适用）、`SHA256SUMS.txt`。
+- 当前发布：**`0.1.1`**（真实格式修正维护版，见 §7）；首发 `0.1.0`，方案为 `win-x64` 自包含 WinForms EXE；单文件优先，但若 ZstdSharp 与 single-file 组合造成真实问题，保留自包含目录发布并追加 ADR，不能偷偷改路线。
+- 发布目录 `dist/v<版本>/win-x64/`，包含程序 EXE、README 摘要、LICENSE/THIRD-PARTY-NOTICES（如适用）、`SHA256SUMS.txt`。
 - 不分发 NuGet 缓存、SDK、真实会话数据、配置或测试 fixtures。
 
 ## 2. 放行检查
@@ -25,11 +25,21 @@ $env:TEMP = $env:TMP = "$PWD\.artifacts\tmp"
 dotnet build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
 dotnet test .\DeepSeekHarnessCleaner.sln -c Release --no-build
 dotnet format .\DeepSeekHarnessCleaner.sln --verify-no-changes --no-restore
-.\scripts\publish.ps1
-Get-FileHash .\dist\v0.1.0\win-x64\DeepSeekHarnessCleaner.UI.exe -Algorithm SHA256
+.\scripts\publish.ps1 -Version 0.1.1
+Get-FileHash .\dist\v0.1.1\win-x64\DeepSeekHarnessCleaner.UI.exe -Algorithm SHA256
 ```
 
-发布产物实际文件名为 `DeepSeekHarnessCleaner.UI.exe`（以 `*.csproj` 的 AssemblyName 为准）。本版本**未签名**（无代码签名证书），禁止暗示已签名。注意：`publish.ps1` 以 `-p:Version=0.1.0` 注入版本，会使 `packages.lock.json` 项目引用版本改写为 `[0.1.0, )`，属副作用，发布后应 `git checkout -- src/*/packages.lock.json` 复原，不提交。
+发布产物实际文件名为 `DeepSeekHarnessCleaner.UI.exe`（以 `*.csproj` 的 AssemblyName 为准）。本版本**未签名**（无代码签名证书），禁止暗示已签名。注意：`publish.ps1` 以 `-p:Version=<版本>` 注入版本，会使 `packages.lock.json` 项目引用版本改写为 `[<版本>, )`，属副作用，发布后应 `git checkout -- src/*/packages.lock.json` 复原，不提交。
+
+## 7. 0.1.1 发布记录（真实格式修正，M 系列维护）
+
+- 版本 0.1.1，日期 2026-10-19；产物 `dist/v0.1.1/win-x64/DeepSeekHarnessCleaner.UI.exe`（102.8 MB，SHA-256 `0b5f2e0fa674e7f606e0c35bf92c7a74d4306fe874a04f649b19058439eb9046`，另见 `dist/v0.1.1/win-x64/SHA256SUMS.txt`）。
+- 变更范围：M-02 会话 header 契约对齐真实 0.2.x（`type:"session"`/`id`/`version` 0–4/`createdAt` epoch-millis）；M-03 事件信封与角色/时间映射对齐（消息正文在 `data` 或 `data.message`，仅提取 `text` 块，epoch-millis 时间，47 类实测词表）。修复前真实根 46/46 文件 `HEADER_MISSING` 全部不可清理；修复后全部 Valid。
+- 门禁：build 0 警告（`-warnaserror`）；测试 282/282；`dotnet format --verify-no-changes` 干净；`dotnet list package --vulnerable --include-transitive` 两工程均“没有易受攻击的包”。
+- 冒烟：`scripts/smoke-win10.ps1` 全 9 项 PASS（自包含发布、Smoke 72 PASS/0 FAIL 含删除测试仅合成根、TC-18 运行期 0 条 TCP 连接）；发布包 EXE 本身另跑一次 72 PASS/0 FAIL。证据 `artifacts/evidence/M-04-win10.txt`、`M-04.txt`。
+- 真实根只读核验（COMPAT-01，前后快照证明零写入）：51 会话全部 `Valid`（Corrupt=0、Ambiguous=0、异常文件=0），51/51 带 `createdAt`（日期可筛选），快照 changed=0/deleted=0/added=0。任务书预期“45 会话”为诊断时点计数，真实根为活动根（51 为核验时点），如实记录。
+- 验证环境同 §6：Windows 10 Pro 22H2 (19045.6466) x64 VMware 隔离 VM；**freshly-provisioned 干净 VM 仍未验证**，不宣称兼容通过。
+- 逐项证据：`artifacts/evidence/M-01.txt`～`M-04.txt`、`M-04-win10.txt`；诊断 `DIAG-event-format.txt`、`DIAG-scan-coverage.txt`。
 
 ## 4. 验证及回滚
 

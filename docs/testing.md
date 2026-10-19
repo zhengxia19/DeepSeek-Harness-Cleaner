@@ -31,6 +31,22 @@
 | TC-19 | 配置 | 默认/损坏/未知版本处理正确；记忆关闭时不写根路径 |
 | TC-20 | 安全失败 | 未知格式、权限、空数据、坏压缩、异常目录均无误删/卡死 |
 
+### 2.1 Header 契约负向用例（M-02，`tests/HeaderTests.cs`）
+
+- 旧假设格式 `type:"header"`（含 `sessionId`/`formatVersion`/ISO 字符串日期）→ `HEADER_MISSING`（Corrupt，禁自动清理）。
+- `createdAt` 为 ISO 字符串/缺失/非整数/超 `DateTimeOffset` 范围 → `HEADER_DATE_INVALID`；仅 epoch-millis JSON 数值可解析。
+- `version=5`（>4）→ `Unsupported` + `HEADER_VERSION_UNSUPPORTED`；`version<0`/缺失/非整数 → `HEADER_VERSION_INVALID`。
+- `id` 缺失/空 → `HEADER_ID_MISSING`；`id` ≠ 会话目录名 → `IdentityMatches=false`，禁自动清理（既有 `IdentityMismatch_Flagged_NotDeletable`）。
+
+### 2.2 事件信封契约用例（M-03，`tests/TranscriptV4Tests.cs`、`tests/EventReaderTests.cs`）
+
+- 消息事件按真实信封投影：`user/message` 正文在 `data`（`role`+`content[]` 文本块）；`assistant/system/developer/message` 正文嵌套在 `data.message`；`tool/result` 正文在 `data.message`（`role="tool"`）。
+- 多文本块以换行拼接，非 `text` 块（`image`/`tool-call`/`reasoning` 等）不进入正文；仅含非文本块的 assistant 消息按不完整处理，不猜测正文。
+- 缺 `content`/非文本/未确证角色 → 不完整标记；`tool/result` 缺 `data.message` → 不完整标记。
+- 聚合分块事件（`reasoning-chunks`/`tool-call-chunks`/`text-chunks`）跳过且不标记不完整（正文由最终消息事件承载）。
+- `time` 为 epoch-millis 数值 → 解析为事件时间；缺失/非法数值 → 时间为空但仍投影，不失败。
+- 未列出的已知外类型（如 `step/start`）→ 不完整摘要含类型名与行号；`KnownEventTypes` 由真实根实测 47 类硬编码（`EventReaderTests` 词表断言）。
+
 ## 3. 非功能测试
 
 - PERF-01：Windows 10 x64 + SSD + ≥8GB RAM，在 1000 个小会话 ≤200MB 的 fixtures 上计时，完整元数据初扫 ≤15 秒；筛选响应 ≤200ms，工作集 <512MiB；记录机器 CPU/SSD/Build，失败必须修复或用户明确豁免。

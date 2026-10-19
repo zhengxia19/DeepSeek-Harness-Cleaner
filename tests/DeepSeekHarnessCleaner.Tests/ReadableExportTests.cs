@@ -32,7 +32,7 @@ public sealed class ReadableExportTests
         var transcript = string.Join(
             '\n',
             Header(4),
-            "{\"type\":\"message\",\"role\":\"user\",\"text\":\"你好\\n世界\\n```\\ncode\\n````\\n~~~\",\"ts\":\"2026-01-05T09:01:00Z\"}",
+            "{\"type\":\"user/message\",\"seq\":1,\"data\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"你好\\n世界\\n```\\ncode\\n````\\n~~~\"}]}}",
             FixtureFactory.MessageLine("assistant", "回复 inline ``` end", "2026-01-05T09:02:00Z")) + "\n";
 
         var result = new ReadableExport().Export(new ReadableExportInput(Session(4), transcript));
@@ -77,7 +77,7 @@ public sealed class ReadableExportTests
         sb.Append(Header(4)).Append('\n');
         for (var i = 0; i < TranscriptProjector.MaxPreviewItems + 1; i++)
         {
-            sb.Append("{\"type\":\"message\",\"role\":\"user\",\"text\":\"m").Append(i).Append("\"}\n");
+            sb.Append("{\"type\":\"user/message\",\"seq\":1,\"data\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"m").Append(i).Append("\"}]}}\n");
         }
 
         var result = new ReadableExport().Export(new ReadableExportInput(Session(4), sb.ToString()));
@@ -110,7 +110,7 @@ public sealed class ReadableExportTests
     [Fact]
     public void Export_JsonPreservesUtf8Chinese_AndRoundTripsText()
     {
-        var transcript = string.Join('\n', Header(4), "{\"type\":\"message\",\"role\":\"user\",\"text\":\"中文安全 <tag> \\\"引号\\\"\"}") + "\n";
+        var transcript = string.Join('\n', Header(4), "{\"type\":\"user/message\",\"seq\":1,\"data\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"中文安全 <tag> \\\"引号\\\"\"}]}}") + "\n";
 
         var result = new ReadableExport().Export(new ReadableExportInput(Session(4), transcript));
 

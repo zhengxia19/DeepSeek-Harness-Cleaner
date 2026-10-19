@@ -1,0 +1,51 @@
+M-01 执行证据 · 2026-10-19（本轮唯一任务：真实事件行格式核验，只读，无代码改动）
+==================================================================================
+
+任务来源：docs/maintenance-tasks.md §M-01。
+
+0) 环境核对
+- 仓库根：D:\Code\DeepSeek-Harness-Cleaner；分支 post-release-maintenance-20261019；HEAD 9b5b3b3。
+- `git status --short`（开始时）：M AGENT_CHECKPOINT.md、M src/*/packages.lock.json ×3、
+  ?? DIAG-scan-coverage.txt、?? artifacts/scan-check/、?? docs/maintenance-tasks.md。
+  均为 Round 5/6 已知遗留，未覆盖任何未知改动。
+
+1) 真实根只读统计（PowerShell，只枚举不写入）
+- 命令：Get-ChildItem -Recurse %USERPROFILE%\.dsh\sessions（白名单正则同 scan-check）
+- 结果：FILES=48 TOTAL_MB=17.6；GEN v0=2（0.5MB）v4=46（17.1MB）；DIRS=47；全部 .zstd。
+  较 DIAG-scan-coverage（45/46）增加 2 目录/2 文件：本机 DSH 使用中正常增长，如实记录。
+
+2) 临时 harness 构建（artifacts/event-check/，新增未跟踪目录）
+- 命令：$env:NUGET_PACKAGES='D:\Code\DeepSeek-Harness-Cleaner\.nuget';
+        .\.dotnet\dotnet.exe build artifacts\event-check\event-check.csproj -c Release
+- 第一次 EXIT=1（CS8820 静态 lambda 捕获，harness 自身编译错误，修复后重跑）；
+  第二次 EXIT=0（0 警告 0 错误）；加入根级聚合后再次构建 EXIT=0。
+
+3) 只读运行
+- 命令：.\artifacts\event-check\bin\Release\net10.0\event-check.exe %USERPROFILE%\.dsh\sessions
+- EXIT=0；输出 442 行存 artifacts/event-check/raw-output.txt（含未掩码目录名，临时工件）。
+- 采样：2 个 v0 + 最小/中位/最大 3 个 v4；解码前 40 行骨架 + 全文件词汇计数 +
+  生产 SessionEventReader/TranscriptProjector 对照计数 + 48 文件根级聚合。
+- 文件全部以 FileAccess.Read 打开；真实 .dsh 无任何写入/移动/删除。
+
+4) 逐项验收（docs/maintenance-tasks.md §M-01）
+- [x] 证据落盘：artifacts/evidence/DIAG-event-format.txt（假设 vs 真实逐项对照 D1–D9 + 结论）。
+- [x] 只记录结构性信息：type 名、键名、值种类、长度、计数；证据文件对 session id/项目目录掩码；
+      未写任何会话正文/参数值/凭据。
+- [x] 覆盖 v4 与 v0 样本各若干文件前若干行：v0×2、v4×3，各解码前 40 行结构骨架。
+- [x] 不修改 src/、tests/、docs/：本轮仅新增 artifacts/event-check/（未跟踪）与两个证据文件。
+- [x] 结论明确：预览事件映射**需要修复**（已知词汇命中率 0/21238；预览 complete=0，全部"不完整"），
+      M-03 触发；差异点 D1–D8 全部列出（见 DIAG-event-format.txt 第四节）。
+
+5) 关键实测数字（详表见 DIAG-event-format.txt）
+- 48/48 首行 type:"session"；事件信封 {type,seq,time,data}（聚合行 seq0/time0）；
+  时间全部 epoch-ms 数值（ISO 字符串 0 次）；正文在 data.content[] 块数组；
+  role 值域 {user,assistant,system,tool,developer}；attachment_ref 0 次；根级 distinct type=47。
+- SessionEventReader：valid=0、unknown=全部行、malformed=0（物理解码层无恙）。
+- TranscriptProjector：complete=0、incomplete=全部行、最大文件 truncated=True（2000 上限）。
+
+6) 未运行/未验证（不声称通过）
+- Windows 10 干净 VM：未验证。
+- v1–v3 真实样本：本机不存在，未验证。
+- build/test/format：本轮无代码改动，未运行（M-02/M-04 覆盖）。
+
+本轮结束状态：M-01 完成；下一任务 M-02（header 解析修正）。
