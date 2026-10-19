@@ -8,6 +8,7 @@
 - **归档会话只读识别与展示（N-01）**：扫描时只读读取 `storages/workspace.json`（与会话根同级）的 `global.archivedSessionIds`，会话列表新增“归档”列（是/—），状态栏显示“归档 N”。文件缺失/超限(32MiB)/不可读/JSON 非法/结构未知时扫描不失败，全部按未归档展示并提示“归档信息不可用”。归档 id 按 header `id` 精确匹配；该文件永不写入或删除（见 docs/design.md §2、docs/interfaces.md §3/§5、docs/testing.md §2.3）。
 - **窗口位置/大小持久化（N-03）**：正常模式退出/关窗时保存窗口位置、大小与最大化状态到 `settings.json`（新增可选字段 `windowX/windowY/windowMaximized`，schemaVersion 保持 1，旧文件缺字段自动回退）；重启按保存值恢复，位置全出屏（如外接显示器已移除）时仅位置回退居中、尺寸仍恢复，最大化状态独立生效。冒烟与 `--scan-root` 覆盖模式不读写用户配置（见 docs/design.md §9、docs/interfaces.md §4）。
 - **备份入口移至主窗（N-05）**：主窗操作区新增“创建备份(&B)”按钮（有勾选会话时启用）：对勾选会话直接创建 ZIP 备份并逐文件校验，状态栏显示 ZIP 位置。删除确认对话框内的备份按钮移除，对话框仅展示携带的备份事实——manifest 覆盖当前删除计划全部目标时显示“已备份并校验”并随删除提交，否则按“未备份（可选，建议）”处理；结果报告引用携带 ZIP 的完整位置，未备份删除如实标注“本次无 ZIP 备份”（见 docs/design.md §7/§8、docs/interfaces.md §5、docs/testing.md TC-11）。
+- **附件列表只读展示（N-06）**：主窗菜单新增“文件→附件(&A)”（扫描后可用）：打开附件列表对话框，后台构建、可取消。数据流为数据根 `attachments/` 经 PathGuard 白名单枚举（附件 ID = 文件名）+ 当前列表全部会话按预览同一方式解码转录，引用判定完全复用 AttachmentIndex（判定逻辑不变）。列 = 附件 ID、大小（字节）、引用状态（被引用/无引用（确认）/不可判定）、引用会话数；选中行展开引用会话 ID；页脚标注悬空引用清单，存在未解析会话时明示“全局孤儿结论不可得（GlobalOrphanConclusionAvailable=false）”。附件文件纯只读，本版本无附件删除 UI（见 docs/interfaces.md §5、docs/testing.md TC-14）。
 
 ### Changed
 - **删除门禁放宽：备份改为可选（N-04，决策 D1/D4）**：会话与附件删除不再强制先创建 ZIP 备份——删除确认对话框“确认删除”初始即可用，备份状态显示“未备份（可选，建议）/已备份并校验”。保留全部其余安全机制：明确确认必需、Harness 进程运行阻断、逐文件路径白名单/重解析点/根指纹/SHA-256 指纹复验；提供备份时仍逐项校验 ZIP（校验失败 `GATE_BACKUP_INVALID` 中止零删除）。即“可以不备份，但不是盲删”（新增 ADR-0003，修订 ADR-0002 第 2 条；见 docs/requirements.md REQ-011/REQ-014、docs/testing.md TC-11/TC-14）。

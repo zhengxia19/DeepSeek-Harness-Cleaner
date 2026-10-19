@@ -64,6 +64,7 @@ public sealed partial class MainForm
             RunBindingChecks(_scanRootOverride);
             RunPreviewChecks();
             RunActionsChecks(_scanRootOverride);
+            RunAttachmentChecks(_scanRootOverride);
         }
 
         foreach (var (label, factor) in new[] { ("125%", 1.25f), ("150%", 1.5f) })
@@ -477,6 +478,68 @@ public sealed partial class MainForm
         {
             row.Cells["check"].Value = false;
         }
+    }
+
+    /// <summary>
+    /// N-06 附件列表断言：在 fixture 副本上布置三种附件事实（被引用 / 无引用 / 悬空引用）
+    /// 与一个含 attachment_ref 的纯文本会话，断言列表行数、状态、大小、引用展开与 AttachmentIndex 一致；
+    /// fixture 含 Corrupt 会话 → 无引用附件按“不可判定”展示且页脚标注 GlobalOrphanConclusionAvailable=false。
+    /// </summary>
+    private void RunAttachmentChecks(string fixtureRoot)
+    {
+        var dataHome = Path.GetDirectoryName(fixtureRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            ?? fixtureRoot;
+        var objRoot = Path.Combine(dataHome, "attachments", "v1", "objects");
+        Directory.CreateDirectory(Path.Combine(objRoot, "ab"));
+        Directory.CreateDirectory(Path.Combine(objRoot, "cd"));
+        var referencedPath = Path.Combine(objRoot, "ab", "att-referenced");
+        var orphanPath = Path.Combine(objRoot, "cd", "att-orphan");
+        File.WriteAllBytes(referencedPath, new byte[1234]);
+        File.WriteAllBytes(orphanPath, new byte[77]);
+        var attSessionDir = Path.Combine(fixtureRoot, "att-proj", "att-src");
+        Directory.CreateDirectory(attSessionDir);
+        File.WriteAllText(Path.Combine(attSessionDir, "session.jsonl"),
+            "{\"type\":\"session\",\"id\":\"att-src\",\"version\":4,\"createdAt\":1760000000000}\n" +
+            "{\"type\":\"attachment_ref\",\"seq\":1,\"time\":1760000001000,\"attachmentId\":\"att-referenced\"}\n" +
+            "{\"type\":\"attachment_ref\",\"seq\":2,\"time\":1760000002000,\"attachmentId\":\"att-missing\"}\n");
+
+        // 重扫使 att-src 进入列表：附件索引以当前列表全部会话为输入。
+        _smokeScanFinished = false;
+        _scanButton.PerformClick();
+        PumpUntil(() => _smokeScanFinished, 20_000);
+
+        _attachmentsMenuItem!.PerformClick();
+        System.Windows.Forms.Application.DoEvents();
+        var attDialog = _lastAttachmentDialog!;
+        Check("附件列表对话框经菜单打开", attDialog.Visible);
+        PumpUntil(() => attDialog.BuildFinished, 60_000);
+        Check("附件索引后台构建完成（UI 消息泵持续）", attDialog.BuildFinished && attDialog.Outcome is not null);
+
+        var snapshot = attDialog.GridSnapshot();
+        _smokeLines.Add($"INFO 附件列表行数={snapshot.Count}；页脚={attDialog.FooterText}");
+        Check("附件列表行数与磁盘附件一致（2 个：被引用/无引用）",
+            snapshot.Count == 2
+            && snapshot[0].Id == "att-orphan" && snapshot[1].Id == "att-referenced");
+        var referencedRow = snapshot.FirstOrDefault(static r => r.Id == "att-referenced");
+        var orphanRow = snapshot.FirstOrDefault(static r => r.Id == "att-orphan");
+        Check("被引用附件：状态=被引用、引用会话数=1（att-src）",
+            referencedRow.Status == "被引用" && referencedRow.Refs == 1);
+        Check("无引用附件：fixture 含 Corrupt 会话 → 状态=不可判定（与 AttachmentIndex 一致）",
+            orphanRow.Status == "不可判定" && orphanRow.Refs == 0);
+        Check("附件大小与磁盘事实一致（1234 / 77 字节）",
+            referencedRow.Size == 1234 && orphanRow.Size == 77);
+        Check("页脚标注悬空引用 att-missing 与 GlobalOrphanConclusionAvailable=false",
+            attDialog.FooterText.Contains("att-missing", StringComparison.Ordinal)
+            && attDialog.FooterText.Contains("GlobalOrphanConclusionAvailable=false", StringComparison.Ordinal));
+        Check("选中被引用行展开引用会话 ID（att-src）",
+            attDialog.SelectRowByAttachmentId("att-referenced")
+            && attDialog.DetailText.Contains("att-src", StringComparison.Ordinal));
+        Check("附件文件只读：列表构建不写不删",
+            File.Exists(referencedPath) && new FileInfo(referencedPath).Length == 1234
+            && File.Exists(orphanPath) && new FileInfo(orphanPath).Length == 77);
+
+        attDialog.Close();
+        PumpUntil(() => !attDialog.Visible, 5_000);
     }
 
     /// <summary>T-31：执行结果报告断言（逐项一致、汇总一致、备份位置可见、脱敏日志无正文/路径泄露）。</summary>

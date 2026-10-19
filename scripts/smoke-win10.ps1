@@ -91,6 +91,9 @@ if (Test-Path $realRoot) {
         return "$($f.Length)|$($f.LastWriteTimeUtc.Ticks)"
     }
     $wsBefore = Get-WsStamp $wsJson
+    # N-06：真实 attachments 根只读快照（附件文件不得被写入/删除）。
+    $attRootDir = Join-Path $env:USERPROFILE '.dsh/attachments'
+    $attBefore = if (Test-Path $attRootDir) { Get-RootSnapshot $attRootDir } else { $null }
     $archExpected = 0
     if (Test-Path $wsJson) {
         $ws = Get-Content $wsJson -Raw | ConvertFrom-Json
@@ -141,12 +144,20 @@ foreach ($s in ($res.Sessions | Where-Object { $_.Status -eq 'Valid' -and -not $
         if ($pr.IsProjectionComplete) { $semOk++ } else { $semPartial++ }
     } catch { $semFail++ }
 }
+# N-06：真实根附件只读计数（经产品 AttachmentListPresenter，PathGuard 白名单 + AttachmentIndex 判定）。
+$dataHome = Split-Path $Root -Parent
+$presenter = New-Object DeepSeekHarnessCleaner.UI.AttachmentListPresenter
+$att = $presenter.BuildAsync($dataHome, $res.Sessions, [System.Threading.CancellationToken]::None).GetAwaiter().GetResult()
+$attOrphan = if ($att.GlobalOrphanConclusionAvailable) { 'TRUE' } else { 'FALSE' }
+$attRoot = if ($null -ne $att.AttachmentsRootError) { [string]$att.AttachmentsRootError } else { 'OK' }
 @{
     sessions = $res.Sessions.Count; totalBytes = $res.TotalBytes; anomalies = $res.AnomalousFiles.Count
     status = $status; generations = $gens; encodings = $enc; ambiguous = $amb
     corrupt = $corrupt; dateSessions = $dateSessions
     archived = $archived; archiveStatus = $archiveStatus
     semanticSampled = $sampled; semanticComplete = $semOk; semanticPartial = $semPartial; semanticFail = $semFail
+    attachments = $att.Rows.Count; attDangling = $att.DanglingReferences.Count
+    attOrphanConclusion = $attOrphan; attUnresolved = $att.UnresolvedSessionIds.Count; attRoot = $attRoot
 } | ConvertTo-Json -Compress -Depth 5
 '@ | Set-Content -Path $harness -Encoding utf8
     $json = & pwsh -NoProfile -File $harness -Root $realRoot -Bin $bin | Select-Object -Last 1
@@ -155,6 +166,8 @@ foreach ($s in ($res.Sessions | Where-Object { $_.Status -eq 'Valid' -and -not $
     $after = Get-RootSnapshot $realRoot
     $diff = Compare-Snapshot $before $after
     $wsAfter = Get-WsStamp $wsJson
+    $attAfter = if (Test-Path $attRootDir) { Get-RootSnapshot $attRootDir } else { $null }
+    $attDiff = if ($null -ne $attBefore) { Compare-Snapshot $attBefore $attAfter } else { $null }
 }
 
 # ---- E. 判定与证据 ----
@@ -162,7 +175,7 @@ $checks = [ordered]@{
     'WIN10-01 发布退出码 0'                 = ($pubExit -eq 0)
     'WIN10-01 单文件 EXE 存在'              = $exeOk
     'WIN10-01 自包含冒烟退出码 0'           = ($smokeExit -eq 0)
-    'WIN10-01 冒烟 82 PASS / 0 FAIL'        = ($smokePass -eq 82 -and $smokeFail -eq 0)
+    'WIN10-01 冒烟 91 PASS / 0 FAIL'        = ($smokePass -eq 91 -and $smokeFail -eq 0)
     'TC-18 运行期零新增 TCP 连接'           = ($netHits -eq 0)
     'COMPAT-01 真实根存在且完成只读扫描'    = ($null -ne $compat -and $compat.sessions -gt 0)
     'COMPAT-01 真实根会话无 Corrupt'        = ($null -ne $compat -and $compat.corrupt -eq 0)
@@ -171,6 +184,7 @@ $checks = [ordered]@{
     'COMPAT-01 归档命中与 workspace.json 交叉核对一致（命中>0）' = ($null -ne $compat -and $compat.archived -eq $archExpected -and $archExpected -gt 0)
     'COMPAT-01 workspace.json 零写入（只读红线）' = ($null -ne $compat -and $wsBefore -eq $wsAfter)
     'COMPAT-01 真实根既有文件零变更零删除（新增允许）' = ($null -ne $compat -and $diff.Changed -eq 0 -and $diff.Deleted -eq 0)
+    'COMPAT-01 附件根零变更零删除（只读红线，N-06）' = ($null -ne $compat -and ($null -eq $attDiff -or ($attDiff.Changed -eq 0 -and $attDiff.Deleted -eq 0)))
 }
 $allPass = -not ($checks.Values -contains $false)
 $lines = @(
@@ -188,6 +202,12 @@ if ($null -ne $compat) {
     $lines += "COMPAT generations=$($compat.generations | ConvertTo-Json -Compress) encodings=$($compat.encodings | ConvertTo-Json -Compress)"
     $lines += "COMPAT semantic sampled=$($compat.semanticSampled) complete=$($compat.semanticComplete) partial=$($compat.semanticPartial) fail=$($compat.semanticFail)"
     $lines += "COMPAT snapshot files=$($before.Count) changed=$($diff.Changed) deleted=$($diff.Deleted) added=$($diff.Added)（added 为实时 Harness 会话写入，非本扫描）"
+    $lines += "COMPAT attachments count=$($compat.attachments) dangling=$($compat.attDangling) orphanConclusion=$($compat.attOrphanConclusion) unresolved=$($compat.attUnresolved) root=$($compat.attRoot)"
+    if ($null -ne $attBefore) {
+        $lines += "COMPAT attachments snapshot files=$($attBefore.Count) changed=$($attDiff.Changed) deleted=$($attDiff.Deleted) added=$($attDiff.Added)"
+    } else {
+        $lines += 'COMPAT attachments snapshot=ABSENT'
+    }
 }
 foreach ($k in $checks.Keys) {
     $lines += ('{0} : {1}' -f $(if ($checks[$k]) { 'PASS' } else { 'FAIL' }), $k)

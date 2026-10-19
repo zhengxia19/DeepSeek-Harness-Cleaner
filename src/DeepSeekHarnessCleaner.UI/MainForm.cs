@@ -43,6 +43,8 @@ public sealed partial class MainForm : Form
     private BackupDialog? _lastBackupDialog;
     private BackupFacts? _lastBackup;
     private ResultsDialog? _lastResultsDialog;
+    private ToolStripMenuItem? _attachmentsMenuItem;
+    private AttachmentListDialog? _lastAttachmentDialog;
     private readonly string? _scanRootOverride;
     private readonly string? _logDirOverride;
     private readonly bool _persistWindowSettings;
@@ -157,6 +159,9 @@ public sealed partial class MainForm : Form
     {
         var fileMenu = new ToolStripMenuItem("文件(&F)");
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("扫描(&S)", null, OnScanClick));
+        // N-06：附件列表（只读展示，无删除入口）。
+        _attachmentsMenuItem = new ToolStripMenuItem("附件(&A)", null, OnAttachmentsClick);
+        fileMenu.DropDownItems.Add(_attachmentsMenuItem);
         fileMenu.DropDownItems.Add(new ToolStripSeparator());
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("退出(&X)", null, OnExitClick));
 
@@ -673,6 +678,26 @@ public sealed partial class MainForm : Form
         _statusLabel.Text = backupFacts is null
             ? "删除确认对话框已打开：备份可选（建议），确认删除后执行。"
             : "删除确认对话框已打开：已携带主窗备份（已校验），确认删除后执行。";
+    }
+
+    /// <summary>N-06：附件列表入口——以当前列表全部会话 + 数据根 attachments 目录后台构建只读索引。</summary>
+    private void OnAttachmentsClick(object? sender, EventArgs e)
+    {
+        if (_effectiveScanRoot is null)
+        {
+            _statusLabel.Text = "请先扫描，再查看附件。";
+            return;
+        }
+
+        var sessions = _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .Select(static row => (SessionSummary)row.Tag!)
+            .ToList();
+        var dataHome = Path.GetDirectoryName(_effectiveScanRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            ?? _effectiveScanRoot;
+        var dialog = new AttachmentListDialog(dataHome, sessions);
+        _lastAttachmentDialog = dialog;
+        dialog.Show(this);
+        _statusLabel.Text = "附件列表已打开（只读，后台构建中）。";
     }
 
     /// <summary>N-05：主窗备份按钮——对勾选会话构建清单并复用 BackupDialog 后台创建+校验；成功后持有备份事实。</summary>
