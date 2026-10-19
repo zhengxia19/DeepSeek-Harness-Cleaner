@@ -61,8 +61,9 @@ public sealed class CleanupExecutor
 
     /// <summary>
     /// 执行计划。<paramref name="manifest"/> 与 <paramref name="backup"/> 来自 T-21/T-22；
-    /// 会话计划（RequiresBackup=true）必须两者齐备且 ZIP 重校验通过（损坏/缺失/签名不符即中止）；
-    /// 缓存计划（RequiresBackup=false，T-27）不要求会话 ZIP，但若调用方仍提供备份则同样校验。
+    /// N-04（D1/D4）后会话/附件计划 RequiresBackup=false：备份可选，但提供备份（两者齐备）时仍重校验 ZIP
+    /// （损坏/缺失/签名不符即 GATE_BACKUP_INVALID 中止）；RequiresBackup=true 的计划（如调用方显式要求）仍必须齐备。
+    /// 确认、进程门禁、根指纹与逐项路径/指纹复验不受影响。
     /// </summary>
     public CleanupExecutionResult Execute(
         CleanupPlan plan,

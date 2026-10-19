@@ -14,6 +14,22 @@ public sealed class EventReaderTests
     private static readonly SessionEventReader Reader = new();
 
     [Fact]
+    public void KnownEventTypes_MatchesRealRootVocabulary_M03()
+    {
+        // M-03：真实根实测 47 类事件词表 + attachment_ref（按 D7 保留）= 48 项；
+        // 词表证据见 artifacts/evidence/M-01.txt（仅类型名与频次）。
+        Assert.Equal(48, SessionEventReader.KnownEventTypes.Count);
+        foreach (var type in new[]
+        {
+            "session", "user/message", "assistant/message", "system/message", "developer/message",
+            "tool/result", "reasoning-chunks", "tool-call-chunks", "text-chunks", "attachment_ref",
+        })
+        {
+            Assert.Contains(type, SessionEventReader.KnownEventTypes);
+        }
+    }
+
+    [Fact]
     public void PlainSession_LineCountAndOrderMatch()
     {
         using var fx = FixtureRoot.Create();
@@ -23,7 +39,7 @@ public sealed class EventReaderTests
 
         Assert.Equal(ParseStatus.Valid, result.Status);
         Assert.Equal([1, 2], result.Lines.Select(l => l.LineNumber));
-        Assert.Equal(["header", "message"], result.Lines.Select(l => l.EventType));
+        Assert.Equal(["session", "user/message"], result.Lines.Select(l => l.EventType));
         Assert.All(result.Lines, l => Assert.Equal(EventLineStatus.Valid, l.Status));
     }
 
@@ -39,7 +55,7 @@ public sealed class EventReaderTests
         // TC-04：多帧按序解码后行流与明文一致。
         Assert.Equal(ParseStatus.Valid, result.Status);
         Assert.Equal([1, 2], result.Lines.Select(l => l.LineNumber));
-        Assert.Equal(["header", "message"], result.Lines.Select(l => l.EventType));
+        Assert.Equal(["session", "user/message"], result.Lines.Select(l => l.EventType));
     }
 
     [Fact]

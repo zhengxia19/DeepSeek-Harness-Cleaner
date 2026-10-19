@@ -1,0 +1,66 @@
+N-06 附件列表（只读）实施证据
+=====================================
+分支: docs/post-release-maintenance-20261019（基线 HEAD 1205f28 = N-05）
+日期: 2026-10-19（本地）
+
+一、改动文件
+- 新增 src/DeepSeekHarnessCleaner.UI/AttachmentListPresenter.cs
+  （dataHome\attachments 经 PathGuard 白名单枚举普通文件，附件 ID=文件名、同名保留首个、reparse/白名单外跳过；
+   当前列表全部会话按预览同一代际选择与读取上限解码转录（复用 PreviewPresenter.ReadTranscript，改为 internal）；
+   AttachmentIndex.Build 建立引用证据；后台 Task + CancellationToken，纯只读）
+- 新增 src/DeepSeekHarnessCleaner.UI/AttachmentListDialog.cs
+  （只读 DataGridView：附件 ID / 大小（字节）/ 引用状态（被引用、无引用（确认）、不可判定）/ 引用会话数；
+   选中行下方展开引用会话 ID；页脚标注悬空引用清单与不可判定说明（GlobalOrphanConclusionAvailable=false 明示）；
+   打开时后台构建、可取消；无附件删除入口）
+- src/DeepSeekHarnessCleaner.UI/MainForm.cs：菜单“文件”新增“附件(&A)”项（扫描后可用，未扫描状态栏提示）；
+  字段 _attachmentsMenuItem/_lastAttachmentDialog
+- src/DeepSeekHarnessCleaner.UI/PreviewPresenter.cs：ReadTranscript private→internal（供附件演示器复用同一读取方式；逻辑未变）
+- src/DeepSeekHarnessCleaner.UI/MainForm.Smoke.cs：新增 RunAttachmentChecks（9 项断言），冒烟总数 82→91
+- scripts/smoke-win10.ps1：冒烟期望 82→91；COMPAT 内联 harness 经产品 AttachmentListPresenter 只读统计真实根附件；
+  新增 attachments 根前后快照与判定“COMPAT-01 附件根零变更零删除（只读红线，N-06）”（12→13 项判定）
+- 文档：docs/interfaces.md §5 新增“附件列表（N-06，只读）”契约；docs/testing.md TC-14 补充只读列表验收；CHANGELOG.md [Unreleased] Added 新增 N-06 条目
+- 边界（不改）确认：AttachmentIndex 判定逻辑零改动；附件删除无 UI；缓存/桌面规则、BackupService 内部未触碰；附件文件只读
+
+二、门禁命令与退出码
+1) build: $env:NUGET_PACKAGES='D:\Code\DeepSeek-Harness-Cleaner\.nuget'; .\.dotnet\dotnet.exe build DeepSeekHarnessCleaner.sln -c Release -warnaserror --nologo
+   → 已成功生成，0 个警告 0 个错误，EXIT=0
+2) test: .\.dotnet\dotnet.exe test DeepSeekHarnessCleaner.sln -c Release --no-build --nologo
+   → 失败: 0，通过: 310，总计: 310，TEST_EXIT=0（基线 310 保持；三种引用状态+不可判定由既有 AttachmentIndexTests 覆盖）
+3) format: .\.dotnet\dotnet.exe format --verify-no-changes
+   → FMT_EXIT=0（在全部 C# 改动后重跑）
+4) 直接冒烟（全新 fixture 副本 .artifacts/tmp/n06-fixture2\sessions + 同级 storages\workspace.json utf8NoBOM）:
+   DeepSeekHarnessCleaner.UI.exe --smoke .artifacts/tmp/n06-report2/smoke.txt --scan-root <副本>\sessions --log-dir <副本报告>\logs
+   → EXIT=0，PASS=91 FAIL=0，SMOKE_RESULT=PASS
+5) scripts/smoke-win10.ps1 -EvidencePath artifacts/evidence/N-06-win10-smoke.txt（PATH 前缀 .dotnet）
+   → 13/13 PASS，WIN10_RESULT=PASS，SCRIPT_EXIT=0（详见 N-06-win10-smoke.txt）
+
+三、冒烟附件断言逐项（fixture 副本内合成附件：attachments\v1\objects\ab\att-referenced 1234B、cd\att-orphan 77B；
+    新增纯文本会话 att-proj\att-src 引用 att-referenced 与不存在的 att-missing；fixture 含 1 个 Corrupt 会话）
+PASS 附件列表对话框经菜单打开
+PASS 附件索引后台构建完成（UI 消息泵持续）
+PASS 附件列表行数与磁盘附件一致（2 个：被引用/无引用）
+PASS 被引用附件：状态=被引用、引用会话数=1（att-src）
+PASS 无引用附件：fixture 含 Corrupt 会话 → 状态=不可判定（与 AttachmentIndex 一致）
+PASS 附件大小与磁盘事实一致（1234 / 77 字节）
+PASS 页脚标注悬空引用 att-missing 与 GlobalOrphanConclusionAvailable=false
+PASS 选中被引用行展开引用会话 ID（att-src）
+PASS 附件文件只读：列表构建不写不删
+INFO 页脚实录：悬空引用 1 个（att-missing）。 不可判定：存在未解析会话（1 个），全局孤儿结论不可得（GlobalOrphanConclusionAvailable=false），未引用附件按“不可判定”展示。
+（三种引用状态中“无引用（确认）”在 fixture 冒烟里因 Corrupt 会话按“不可判定”展示——与 AttachmentIndex 判定一致；
+ “无引用（确认）”状态由 AttachmentIndexTests 单测覆盖。）
+
+四、真实根只读打开一次（COMPAT harness，经产品 AttachmentListPresenter，非 GUI 对话框）
+COMPAT attachments count=2 dangling=0 orphanConclusion=TRUE unresolved=0 root=OK
+COMPAT attachments snapshot files=2 changed=0 deleted=0 added=0
+→ 真实 %USERPROFILE%\.dsh\attachments 只读：2 个附件、0 悬空引用、全局孤儿结论可得（54 会话全部解析）、附件根零变更零删除。
+（真实根 GUI 对话框人工打开未执行；以 harness 走同一产品代码路径的只读构建代替，判定与展示逻辑同一实现。）
+
+五、开发期迭代（非门禁失败，如实记录）
+- 首轮直接冒烟 90 PASS / 1 FAIL：“选中被引用行展开引用会话 ID”——仅设 row.Selected=true 未同步 CurrentRow；
+  修复为设 _grid.CurrentCell 后重跑全新副本 → 91/91 PASS。
+- 首轮 build 5 处编译错误（MinSize/Anchor 简写），修复后 0 警告。
+- packages.lock.json 出现已知 build/publish 往返抖动（win-x64 RID 条目增删），提交前已 git checkout 还原，不入库。
+
+六、未验证项（如实标注）
+- AttachmentListPresenter 无直接单测（测试工程不引用 UI 工程）；其枚举+索引一致性由冒烟第 4 项断言覆盖。
+- 真实根 GUI 附件对话框未人工点击（见上）。

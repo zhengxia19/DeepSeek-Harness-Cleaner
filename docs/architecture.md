@@ -56,7 +56,7 @@ WinForms.UI (Views/Presenters)
 
 ## 7. 技术和限制
 
-- WinForms 原生控件：TreeView/ListView 或 DataGridView + SplitContainer + RichTextBox，虚拟行/分页，后台扫描。
+- WinForms 原生控件：TreeView/ListView 或 DataGridView + SplitContainer + RichTextBox，虚拟行/分页，后台扫描。主列表为十列 DataGridView（N-02：勾选列 + 序号列 + 数据列；勾选列 = 删除/备份操作对象，行选中仅驱动预览；序号按绑定顺序、排序后随行）。
 - `System.Text.Json`、`System.IO`、`System.IO.Compression`、`ZstdSharp.Port`；不用外部脚本清理真实数据。
 - 不承诺官方 Harness 文件格式的永久兼容。格式变化优先退化为只读元数据/原始备份。
 - .NET 10 官方 Windows 10 支持限定仍受支持的 LTSC/Enterprise；普通 Windows 10 版本兼容必须现场测试，不能标为官方支持。

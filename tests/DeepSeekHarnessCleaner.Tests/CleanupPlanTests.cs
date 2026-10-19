@@ -51,7 +51,7 @@ public sealed class CleanupPlanTests
         });
         Assert.Contains(result.Plan.Targets, t => t.AbsolutePath.EndsWith("session.jsonl", StringComparison.Ordinal));
         Assert.Contains(result.Plan.Targets, t => t.AbsolutePath.EndsWith("session.v4.jsonl", StringComparison.Ordinal));
-        Assert.True(result.Plan.RequiresBackup);
+        Assert.False(result.Plan.RequiresBackup); // N-04（D1）：会话删除备份可选。
     }
 
     [Fact]

@@ -147,6 +147,98 @@ public sealed class HeaderTests
         Assert.Equal(SessionHeaderReader.HeaderDateInvalidErrorCode, result.ErrorCode);
     }
 
+    // ---- M-02 负向用例：旧假设格式与真实契约的边界（安全失败，不放宽门禁） ----
+
+    [Fact]
+    public void LegacyHeaderFormat_TreatedAsHeaderMissing()
+    {
+        using var fx = FixtureRoot.Create();
+        var path = fx.Factory.WriteSessionFile(
+            "proj-h", "s-legacy", "session.v4.jsonl",
+            FixtureFactory.Utf8(
+                "{\"type\":\"header\",\"sessionId\":\"s-legacy\",\"formatVersion\":4,\"createdAt\":\"2026-04-02T00:00:00Z\"}\n"));
+
+        var result = Reader.Read(path);
+        Assert.Equal(ParseStatus.Corrupt, result.Status);
+        Assert.Equal(SessionHeaderReader.HeaderMissingErrorCode, result.ErrorCode);
+        Assert.False(result.AllowsAutoCleanup);
+    }
+
+    [Fact]
+    public void CreatedAtIsoString_HeaderDateInvalid()
+    {
+        using var fx = FixtureRoot.Create();
+        var path = fx.Factory.WriteSessionFile(
+            "proj-h", "s-datestr", "session.v4.jsonl",
+            FixtureFactory.Utf8(
+                "{\"type\":\"session\",\"id\":\"s-datestr\",\"version\":4,\"createdAt\":\"2026-04-02T00:00:00Z\"}\n"));
+
+        var result = Reader.Read(path);
+        Assert.Equal(ParseStatus.Corrupt, result.Status);
+        Assert.Equal(SessionHeaderReader.HeaderDateInvalidErrorCode, result.ErrorCode);
+        Assert.False(result.AllowsAutoCleanup);
+    }
+
+    [Fact]
+    public void VersionFive_Unsupported_NotDeletable()
+    {
+        using var fx = FixtureRoot.Create();
+        var path = fx.Factory.WriteSessionFile(
+            "proj-h", "s-v5", "session.v4.jsonl",
+            FixtureFactory.Utf8(
+                "{\"type\":\"session\",\"id\":\"s-v5\",\"version\":5,\"createdAt\":1775001600000}\n"));
+
+        var result = Reader.Read(path);
+        Assert.Equal(ParseStatus.Unsupported, result.Status);
+        Assert.Equal(SessionHeaderReader.HeaderVersionUnsupportedErrorCode, result.ErrorCode);
+        Assert.False(result.AllowsAutoCleanup);
+    }
+
+    [Fact]
+    public void IdMissing_HeaderIdMissing()
+    {
+        using var fx = FixtureRoot.Create();
+        var path = fx.Factory.WriteSessionFile(
+            "proj-h", "s-noid", "session.v4.jsonl",
+            FixtureFactory.Utf8(
+                "{\"type\":\"session\",\"version\":4,\"createdAt\":1775001600000}\n"));
+
+        var result = Reader.Read(path);
+        Assert.Equal(ParseStatus.Corrupt, result.Status);
+        Assert.Equal(SessionHeaderReader.HeaderIdMissingErrorCode, result.ErrorCode);
+        Assert.False(result.AllowsAutoCleanup);
+    }
+
+    [Fact]
+    public void NegativeVersion_HeaderVersionInvalid()
+    {
+        using var fx = FixtureRoot.Create();
+        var path = fx.Factory.WriteSessionFile(
+            "proj-h", "s-negver", "session.v4.jsonl",
+            FixtureFactory.Utf8(
+                "{\"type\":\"session\",\"id\":\"s-negver\",\"version\":-1,\"createdAt\":1775001600000}\n"));
+
+        var result = Reader.Read(path);
+        Assert.Equal(ParseStatus.Corrupt, result.Status);
+        Assert.Equal(SessionHeaderReader.HeaderVersionInvalidErrorCode, result.ErrorCode);
+        Assert.False(result.AllowsAutoCleanup);
+    }
+
+    [Fact]
+    public void CreatedAtEpochOutOfRange_HeaderDateInvalid()
+    {
+        using var fx = FixtureRoot.Create();
+        var path = fx.Factory.WriteSessionFile(
+            "proj-h", "s-epochrange", "session.v4.jsonl",
+            FixtureFactory.Utf8(
+                "{\"type\":\"session\",\"id\":\"s-epochrange\",\"version\":4,\"createdAt\":99999999999999999}\n"));
+
+        var result = Reader.Read(path);
+        Assert.Equal(ParseStatus.Corrupt, result.Status);
+        Assert.Equal(SessionHeaderReader.HeaderDateInvalidErrorCode, result.ErrorCode);
+        Assert.False(result.AllowsAutoCleanup);
+    }
+
     [Fact]
     public void HeaderLineExceedingLimit_Corrupt()
     {
@@ -154,7 +246,7 @@ public sealed class HeaderTests
         var padding = new string('a', CompressionLimits.MaxLineBytes + 16);
         var path = fx.Factory.WriteSessionFile(
             "proj-h", "s-toolong", "session.jsonl",
-            Encoding.UTF8.GetBytes("{\"type\":\"header\",\"sessionId\":\"" + padding + "\"}\n"));
+            Encoding.UTF8.GetBytes("{\"type\":\"session\",\"id\":\"" + padding + "\"}\n"));
 
         var result = Reader.Read(path);
         Assert.Equal(ParseStatus.Corrupt, result.Status);

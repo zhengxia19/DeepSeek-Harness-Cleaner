@@ -59,9 +59,64 @@ public sealed class SessionEventReader
     public const string ZstdCorruptErrorCode = "ZSTD_CORRUPT";
     public const string TotalLimitErrorCode = "TOTAL_LIMIT";
 
-    /// <summary>已知事件词汇由脱敏 fixture 断言绑定（design.md §48），不得凭字段名猜测扩充。</summary>
+    /// <summary>
+    /// 已知事件词汇（M-03）：由真实根只读聚合确证（M-01 证据 DIAG-event-format.txt：
+    /// 48 文件 / 21238 事件行 / 47 个 distinct 根类型），并由脱敏 fixture 断言绑定（design.md §48）。
+    /// <c>attachment_ref</c> 为真实数据未观测但按 D7 保留的已知类型；新类型须先经真实数据确证再扩充，
+    /// 未收录类型仍按 Unknown 处理（输出类型/行号摘要，不猜测语义）。
+    /// </summary>
     public static readonly IReadOnlySet<string> KnownEventTypes =
-        new HashSet<string>(StringComparer.Ordinal) { "header", "message", "attachment_ref" };
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "agent-preset/selected",
+            "agent/inbox/spliced",
+            "approval/asked",
+            "approval/decided",
+            "approval/policy",
+            "assistant/attempt",
+            "assistant/chunk",
+            "assistant/message",
+            "attachment_ref",
+            "command/done",
+            "command/run",
+            "compaction/end",
+            "compaction/prune",
+            "compaction/start",
+            "compaction/summary",
+            "deliverables/presented",
+            "developer/message",
+            "goal/change",
+            "job/registered",
+            "job/settled",
+            "llm/retry",
+            "llm/retry-started",
+            "model/selection",
+            "permission/preset",
+            "reasoning-chunks",
+            "request/context",
+            "request/header",
+            "sandbox/mode",
+            "session",
+            "session-log-deepseek/delivery-accepted",
+            "session/end-seed",
+            "session/title",
+            "session/title-llm-request",
+            "step/end",
+            "step/start",
+            "subagent/model-selection-policy",
+            "system/message",
+            "text-chunks",
+            "todo/write",
+            "tool-call-chunks",
+            "tool/call",
+            "tool/result",
+            "turn/end",
+            "turn/start",
+            "user/message",
+            "web/deepseek-search-llm-request",
+            "working-directory/change",
+            "workspace/changes",
+        };
 
     /// <summary>
     /// 读取 <paramref name="fullPath"/> 的全部事件行。取消（<paramref name="cancellationToken"/>）

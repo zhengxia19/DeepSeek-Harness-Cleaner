@@ -21,8 +21,9 @@ interface ICleanupExecutor { Task<CleanupResult> ExecuteAsync(CleanupPlan plan, 
 
 ### 输入类型
 
-- 会话目录：每个会话的规范代际日志文件 `session.jsonl[.zstd]` 或 `session.vN.jsonl[.zstd]`；遍历时只读读取 `SessionHeader` / 事件。
+- 会话目录：每个会话的规范代际日志文件 `session.jsonl[.zstd]` 或 `session.vN.jsonl[.zstd]`；遍历时只读读取 `SessionHeader` / 事件。首行 header 契约为 `{"type":"session","id":…,"version":0–4,"createdAt":<epoch-millis 数值>}`（M-02，详见 design.md §2）。事件行契约为 `{"type":…,"seq":…,"time":<epoch-millis 数值>,"data":…}`；消息正文在 `data`（`user/message`）或 `data.message`（`assistant/system/developer/message`、`tool/result`）（M-03，详见 design.md §2）。
 - 投影缓存：`storages/session_projcache/sessions/<id>.json`、`storages/session_projcache.json`；不是权威会话日志。
+- 归档标志输入（N-01）：`storages/workspace.json`（与会话根同级）`global.archivedSessionIds` 字符串数组；只读识别，永不写入/删除；解析失败按 §5 `ARCHIVE_*` 状态降级为全部未归档，扫描不失败。
 - 桌面清理目录：`Cache`、`Code Cache`、`GPUCache`、`DawnGraphiteCache`、`DawnWebGPUCache`、`logs`。
 
 ### ZIP 导出契约（schemaVersion=1）
@@ -47,13 +48,17 @@ interface ICleanupExecutor { Task<CleanupResult> ExecuteAsync(CleanupPlan plan, 
   "dateField": "fileModified",
   "previewMaxItems": 2000,
   "windowWidth": 1100,
-  "windowHeight": 700
+  "windowHeight": 700,
+  "windowX": null,
+  "windowY": null,
+  "windowMaximized": null
 }
 ```
 
 - `rememberRoots=false` 时不得持久化所选绝对路径；默认扫描位置为系统环境推导。
 - `previewMaxItems` 固定上限 2000；恶意大值按设计上限截断或报配置错误；不得扩展到未授权根。
 - 任何未知 `schemaVersion`：只读提示/回退默认，不覆盖用户已有配置。
+- **窗口几何（N-03，schemaVersion 保持 1）**：`windowX/windowY/windowMaximized` 为可选字段，`null` = 未保存过；旧文件缺字段等价 `null`（向后兼容）。坐标为窗口外层 Bounds（DIP），负值对多屏布局合法，读写钳制 ±1,000,000，非数值按未保存处理；恢复时与任一屏幕工作区不相交（全出屏）仅位置回退居中，尺寸仍恢复；`windowMaximized=true` 时以最大化启动。冒烟/`--scan-root` 覆盖模式不读写该文件。
 
 ## 5. 错误码
 
@@ -66,10 +71,19 @@ interface ICleanupExecutor { Task<CleanupResult> ExecuteAsync(CleanupPlan plan, 
 | PROCESS_UNKNOWN | 无法可靠确定退出状态 | 禁止清理 |
 | FORMAT_UNSUPPORTED | 格式未验证 | 仅只读、原始备份 |
 | FORMAT_CORRUPT | Zstd/JSON 破损 | 不进入自动清理 |
-| BACKUP_INVALID | 归档未通过校验 | 不删除 |
+| BACKUP_INVALID | 提供备份时归档未通过校验 | 不删除（中止，零删除） |
 | FILE_CHANGED | 计划/备份后文件变化 | 停止或跳过 |
 | FILE_ACCESS_DENIED | 文件权限拒绝/被占用 | 报告，禁止提权 |
 | OP_CANCELLED | 用户取消 | 停止于安全边界并报告部分结果 |
+| ARCHIVE_FILE_MISSING | `storages/workspace.json` 不存在 | 扫描不失败；全部会话按未归档展示，状态栏提示“归档信息不可用” |
+| ARCHIVE_FILE_TOO_LARGE | `workspace.json` 超过 32MiB 上限 | 同上 |
+| ARCHIVE_FILE_UNREADABLE | `workspace.json` 权限拒绝/被占用 | 同上 |
+| ARCHIVE_JSON_INVALID | `workspace.json` JSON 解析失败 | 同上 |
+| ARCHIVE_STRUCTURE_UNKNOWN | 根/`global` 非对象、`archivedSessionIds` 非数组或含非字符串元素 | 同上 |
+
+- **备份门禁（N-04/ADR-0003）**：会话/附件删除备份可选——未备份不触发备份类错误码，确认（`GATE_NOT_CONFIRMED` 仍必需）、进程、根指纹与逐文件复验不变；提供 manifest+ZIP 时仍校验，失败按 `BACKUP_INVALID`（`GATE_BACKUP_INVALID:*`）中止零删除；`RequiresBackup=true` 的计划（调用方显式要求）缺备份仍报 `GATE_BACKUP_REQUIRED`。
+- **备份入口（N-05）**：主窗操作区“创建备份”按钮对勾选会话构建 manifest（dataHome 为根）并创建/校验 ZIP；主窗持有已校验备份事实（ZIP 路径 + manifest + 校验结果）。删除确认对话框不再自建备份：仅当 manifest 覆盖当前计划全部目标时携带事实展示“已备份并校验”，否则按未备份展示；结果报告引用携带的 ZIP 完整位置或如实标注无备份。
+- **附件列表（N-06，只读）**：主窗菜单“文件→附件(&A)”打开附件列表对话框（未扫描时状态栏提示、不打开）。数据流：dataHome（sessions 根父目录）下 `attachments/` 经 PathGuard 白名单枚举普通文件（附件 ID = 文件名，同名保留首个；reparse/白名单外跳过）+ 当前列表全部会话按预览同一代际选择与读取上限解码转录 → `AttachmentIndex.Build`（判定逻辑不变）。列 = 附件 ID、大小（字节）、引用状态（被引用/无引用（确认）/不可判定）、引用会话数；选中行展开引用会话 ID；页脚标注悬空引用清单与不可判定说明（`GlobalOrphanConclusionAvailable=false` 时明示）。后台构建、可取消；附件文件纯只读，本版本无附件删除 UI。
 
 ## 6. 兼容性与版本
 

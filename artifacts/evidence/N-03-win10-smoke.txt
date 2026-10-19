@@ -1,0 +1,25 @@
+WIN10-01/TC-18/COMPAT-01（T-33） 2026-10-19T07:54:25Z
+OS=Windows Windows 10 Pro Edition=Professional Version=22H2 Build=19045.UBR6466
+HARNESS_VERSION=0.2.1-rc.2
+PUBLISH_EXIT=0 EXE=D:\Code\DeepSeek-Harness-Cleaner\.artifacts\publish\t33-win10\DeepSeekHarnessCleaner.UI.exe sizeMB=102.8
+SMOKE_EXIT=0 PASS=79 FAIL=0 (fixture=D:\Code\DeepSeek-Harness-Cleaner\.artifacts\tmp\dsh-t33-fixture\sessions)
+TC18_NETWORK_CONNECTIONS=0
+COMPAT sessions=54 totalBytes=24524339 anomalies=0 ambiguous=0 corrupt=0 dateSessions=54
+COMPAT archived=19 archiveStatus=OK wsGroundTruthMatched=19 wsStampBefore=4824|639279880895552083 wsStampAfter=4824|639279880895552083
+COMPAT status={"Valid":54}
+COMPAT generations={"gen0":2,"gen4":53} encodings={"zstd":55}
+COMPAT semantic sampled=25 complete=0 partial=25 fail=0
+COMPAT snapshot files=55 changed=0 deleted=0 added=0（added 为实时 Harness 会话写入，非本扫描）
+PASS : WIN10-01 发布退出码 0
+PASS : WIN10-01 单文件 EXE 存在
+PASS : WIN10-01 自包含冒烟退出码 0
+PASS : WIN10-01 冒烟 79 PASS / 0 FAIL
+PASS : TC-18 运行期零新增 TCP 连接
+PASS : COMPAT-01 真实根存在且完成只读扫描
+PASS : COMPAT-01 真实根会话无 Corrupt
+PASS : COMPAT-01 真实根会话全部带 createdAt（日期可筛选）
+PASS : COMPAT-01 归档信息可用（真实 workspace.json 只读解析成功）
+PASS : COMPAT-01 归档命中与 workspace.json 交叉核对一致（命中>0）
+PASS : COMPAT-01 workspace.json 零写入（只读红线）
+PASS : COMPAT-01 真实根既有文件零变更零删除（新增允许）
+WIN10_RESULT=PASS

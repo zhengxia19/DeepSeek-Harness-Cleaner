@@ -30,6 +30,7 @@ public sealed partial class MainForm : Form
     private readonly RichTextBox _preview = new();
     private readonly FlowLayoutPanel _actionPanel = new();
     private readonly Button _scanButton = new();
+    private readonly Button _backupButton = new();
     private readonly Button _deleteButton = new();
     private readonly Button _exitButton = new();
     private readonly StatusStrip _statusStrip = new();
@@ -39,9 +40,14 @@ public sealed partial class MainForm : Form
     private readonly PreviewPresenter _previewPresenter = new();
     private readonly ActionsPresenter _actionsPresenter;
     private CleanupDialog? _lastCleanupDialog;
+    private BackupDialog? _lastBackupDialog;
+    private BackupFacts? _lastBackup;
     private ResultsDialog? _lastResultsDialog;
+    private ToolStripMenuItem? _attachmentsMenuItem;
+    private AttachmentListDialog? _lastAttachmentDialog;
     private readonly string? _scanRootOverride;
     private readonly string? _logDirOverride;
+    private readonly bool _persistWindowSettings;
     private string? _effectiveScanRoot;
     private CancellationTokenSource? _previewCts;
     private bool _scanning;
@@ -63,6 +69,14 @@ public sealed partial class MainForm : Form
         ClientSize = new Size(1100, 680);
         MinimumSize = new Size(640, 420);
 
+        // N-03：仅正常模式读写用户配置；冒烟/--scan-root 覆盖模式不触碰真实 %LOCALAPPDATA%（避免 CI 污染）。
+        _persistWindowSettings = _smokeResultPath is null && _scanRootOverride is null;
+        if (_persistWindowSettings)
+        {
+            ApplySavedWindowGeometry();
+            FormClosing += OnFormClosingSaveGeometry;
+        }
+
         BuildMenu();
         BuildListRegion();
         BuildPreviewRegion();
@@ -77,7 +91,17 @@ public sealed partial class MainForm : Form
         MainMenuStrip = _menu;
 
         _sessionGrid.SelectionChanged += OnSessionGridSelectionChanged;
-        _deleteButton.Enabled = false; // UX-01：未选择会话时禁用删除。
+        // N-02：勾选即时提交并刷新删除按钮启用态（预览仍按行选中触发）。
+        _sessionGrid.CurrentCellDirtyStateChanged += (_, _) =>
+        {
+            if (_sessionGrid.IsCurrentCellDirty)
+            {
+                _sessionGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            }
+        };
+        _sessionGrid.CellValueChanged += OnSessionGridValueChanged;
+        _deleteButton.Enabled = false; // UX-01：未勾选会话时禁用删除（N-02 起按勾选行判定）。
+        _backupButton.Enabled = false; // N-05：备份按钮同样按勾选行启用。
 
         if (_smokeResultPath is not null)
         {
@@ -85,10 +109,59 @@ public sealed partial class MainForm : Form
         }
     }
 
+    /// <summary>
+    /// N-03：按已保存几何恢复窗口。有保存位置且与任一屏幕工作区相交 → Manual + 位置/大小；
+    /// 全出屏（如外接显示器已移除）→ 位置回退 CenterScreen，大小仍恢复；最大化标志独立生效。
+    /// </summary>
+    private void ApplySavedWindowGeometry()
+    {
+        var settings = new SettingsStore().Load().Settings;
+        var workingAreas = Screen.AllScreens.Select(static screen => screen.WorkingArea).ToArray();
+        if (WindowGeometry.TryResolve(settings, workingAreas, out var bounds))
+        {
+            StartPosition = FormStartPosition.Manual;
+            Location = bounds.Location;
+        }
+
+        var size = WindowGeometry.RestoreSize(settings);
+        Size = new Size(Math.Max(size.Width, MinimumSize.Width), Math.Max(size.Height, MinimumSize.Height));
+        if (settings.WindowMaximized == true)
+        {
+            WindowState = FormWindowState.Maximized;
+        }
+    }
+
+    /// <summary>
+    /// N-03：正常退出与关窗均保存窗口几何（先 Load 保留其余设置字段；既有文件损坏/未知 schema
+    /// 时 SettingsStore 拒绝覆写，保持既有语义）。最大化时保存 RestoreBounds（正常态几何）。
+    /// </summary>
+    private void OnFormClosingSaveGeometry(object? sender, FormClosingEventArgs e)
+    {
+        var store = new SettingsStore();
+        var current = store.Load();
+        var bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            return;
+        }
+
+        _ = store.Save(current.Settings with
+        {
+            WindowX = bounds.X,
+            WindowY = bounds.Y,
+            WindowWidth = bounds.Width,
+            WindowHeight = bounds.Height,
+            WindowMaximized = WindowState == FormWindowState.Maximized,
+        });
+    }
+
     private void BuildMenu()
     {
         var fileMenu = new ToolStripMenuItem("文件(&F)");
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("扫描(&S)", null, OnScanClick));
+        // N-06：附件列表（只读展示，无删除入口）。
+        _attachmentsMenuItem = new ToolStripMenuItem("附件(&A)", null, OnAttachmentsClick);
+        fileMenu.DropDownItems.Add(_attachmentsMenuItem);
         fileMenu.DropDownItems.Add(new ToolStripSeparator());
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("退出(&X)", null, OnExitClick));
 
@@ -112,21 +185,71 @@ public sealed partial class MainForm : Form
         _sessionGrid.Dock = DockStyle.Fill;
         _sessionGrid.MultiSelect = true;
         _sessionGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _sessionGrid.ReadOnly = true;
+        // N-02：网格级 ReadOnly 置 false，由列级 ReadOnly=true 锁定除勾选外的全部列。
+        // （列级 ReadOnly=false 会被 setter 移除并回退到网格级值，无法覆盖 true。）
+        _sessionGrid.ReadOnly = false;
         _sessionGrid.AllowUserToAddRows = false;
         _sessionGrid.AllowUserToDeleteRows = false;
         _sessionGrid.AllowUserToResizeRows = false;
         _sessionGrid.RowHeadersVisible = false;
         _sessionGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
         _sessionGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        // N-02：勾选列可编辑（其余列继承网格级 ReadOnly），进入单元格即编辑，单击即可切换勾选。
+        _sessionGrid.EditMode = DataGridViewEditMode.EditOnEnter;
         _sessionGrid.TabIndex = 9;
+        // N-02：列序 [勾选][序号][会话 ID][项目][创建时间][日期来源][大小][格式][状态][归档]。
+        // 勾选列：删除/备份目标选择，不可排序；序号列：绑定顺序赋值、只读、不可排序。
+        _sessionGrid.Columns.Add(new DataGridViewCheckBoxColumn
+        {
+            Name = "check",
+            HeaderText = "选",
+            Width = 40,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+            ReadOnly = false,
+        });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "num",
+            HeaderText = "序号",
+            Width = 50,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+        });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "id", HeaderText = "会话 ID", Width = 190 });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "project", HeaderText = "项目", Width = 130 });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "created", HeaderText = "创建时间", Width = 140 });
+        // N-02：project/created/size 三列按内容自适应（AllCells）；绑定后另有全行兜底（EnsureContentColumnWidths）。
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "project",
+            HeaderText = "项目",
+            Width = 130,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells,
+        });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "created",
+            HeaderText = "创建时间",
+            Width = 140,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells,
+        });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "origin", HeaderText = "日期来源", Width = 110 });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "size", HeaderText = "大小", Width = 110 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "size",
+            HeaderText = "大小",
+            Width = 110,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells,
+        });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "format", HeaderText = "格式（代际）", Width = 140 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = "状态", Width = 110 });
+        // N-01：归档标志列（是/—），来自 storages\workspace.json 只读识别；仅展示，不参与删除门禁。
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "archive", HeaderText = "归档", Width = 60 });
+        // N-02：除勾选列外全部列只读（序号/数据列不可编辑）。
+        foreach (DataGridViewColumn column in _sessionGrid.Columns)
+        {
+            if (column.Name != "check")
+            {
+                column.ReadOnly = true;
+            }
+        }
         _split.Panel1.Controls.Add(_sessionGrid);
 
         BuildFilterPanel();
@@ -218,14 +341,16 @@ public sealed partial class MainForm : Form
         _actionPanel.Padding = new Padding(8, 6, 8, 6);
 
         ConfigureActionButton(_scanButton, "扫描(&S)", 11);
-        ConfigureActionButton(_deleteButton, "删除(&D)", 12);
-        ConfigureActionButton(_exitButton, "退出(&X)", 13);
+        ConfigureActionButton(_backupButton, "创建备份(&B)", 12);
+        ConfigureActionButton(_deleteButton, "删除(&D)", 13);
+        ConfigureActionButton(_exitButton, "退出(&X)", 14);
 
         _scanButton.Click += OnScanClick;
+        _backupButton.Click += OnBackupClick;
         _deleteButton.Click += OnDeleteClick;
         _exitButton.Click += OnExitClick;
 
-        _actionPanel.Controls.AddRange(new Control[] { _scanButton, _deleteButton, _exitButton });
+        _actionPanel.Controls.AddRange(new Control[] { _scanButton, _backupButton, _deleteButton, _exitButton });
     }
 
     private static void ConfigureActionButton(Button button, string text, int tabIndex)
@@ -248,8 +373,26 @@ public sealed partial class MainForm : Form
 
     private void OnSessionGridSelectionChanged(object? sender, EventArgs e)
     {
-        _deleteButton.Enabled = _sessionGrid.SelectedRows.Count > 0;
+        UpdateDeleteButtonEnabled();
         _ = RequestPreviewAsync();
+    }
+
+    /// <summary>N-02：勾选列值变化即时刷新删除按钮启用态（按勾选行数）。</summary>
+    private void OnSessionGridValueChanged(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex >= 0 && _sessionGrid.Columns[e.ColumnIndex].Name == "check")
+        {
+            UpdateDeleteButtonEnabled();
+        }
+    }
+
+    /// <summary>N-02/N-05：删除与备份按钮启用条件 = 存在勾选行。</summary>
+    private void UpdateDeleteButtonEnabled()
+    {
+        var anyChecked = _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .Any(static row => row.Cells["check"].Value is true);
+        _deleteButton.Enabled = anyChecked;
+        _backupButton.Enabled = anyChecked;
     }
 
     /// <summary>
@@ -271,7 +414,7 @@ public sealed partial class MainForm : Form
 
         if (rows.Count > 1)
         {
-            _preview.Text = $"已选择 {rows.Count} 个会话；单选时显示预览（删除按整会话选择）。";
+            _preview.Text = $"已选择 {rows.Count} 个会话；单选时显示预览（删除按勾选行）。";
             return;
         }
 
@@ -414,25 +557,67 @@ public sealed partial class MainForm : Form
         _statusLabel.Text = _presenter.BuildStatusText(filtered);
     }
 
-    /// <summary>绑定列表：每行 Tag 持有对应 SessionSummary，排序/筛选后选中项仍指向原会话。</summary>
+    /// <summary>绑定列表：每行 Tag 持有对应 SessionSummary，排序/筛选后选中项仍指向原会话。
+    /// N-02：首列勾选（初始未选）、次列序号按绑定顺序 1 起赋值；绑定后对内容列做全行宽度兜底。</summary>
     private void BindSessions(IReadOnlyList<SessionSummary> sessions)
     {
         _sessionGrid.SuspendLayout();
         _sessionGrid.Rows.Clear();
+        var num = 1;
         foreach (var session in sessions)
         {
             var index = _sessionGrid.Rows.Add(
+                false,
+                num++,
                 session.SessionId ?? "（未知）",
                 session.Project ?? "（未知）",
                 FormatDate(session.CreatedAt),
                 DateOriginText(session.DateOrigin),
                 InventoryPresenter.FormatBytes(session.TotalBytes),
                 FormatsText(session),
-                StatusText(session));
+                StatusText(session),
+                session.IsArchived ? "是" : "—");
             _sessionGrid.Rows[index].Tag = session;
         }
 
         _sessionGrid.ResumeLayout();
+        EnsureContentColumnWidths();
+        UpdateDeleteButtonEnabled();
+    }
+
+    /// <summary>
+    /// N-02：AllCells 只按已显示行计算宽度，虚拟化的未显示行可能漏算最长内容；
+    /// 绑定后逐行测量文本首选宽度（含表头与单元格内边距），不足则切到手动宽度兜底。
+    /// </summary>
+    private void EnsureContentColumnWidths()
+    {
+        foreach (var name in new[] { "project", "created", "size" })
+        {
+            var column = _sessionGrid.Columns[name]!;
+            var preferred = PreferredCellWidth(column.HeaderCell.InheritedStyle, column.HeaderText);
+            foreach (DataGridViewRow row in _sessionGrid.Rows)
+            {
+                var cell = row.Cells[column.Index];
+                preferred = Math.Max(preferred, PreferredCellWidth(cell.InheritedStyle, cell.Value as string ?? string.Empty));
+            }
+
+            preferred = Math.Max(preferred, column.MinimumWidth);
+            if (column.Width < preferred)
+            {
+                column.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+                column.Width = preferred;
+            }
+        }
+    }
+
+    /// <summary>N-02：单元格文本首选宽度 = MeasureText + 样式内边距 + 6px 边框/余量。</summary>
+    private int PreferredCellWidth(DataGridViewCellStyle style, string text)
+    {
+        var font = style.Font ?? _sessionGrid.Font;
+        var measured = TextRenderer.MeasureText(
+            text, font, new Size(int.MaxValue / 4, int.MaxValue / 4),
+            TextFormatFlags.Left | TextFormatFlags.NoPrefix);
+        return measured.Width + style.Padding.Horizontal + 6;
     }
 
     private static string FormatDate(DateTimeOffset? value) =>
@@ -460,12 +645,14 @@ public sealed partial class MainForm : Form
             return;
         }
 
-        var sessions = _sessionGrid.SelectedRows.Cast<DataGridViewRow>()
+        // N-02：删除目标 = 勾选行（按列表顺序取 Tag），不再依赖行选中。
+        var sessions = _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .Where(static row => row.Cells["check"].Value is true)
             .Select(static row => (SessionSummary)row.Tag!)
             .ToList();
         if (sessions.Count == 0)
         {
-            _statusLabel.Text = "未选择会话。";
+            _statusLabel.Text = "未勾选会话。";
             return;
         }
 
@@ -477,16 +664,109 @@ public sealed partial class MainForm : Form
             return;
         }
 
-        var zipPath = Path.Combine(
-            Path.GetTempPath(), "dshcleaner-backups", $"cleanup-{DateTime.Now:yyyyMMdd-HHmmss}-{Environment.ProcessId}.zip");
         // 备份清单以数据根（sessions 的父目录，即 .dsh 主目录）为根。
         var dataHome = Path.GetDirectoryName(_effectiveScanRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
             ?? _effectiveScanRoot;
-        var dialog = new CleanupDialog(planResult, _effectiveScanRoot, dataHome, sessions, _actionsPresenter, zipPath);
+        // N-05：主窗已有备份且清单覆盖本次全部删除目标时，作为既有备份事实传入对话框（仅展示）；否则按未备份。
+        BackupFacts? backupFacts = _lastBackup is { } facts && ManifestCoversPlan(facts.Manifest, dataHome, planResult.Plan)
+            ? facts
+            : null;
+        var dialog = new CleanupDialog(planResult, _effectiveScanRoot, dataHome, sessions, _actionsPresenter, backupFacts);
         dialog.CleanupFinished += OnCleanupFinished;
         _lastCleanupDialog = dialog;
         dialog.Show(this);
-        _statusLabel.Text = "删除确认对话框已打开：先创建备份，再确认删除。";
+        _statusLabel.Text = backupFacts is null
+            ? "删除确认对话框已打开：备份可选（建议），确认删除后执行。"
+            : "删除确认对话框已打开：已携带主窗备份（已校验），确认删除后执行。";
+    }
+
+    /// <summary>N-06：附件列表入口——以当前列表全部会话 + 数据根 attachments 目录后台构建只读索引。</summary>
+    private void OnAttachmentsClick(object? sender, EventArgs e)
+    {
+        if (_effectiveScanRoot is null)
+        {
+            _statusLabel.Text = "请先扫描，再查看附件。";
+            return;
+        }
+
+        var sessions = _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .Select(static row => (SessionSummary)row.Tag!)
+            .ToList();
+        var dataHome = Path.GetDirectoryName(_effectiveScanRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            ?? _effectiveScanRoot;
+        var dialog = new AttachmentListDialog(dataHome, sessions);
+        _lastAttachmentDialog = dialog;
+        dialog.Show(this);
+        _statusLabel.Text = "附件列表已打开（只读，后台构建中）。";
+    }
+
+    /// <summary>N-05：主窗备份按钮——对勾选会话构建清单并复用 BackupDialog 后台创建+校验；成功后持有备份事实。</summary>
+    private void OnBackupClick(object? sender, EventArgs e)
+    {
+        if (_effectiveScanRoot is null)
+        {
+            _statusLabel.Text = "请先扫描，再创建备份。";
+            return;
+        }
+
+        var sessions = _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .Where(static row => row.Cells["check"].Value is true)
+            .Select(static row => (SessionSummary)row.Tag!)
+            .ToList();
+        if (sessions.Count == 0)
+        {
+            _statusLabel.Text = "未勾选会话。";
+            return;
+        }
+
+        // 清单/备份以数据根（.dsh 主目录）为根：条目名须为 sessions/… 类别前缀。
+        var dataHome = Path.GetDirectoryName(_effectiveScanRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            ?? _effectiveScanRoot;
+        var manifestResult = _actionsPresenter.BuildSessionManifest(dataHome, sessions);
+        if (manifestResult.Manifest is null)
+        {
+            _statusLabel.Text = "清单构建失败：" + string.Join("；", manifestResult.Issues.Select(static i => $"{i.Code}:{i.Path}"));
+            return;
+        }
+
+        var zipPath = Path.Combine(
+            Path.GetTempPath(), "dshcleaner-backups", $"cleanup-{DateTime.Now:yyyyMMdd-HHmmss}-{Environment.ProcessId}.zip");
+        var manifest = manifestResult.Manifest;
+        var dialog = new BackupDialog(manifest, zipPath, _actionsPresenter);
+        _lastBackupDialog = dialog;
+        dialog.Completed += (_, _) =>
+        {
+            if (dialog.State.Stage == BackupStage.Ready)
+            {
+                // 打开既有 ZIP 复验（SHA-256 逐项），成功才作为删除可携带的备份事实。
+                var verified = new BackupService().VerifyZip(zipPath, manifest);
+                if (verified.Success && verified.Backup is not null)
+                {
+                    _lastBackup = new BackupFacts(zipPath, manifest, verified.Backup);
+                    _statusLabel.Text = $"备份完成并校验：{zipPath}";
+                }
+                else
+                {
+                    _statusLabel.Text = $"备份校验失败：{verified.ErrorCode ?? "UNKNOWN"}，未持有备份事实。";
+                }
+            }
+            else
+            {
+                _statusLabel.Text = $"备份未完成：{dialog.State.Stage}（{dialog.State.ErrorCode ?? "—"} {dialog.State.Message}）。";
+            }
+        };
+        dialog.Show(this);
+        _statusLabel.Text = "正在创建并校验 ZIP 备份…";
+    }
+
+    /// <summary>N-05：清单是否覆盖计划全部目标（按数据根相对路径，Windows 大小写不敏感）。</summary>
+    private static bool ManifestCoversPlan(BackupManifest manifest, string dataHome, CleanupPlan plan)
+    {
+        var entries = manifest.Entries
+            .Select(static entry => entry.ZipPath.Replace('/', Path.DirectorySeparatorChar))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return plan.Targets.All(target =>
+            entries.Contains(Path.GetRelativePath(dataHome, target.AbsolutePath)));
     }
 
     private async void OnCleanupFinished(object? sender, CleanupExecutionResult result)

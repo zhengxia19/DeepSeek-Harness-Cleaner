@@ -1,6 +1,6 @@
-# DeepSeek Harness Cleaner（设计与实施文档）
+# DeepSeek Harness Cleaner
 
-> 状态：**已实施并通过 T-01～T-33 验收；0.1.0 发布包已构建（`dist/v0.1.0/win-x64/`），最终发布复核见 `artifacts/evidence/T-34.txt`**。文档日期：2026-10-18。目标：Windows 10 x64，DeepSeek Harness 0.2.0.0 本地数据（0.2.1-rc.2 只读识别、禁止清理）。方案 B：C# / .NET 10 / WinForms。
+> 状态：**已实施并通过 T-01～T-34 验收；M 系列真实格式修正已归档闭环，0.1.1 发布包已构建（`dist/v0.1.1/win-x64/`）**；下一线为 v0.2.0 N 系列（计划见 `docs/change-plan-v0.2.0.md`）。文档日期：2026-10-19。目标：Windows 10 x64，DeepSeek Harness 0.2.0.0 本地数据（0.2.1-rc.2 只读识别、禁止清理）。方案 B：C# / .NET 10 / WinForms。
 
 ## 项目目标
 
@@ -9,7 +9,7 @@
 ## 安全默认值
 
 - 启动与扫描不修改 Harness 目录；所有写入仅发生在用户明确启动的备份/清理操作中。
-- 清理会话必须先完成 ZIP 原始备份及逐文件 SHA-256 校验；用户不能关闭该保护（v1）。
+- 清理会话/附件必须经确认对话框明确确认，删除前逐文件复验路径白名单与 SHA-256 指纹；ZIP 原始备份为可选（建议），自 v0.2.0 起不再强制，可由主窗“创建备份”按钮先行创建并校验（见 docs/decisions/0003-session-delete-backup-optional.md）。
 - Harness 未完全退出、运行状态不明、路径越界或文件扫描后已变化时，禁止清理。
 - 保留 `.credentials.yaml`、`profiles/`、`dsh-runtimes/`、`workspace.json`、`Local Storage/`、`Session Storage/`、`Network/` 及匿名身份标识；这些均不属于默认可删除目标。
 - 不调用模型 API、DeepSeek 云端、浏览器或联网遥测；不处理服务器端已上报历史。
@@ -23,7 +23,7 @@
 - 桌面数据：`%APPDATA%\@deepseek-ai\dsh-desktop\`；仅特定 Cache 目录和 `logs` 在清理范围内。
 - 以上是目标路径模板，不硬编码用户名 `zx`；若用户通过 DSH_HOME 指向其他位置，由人工选择受控根目录并重新验证。
 
-## 项目结构（实施时创建）
+## 项目结构（当前已实现）
 
 ```text
 DeepSeek-Harness-Cleaner/
@@ -55,17 +55,17 @@ DeepSeek-Harness-Cleaner/
         └── 0002-safe-deletion-and-backup.md
 ```
 
-## 开发入口
+## 维护与开发入口
 
-1. 阅读 [需求](docs/requirements.md) 与 [详细设计](docs/design.md)。
-2. 严格按 [原子实施任务](docs/implementation-tasks.md) 的依赖链推进，不能越过未验收任务。
+1. 阅读 [Agent 项目规则](AGENTS.md) 与按需查阅 [执行规程](docs/agent-execution.md)；T-01～T-34 已完成，历史任务不自动重新执行。
+2. 新修复、兼容工作或文档任务以当轮需求为入口，先确认相关需求和代码/测试证据；历史 [原子任务清单](docs/implementation-tasks.md) 仅供追溯。
 3. 按 [开发环境](docs/development.md) 创建项目本地 SDK 与隔离的 NuGet 缓存。
 4. 根据 [测试](docs/testing.md) 生成脱敏/合成样本；**不得把真实用户数据作为自动清理测试对象**。
 5. 发布前执行 [发布清单](docs/release.md)，含 Windows 10 版本兼容性验收。
 
-## 文档阅读顺序
+## 文档阅读顺序与权威来源
 
-需求 → 架构 → 详细设计 → ADR → 环境与依赖 → 接口 → 测试 → 原子任务 → 发布；`review-report.md` 存放设计复审与遗留验证项。技术真相以相应权威文件为准，杜绝在多处复制可变配置/协议定义。
+维护时按当前改动范围选择：AGENTS → 需求/架构/设计/接口 → 对应源码与测试 → 发布；T-01～T-34 为历史实施记录；`review-report.md` 存放设计复审与遗留验证项。技术真相以相应权威文件为准，杜绝在多处复制可变配置/协议定义。
 
 ## 明确限制
 

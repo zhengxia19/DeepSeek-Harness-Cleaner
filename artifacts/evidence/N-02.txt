@@ -1,0 +1,65 @@
+N-02 表格重构：勾选框列 + 序号列 + 三列自适应（R8 + R3）
+日期：2026-10-19（本地）  分支：docs/post-release-maintenance-20261019  基线提交：12a3bb3（N-01）
+执行者：v0.2.0 变更实施 Agent（goal loop）
+
+== 改动范围（边界(改)内）==
+- src/DeepSeekHarnessCleaner.UI/MainForm.cs：
+  * 列序改为 [check(DataGridViewCheckBoxColumn)][num][id][project][created][origin][size][format][status][archive]。
+  * 勾选列：SortMode=NotSortable、可编辑；序号列：只读、NotSortable、绑定顺序 1 基赋值。
+  * 网格级 ReadOnly=false + 除 check 外全部列 ReadOnly=true（WinForms 陷阱：列级 ReadOnly=false 的 setter 会移除属性并回退到网格级 true，无法覆盖；已用冒烟断言 ro=False/ro=True 锁定）。
+  * EditMode=EditOnEnter + CurrentCellDirtyStateChanged→CommitEdit：单击勾选即提交并触发 CellValueChanged。
+  * 删除按钮启用条件 = 存在勾选行（UpdateDeleteButtonEnabled，经 CellValueChanged/SelectionChanged/BindSessions 刷新）；OnDeleteClick 取勾选行 Tag（按列表顺序），不再用 SelectedRows；预览仍按行选中（RequestPreviewAsync 不变）。
+  * project/created/size 三列 AutoSizeMode=AllCells；BindSessions 后 EnsureContentColumnWidths 兜底：逐行 TextRenderer.MeasureText + 样式内边距 + 6px，含表头，不足则切 None 并加宽（AllCells 只测已显示行，虚拟化行会漏算）。
+  * 多会话预览提示文案改为“删除按勾选行”。
+- src/DeepSeekHarnessCleaner.UI/MainForm.Smoke.cs：
+  * GridMatches 增加：勾选列初始未选（Value is false）、序号列 = 绑定顺序 i+1。
+  * 新增断言：列序字符串断言；勾选列=复选框列/不可排序/可编辑 + 序号列只读/不可排序；三列宽度 ≥ 全行最长内容首选宽度（含表头）；删除计划仅含勾选两会话（目标路径集合与独立构建的 expectedPlan 一致）。
+  * TC-08 重写为勾选语义：勾选两行启用删除；按 size 列排序后勾选仍指向原会话 + 序号随行（(id,num) 对排序前后 SequenceEqual）；取消勾选禁用删除。
+  * 删除流程（RunActionsChecks/TC-16）由行选中改为设置勾选；收尾复位勾选。
+  * “删除按钮初始禁用（未选择会话）”更名“（未勾选会话）”。
+- scripts/smoke-win10.ps1：WIN10-01 期望冒烟断言数 74→79。
+- 边界(不改)遵守：SessionSummary/服务层、筛选逻辑、行 Tag 绑定机制均未改动；无新增网络/遥测。
+
+== 门禁命令与退出码 ==
+1) $env:NUGET_PACKAGES='D:\Code\DeepSeek-Harness-Cleaner\.nuget'; .\.dotnet\dotnet.exe build DeepSeekHarnessCleaner.sln -c Release -warnaserror --nologo
+   → 0 个警告 0 个错误，BUILD_EXIT=0
+2) .\.dotnet\dotnet.exe test DeepSeekHarnessCleaner.sln -c Release --no-build --nologo
+   → 已通过! 失败:0 通过:298 总计:298，TEST_EXIT=0（无新增单测：N-02 为 UI 冒烟覆盖，计划验收未要求单测）
+3) .\.dotnet\dotnet.exe format --verify-no-changes
+   → FORMAT_EXIT=0（首轮 2 处 WHITESPACE：条件表达式内注释行，已移出后复验通过）
+4) 直接冒烟（全新 fixture 副本 .artifacts\tmp\n02-fixture\sessions + 同级 storages\workspace.json 91B，归档 ids 3 个其中 2 个命中）：
+   Start-Process <UI.exe> --smoke <report> --scan-root <fixtureCopy>\sessions --log-dir <dir> -Wait
+   → SMOKE_EXIT=0  PASS=79 FAIL=0  SMOKE_RESULT=PASS（报告 .artifacts\tmp\n02-smoke-report3.txt）
+   关键 INFO：
+     列属性 check=DataGridViewCheckBoxColumn sort=NotSortable ro=False；num=DataGridViewTextBoxColumn sort=NotSortable ro=True
+     列 project 宽度 85，全行最长内容首选宽度 85（兜底生效）
+     列 created 宽度 199，全行最长内容首选宽度 199（兜底生效）
+     列 size 宽度 77，全行最长内容首选宽度 65（AllCells 已覆盖）
+   N-02 新增/改写断言全部 PASS：
+     PASS 列序：勾选/序号/会话 ID/项目/创建时间/日期来源/大小/格式/状态/归档
+     PASS 勾选列为复选框列、不可排序、可编辑；序号列只读、不可排序
+     PASS project/created/size 三列宽度 ≥ 最长内容（全行测量含表头）
+     PASS 勾选两行启用删除按钮（勾选语义）
+     PASS 列排序后勾选仍指向原会话（不指向别的会话）
+     PASS 排序后序号随行（序号仍为绑定顺序，不随显示位置重排）
+     PASS 取消勾选后删除按钮禁用
+     PASS 删除计划仅含勾选两会话（未勾选行不进入计划）
+     PASS 确认后执行器精确删除全部选定目标 / 已选会话文件删除、未选会话文件不变（勾选=smoke-a-0001、smoke-b-0002 两会话）
+5) .\scripts\smoke-win10.ps1 -EvidencePath artifacts\evidence\N-02-win10-smoke.txt（前置 $env:PATH 含本地 .dotnet）
+   → SCRIPT_EXIT=0  12/12 检查 PASS  WIN10_RESULT=PASS
+   其中自包含发布冒烟 SMOKE_EXIT=0 PASS=79 FAIL=0；TC-18 零新增 TCP 连接；
+   COMPAT-01 真实根只读：sessions=54 archived=19 archiveStatus=OK wsGroundTruthMatched=19；
+   workspace.json 指纹前后一致 4824|639279880895552083（零写入）；既有文件 changed=0 deleted=0 added=0。
+
+== 验收逐项 ==
+- [x] 三列宽度 ≥ 最长内容：PASS（见 4) INFO；fixture 中 created 列最长内容为完整日期时间 199px，project 最长为 projPerf，size 最长 65px；测量口径=逐行 MeasureText+内边距+6px，含表头）。
+      说明：金样 fixture 项目名最长 8 字符（无超长项目名）；断言按“实际最长内容”测量，兜底逻辑对任意长内容生效（project/created 两列兜底实际触发，宽度恰等于最长内容）。
+- [x] 勾选 2 行删除仅删该 2 会话（合成根冒烟）：PASS（计划集合断言 + 精确删除 + 未选文件不变）。
+- [x] 全部测试 + 冒烟 PASS：298/298；直接冒烟 79/79；Win10 脚本 12/12。
+- [x] 证据 artifacts/evidence/N-02.txt：本文件；脚本证据 artifacts/evidence/N-02-win10-smoke.txt。
+
+== 诚实记录（非门禁失败）==
+- 首次直接冒烟把报告写到不存在的 artifacts\smoke\ 目录：File.WriteAllLines 抛 DirectoryNotFoundException，进程 ExitCode=0 但报告未落盘（冒烟框架对报告目录无预建保证；未改动产品代码，改写到已存在目录后正常）。该次运行已消费 fixture，随后重建副本重跑。
+- 首轮列属性断言 FAIL（check ro=True）：根因为 DataGridViewColumn.ReadOnly=false 的 setter 移除属性回退网格级值；按正确模式反转（网格 false + 列 true）后通过。属实现期缺陷，修复后全门禁重跑。
+- 冒烟断言总数 74→79（+5：列序、列属性、三列宽度、序号随行、删除计划仅含勾选；TC-08 三项改写为四项）。脚本期望同步更新。
+- 真实根为实时 Harness（N-01 先例）：本轮 COMPAT changed=0/deleted=0/added=0，无漂移披露需要；计数 54/19 为当轮实测。

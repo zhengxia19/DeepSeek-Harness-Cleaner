@@ -1,0 +1,66 @@
+M-02 证据 — 会话 header 解析对齐真实 DSH 格式（2026-10-19，本地时间）
+分支 docs/post-release-maintenance-20261019；HEAD 9b5b3b3 + 本轮未提交工作树改动。
+证据仅含结构信息（类型名/键名/计数/错误码），不含真实会话正文、ID、凭据。
+
+## 改动清单
+- src/DeepSeekHarnessCleaner.Infrastructure/SessionHeaderReader.cs
+  ParseHeaderLine 改为真实契约（依据 M-01 DIAG-scan-coverage/DIAG-event-format 实测）：
+  * type=="session"（旧假设 type:"header" → HEADER_MISSING，安全失败不放宽门禁）
+  * id：非空字符串，缺失/空 → HEADER_ID_MISSING
+  * version：JSON 数值 int；缺失/非数值/非整数/<0 → HEADER_VERSION_INVALID；>4 → Unsupported + HEADER_VERSION_UNSUPPORTED
+  * createdAt：仅接受 epoch-millis JSON 数值（ValueKind==Number + TryGetInt64）；字符串/缺失/非整数/超 DateTimeOffset 范围 → HEADER_DATE_INVALID
+  * cwd 等其余字段（isSeeded/delegationDepth/agentPreset…）可选、不校验语义；cwd 仅约束 JSON 类型
+- src/DeepSeekHarnessCleaner.Infrastructure/SessionEventReader.cs：KnownEventTypes "header"→"session"（随 header 契约的最小词汇更名；事件词汇其余部分留 M-03）
+- src/DeepSeekHarnessCleaner.Application/TranscriptProjector.cs：SkippedKnownTypes "header"→"session"
+- tests/Fixtures/FixtureFactory.cs：HeaderLine 输出真实格式；ISO 参数换算 epoch-millis，不可解析时写成 JSON 字符串（保留 HEADER_DATE_INVALID 负向用例语义）
+- tests/HeaderTests.cs：新增 6 个负向测试（旧 type→HEADER_MISSING；createdAt ISO 字符串→HEADER_DATE_INVALID；version=5→Unsupported；id 缺失→HEADER_ID_MISSING；version=-1→HEADER_VERSION_INVALID；epoch 超范围→HEADER_DATE_INVALID）；超长行用例改新格式
+- tests/EventReaderTests.cs：EventType 断言 ["header","message"]→["session","message"]（2 处）
+- scripts/perf.ps1：fixture header 模板改真实格式（epoch-millis）
+- .artifacts/tmp/dsh-t18-fixture（T-18 黄金 fixture，306 个 session 文件 + stray.txt）：
+  首行重写为真实格式 CONVERTED=305 TRUNCATED=1 SKIPPED=0；projC 截断行保持截断形态；
+  createdAt epoch 值由原 ISO 日期精确换算（2026-10-01T08:00Z→1790841600000、2026-09-15T00:30Z→1789432200000、2026-10-02T09:00Z→1790931600000、2025-05-01T00:00Z→1746057600000、2020-01-01T00:00Z→1577836800000）。
+  备份：.artifacts/tmp/dsh-t18-fixture.bak-preM02。
+  过程记录：首次重写因正则未容忍 CRLF 得 CONVERTED=2/TRUNCATED=304（错误形态），已从备份恢复后重做。
+- docs/design.md §2：新增 Header 契约条目；docs/interfaces.md §3：补契约句；docs/testing.md §2.1：负向用例清单；CHANGELOG.md [Unreleased] Fixed 条目。
+
+## 门禁（真实命令与退出码）
+1) .\.dotnet\dotnet.exe build DeepSeekHarnessCleaner.sln -c Release -warnaserror --nologo
+   → EXIT=0，0 警告 0 错误（ParseHeaderLine 修正后复跑仍 EXIT=0）
+2) .\.dotnet\dotnet.exe test DeepSeekHarnessCleaner.sln -c Release --no-build --nologo
+   - 首轮 EXIT=1：2 失败（TryGetInt64 对 String 元素抛 InvalidOperationException 而非返回 false）→ 增加 ValueKind==Number 前置守卫（version 同样加守卫）
+   - 终轮 EXIT=0：通过 273 / 失败 0 / 总计 273（基线 267，+6 新负向测试）
+3) .\.dotnet\dotnet.exe format --verify-no-changes → EXIT=0
+
+## 真实根只读扫描验收（artifacts/scan-check，生产栈 SessionLogDiscovery+SessionHeaderReader+InventoryService）
+.\.dotnet\dotnet.exe build artifacts\scan-check\scan-check.csproj -c Release → EXIT=0
+.\artifacts\scan-check\bin\Release\net10.0\scan-check.exe %USERPROFILE%\.dsh\sessions → EXIT=0
+- ROOT_ERROR=(none)；SESSIONS=49；ANOMALIES=0；TOTAL_MB=18.4
+- STATUS Valid=49（全部会话 Valid；M-01 基线为 46/46 HEADER_MISSING → Corrupt/Ambiguous）
+- AMBIGUOUS=0；NO_SESSION_ID=0；NO_CREATED_AT=0（全部会话有 header 日期 → 可按日期筛选）
+- HEADER_READ Valid ×50（50 个物理文件首行全部解析 Valid，含 v0 与 v4 双代际）
+- FS_GROUNDTRUTH dirs=49 whitelisted_files=50
+  漂移记录：真实根自 M-01 检查点 47 dirs/48 files 自然增长至 49/50（外部 Harness 会话写入，非本工具操作）；验收按当前计数判定。
+- FIRSTLINE 抽样（结构）：首行 kind=Object type=session keys=[type,version,id,createdAt,cwd,isSeeded,delegationDepth,agentPreset]，version∈{0,4}，createdAt 为 epoch-millis 数值；第 2 行起为事件行（type=permission/preset、sandbox/mode，keys=[type,seq,time,data]）→ 事件词汇/映射整改留 M-03。
+- ARCHIVED_IDS=16 FOUND_IN_SCAN=16 MISSING=0
+
+## T-18 fixture 回归（M-02 重写了 fixture，提前验证）
+a) scan-check.exe 指向 .artifacts\tmp\dsh-t18-fixture → EXIT=0
+   SESSIONS=305；ANOMALIES=1；STATUS Valid=304 / Corrupt=1（projC 截断首行 HEADER_MALFORMED）；
+   AMBIGUOUS=1 NO_SESSION_ID=1 NO_CREATED_AT=1（均仅 projC）；HEADER_READ Valid ×305；
+   项目分布 projPerf=300/projA=1/projB=1/projC=1/projD=1/projE=1；whitelisted_files=306。
+   （ARCHIVE 交叉核对行针对真实根 ID，fixture 根下不适用，非失败。）
+b) exe --smoke（合成根副本 .artifacts/tmp/dsh-m02-smoke/sessions，含删除测试）：
+   DeepSeekHarnessCleaner.UI.exe --smoke ... --scan-root <fixture副本> --log-dir <tmp日志>
+   → SMOKE_EXIT=0 PASS=72 FAIL=0（305 会话/1 异常、关键字/项目/日期筛选、projD 投影完整、projC 不完整事件提示、删除动作全部保持）
+
+## 验收项对照（docs/maintenance-tasks.md M-02）
+- build -warnaserror 0 警告 ✓
+- 全部测试通过（含新增负向用例）✓ 273/273
+- 真实根只读扫描：全部 Valid ✓；NO_SESSION_ID=0 ✓；NO_CREATED_AT=0 ✓；Ambiguous=0 ✓
+- format verify-no-changes ✓
+- 未验证项：Windows 10 干净 VM 兼容（未声明通过）；scripts/smoke-win10.ps1 全流程（publish+联网轮询+COMPAT）留 M-04 发布门禁。
+
+## 红线遵守
+- 真实 %USERPROFILE%\.dsh 与 %APPDATA%\@deepseek-ai\dsh-desktop：仅只读扫描，零写入/移动/删除。
+- 破坏性操作（fixture 重写、smoke 删除测试）仅在 .artifacts/tmp 合成根。
+- 无联网/遥测/自动更新；格式门禁未放宽（旧格式与未知字段值 → 安全失败错误码）。

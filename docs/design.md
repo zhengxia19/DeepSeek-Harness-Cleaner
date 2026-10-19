@@ -26,10 +26,13 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 ## 2. 会话发现与物理格式
 
 - 只进入由用户认可的 `SessionRoot` 下的普通目录，不跟随 NTFS junction / symbolic link / reparse point；禁止层级越界。
+- **Header 契约（M-02，真实 0.2.x 实测格式）**：首行 JSON 对象为 `{"type":"session","id":"session-<uuid>","version":<int>,"createdAt":<epoch-millis 数值>,…}`；`id` 为非空字符串；`version` 为 int（`<0`/缺失/非整数 → `HEADER_VERSION_INVALID`，`>4` → `Unsupported`）；`createdAt` **仅接受 epoch-millis JSON 数值**（字符串/缺失/超范围 → `HEADER_DATE_INVALID`）；其余字段（`cwd`/`isSeeded`/`delegationDepth`/`agentPreset`…）可选、不校验语义。旧假设格式（`type:"header"`/`sessionId`/`formatVersion`/ISO 字符串日期）不再接受，按 `HEADER_MISSING` 安全失败，不放宽门禁。
+- **事件信封契约（M-03，真实 0.2.x 实测格式）**：每行事件为 `{"type":<事件名>,"seq":<int>,"time":<epoch-millis 数值>,…,"data":{…}}`；聚合分块事件（`reasoning-chunks`/`tool-call-chunks`/`text-chunks`）使用 `seq0`/`time0` + `data.dt[]`/`data.texts[]`，为流式碎片，正文由最终消息事件承载。消息正文位置：`user/message` 直接在 `data`（`role`+`content[]`）；`assistant/system/developer/message` 嵌套在 `data.message`（与 `tool/result` 布局相同，`role="tool"`）。`content[]` 为类型化块（`text`/`reasoning`/`tool-call`/`image`/`tool-result`/`tool-addition`…），预览仅提取 `type:"text"` 块的 `text`。事件时间一律为 epoch-millis 数值（真实根 ISO 字符串 0 次出现）；缺失/非法 `time` 投影为无时间戳而非失败。已知事件类型表由真实根实测 47 类（另保留 `attachment_ref`）硬编码；未列出类型仍按 Unknown 处理，不放宽门禁。
 - 会话目录名称不能替代逻辑身份；读取 header `id` 后确认目录与头标识的映射；无有效 header 的日志列入“异常文件”，允许原始备份但不允许自动清理。
 - 文件名白名单：`session.jsonl`、`session.jsonl.zstd`、`session.vN.jsonl`、`session.vN.jsonl.zstd`（N 为正整数）；大写/临时/备份/不匹配项不自动删除。
 - 同一会话保留多个 format generation 是正常的；扫描归组，同一目录不应把多个代际计为多个会话。用于预览的代际为 numerically highest canonical generation；**最高代际无法读取时显示异常，不回退到旧代际假装当前内容**。
 - 同一个会话目录同时存在相同代际 `.jsonl` 与 `.jsonl.zstd` 或 header 身份冲突，标记 Ambiguous，阻止清理。
+- **归档标志（N-01，D5 已确认语义）**：Harness 的会话归档是 `storages/workspace.json`（与会话根同级，即 `<dshHome>\storages\workspace.json`）中 `global.archivedSessionIds` 的 JSON 字符串数组，不是目录标志。扫描时由 `SessionArchiveIndex` **只读**读取（上限 32MiB）：文件缺失、超限、不可读、JSON 非法、结构未知（根/`global` 非对象、`archivedSessionIds` 非数组或含非字符串元素）时扫描**不失败**，全部会话按未归档展示并回报状态码（见 interfaces.md §5 `ARCHIVE_*`）。归档 id 与扫描会话按 **header `id`** 精确匹配（目录名不匹配 header 的会话永不标记）；集合中的未知 id 容忍忽略。该文件永不写入、移动或删除；发现层、删除门禁与缓存清理对 `storages` 的处理不变。
 - 物理读取：以 Zstandard 串接帧解码，分割 UTF-8 JSONL，每行含一个可解析对象。解压库对 *concatenated frames* 和 *truncated tail* 的处理先由 T-04 的 fixture 验证；不能把最后一帧截断当成正常 EOF。
 - 限制：单行 ≤8MiB、单会话解压总量 ≤256MiB、单次预览 ≤2000 行；达到限制显示截断提示，不记录消息正文到日志。备份不限于能否完成语义解析，可按原始字节备份。
 - **历史格式**：对于 v0-v3，物理解码与安全只读元数据为最低保证；不在 v1 强制重新实现官方的完整多阶段迁移。仅对经 fixture 验证的事件提供文本预览；对不支持的事件显示其类型/行号与“不完整”。V4 的消息角色和内容也只基于验证的事件 schema。
@@ -44,15 +47,15 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 
 ## 4. 消息预览
 
-- 标准显示用户/助手/工具角色和文本块；工具参数、隐藏推理内容等默认不展开，避免 UI 混淆与过度显示。
-- 事件类型/角色映射由脱敏 fixture 的断言绑定，不以看到字段 `role` 为充分证明；对于删除无影响的未知事件输出简洁摘要。
+- 标准显示用户/助手/工具角色和文本块（真实数据确证角色：`user`/`assistant`/`system`/`developer`/`tool`，映射见 §2 事件信封契约）；工具参数、隐藏推理内容等默认不展开，避免 UI 混淆与过度显示。
+- 事件类型/角色映射由脱敏 fixture 的断言绑定，不以看到字段 `role` 为充分证明；对于删除无影响的未知事件输出简洁摘要（类型/行号 + “不完整”）。无文本块的完整消息（如仅 `tool-call`/`reasoning` 块的 assistant/message）按“非文本”标记不完整，不猜测正文。
 - 文本控件使用纯文本赋值，禁止 Markdown/HTML 脚本执行或自动加载远程内容；不渲染外部图片 URL。对大型会话可取消/分页。
 
 ## 5. 附件引用策略
 
 - 建立所有已成功解析会话中的显式附件 ID/路径引用证据；引用关系必须匹配本机附件布局，并经白名单验证。
 - 如有旧格式无法解析或缺少全局会话，**绝不可声明任何附件为全局孤儿**；显示 `Unknown`。
-- 会话删除不自动删除附件，无论是否被引用；用户可在附件页单独选择，先进行原始备份后再精确删除，且展示“引用不可判定”警告。
+- 会话删除不自动删除附件，无论是否被引用；用户可在附件页单独选择，确认后精确删除（备份可选、建议，N-04/ADR-0003），且展示“引用不可判定”警告。
 - 对目录级附件、外部软链和未知类型禁止自动删除。附件删除不能扩大到其他 Harness 配置/缓存。
 
 ## 6. 缓存策略
@@ -70,11 +73,11 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 4. 检查目标是普通文件，不允许写入/创建路径，也不自动提权或绕过 ACL。
 5. 删除前再次读取长度、写入时间、SHA-256 并与计划值比对；若发生变化，跳过该项并报告。操作前再次检查 Harness 是否完全退出。
 6. 进程探测至少覆盖已知 `DeepSeek Harness.exe`，明确记录无法可靠识别的托管/子进程风险；探测异常或无权限时禁止删除。**进程退出探测不是绝对文件锁**，无法取得稳定状态则 fail closed。
-7. 同时只允许一个清理计划执行；点击删除时的确认对话框明确显示备份路径、选择数和预计容量。
+7. 同时只允许一个清理计划执行；备份入口为主窗操作区“创建备份”按钮（有勾选会话时启用，N-05），备份完成并校验后由主窗持有备份事实；点击删除打开的确认对话框仅展示携带的备份状态（已备份并校验/未备份）、选择数和预计容量，不再在对话框内创建备份。
 
 ## 8. 备份设计与状态机
 
-会话删除和附件删除必须强制先备份。ZIP 保存“原始文件”而不是只保存解析出的 Markdown，记录：
+会话删除和附件删除的 ZIP 备份为**可选（建议）**（N-04/ADR-0003，修订 ADR-0002 第 2 条）：确认、进程门禁与逐文件复验仍必需；提供备份时 executor 仍校验下列 ZIP 事实。UI 备份入口为主窗操作区“创建备份”按钮（N-05）：对勾选会话以 dataHome 为根构建 manifest，复用同一备份状态机创建 ZIP 并逐文件校验；成功后主窗持有已校验备份事实，删除确认对话框仅携带展示（manifest 覆盖当前计划全部目标时按“已备份并校验”携带，否则按未备份处理），不再在对话框内创建备份。ZIP 保存“原始文件”而不是只保存解析出的 Markdown，记录：
 
 ```json
 {
@@ -92,7 +95,7 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 - `sourceRoots` 仅包含类别名，**不把用户完整绝对路径写到清单**；zip entry 必须是 POSIX 风格相对路径，禁止 `..`、绝对路径和重名。
 - ZIP 内路径：`sessions/<relative>`、`attachments/<relative>`、`manifest.json`；允许未来 schemaVersion 追加兼容字段。缓存不是会话备份必要组成，可单独选择备份缓存，不宣称完整可回导。
 - 校验：生成临时 ZIP → 遍历 ZIP entries 对比 manifest 的数量/长度/SHA-256 → 校验 manifest 自身结构 → 用户指定最终路径下无覆盖发布。失败绝不开始删除。
-- 备份完成与用户确认之间源文件若变化，**停止删除并要求重备份**；不能用陈旧备份覆盖变动的源文件。
+- 提供备份时：备份完成与用户确认之间源文件若变化，**停止删除并要求重备份**；不能用陈旧备份覆盖变动的源文件。未备份时此约束不适用（逐文件 SHA-256/mtime 复验仍按计划在删除前执行）。
 - 若附件引用不明，必须在导出摘要写入“附件未完整保全”，并阻断“保证附件完整”的承诺；会话原始文件备份仍可执行。
 
 ```text
@@ -109,6 +112,7 @@ BackupValidated → Recheck → AwaitConfirm → Deleting → Completed/PartialF
 
 - 工具配置独立存放 `%LOCALAPPDATA%\DeepSeekHarnessCleaner\settings.json`（非 Harness 目录）。初次启动不存在时使用默认值；损坏则报告并使用默认（不覆写损坏文件）。
 - 仅保存 `schemaVersion`、最近选择的受控根、备份路径、日期筛选偏好、窗口布局；不保存会话正文、身份凭据或敏感模型配置；原始根路径显示须明确本地使用。
+- **窗口位置/大小持久化（N-03，R2）**：正常模式启动时按已保存几何恢复（`windowX/windowY` 有值且与任一屏幕工作区相交 → Manual 定位；全出屏仅位置回退居中，尺寸仍恢复；`windowMaximized=true` 最大化启动）；正常退出与关窗均在 `FormClosing` 保存几何（最大化时保存 RestoreBounds；先读后改，保留其余字段，损坏/未知 schema 拒绝覆写的既有语义不变）。冒烟与 `--scan-root` 覆盖模式不读写用户配置，避免 CI 污染真实 `%LOCALAPPDATA%`。跨屏判定为 Infrastructure 纯函数 `WindowGeometry.TryResolve`（可单测）。
 - 配置更新使用临时文件与替换，并可选择不记住路径。
 
 ## 10. 错误与取消

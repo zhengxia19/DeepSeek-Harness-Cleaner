@@ -27,6 +27,9 @@ public sealed record InventoryResult(
     IReadOnlyList<AnomalousFile> AnomalousFiles)
 {
     public long TotalBytes { get; init; }
+
+    /// <summary>归档信息状态码（N-01/D5）：null=可用；非空=不可用，全部会话按未归档显示。</summary>
+    public string? ArchiveStatus { get; init; }
 }
 
 /// <summary>
@@ -52,7 +55,7 @@ public sealed class InventoryService : ISessionInventory
         foreach (var dir in data.Sessions)
         {
             ct.ThrowIfCancellationRequested();
-            sessions.Add(MergeSession(dir));
+            sessions.Add(MergeSession(dir, data.ArchivedSessionIds));
         }
 
         // design.md §3 稳定排序：日期降序 → 会话 ID 升序；无日期条目排末尾。
@@ -70,7 +73,11 @@ public sealed class InventoryService : ISessionInventory
         });
 
         var total = sessions.Sum(static s => s.TotalBytes);
-        return new InventoryResult(null, sessions, data.AnomalousFiles) { TotalBytes = total };
+        return new InventoryResult(null, sessions, data.AnomalousFiles)
+        {
+            TotalBytes = total,
+            ArchiveStatus = data.ArchiveStatus,
+        };
     }
 
     public Task<IReadOnlyList<SessionSummary>> ScanAsync(ResolvedRoots roots, CancellationToken ct)
@@ -80,7 +87,7 @@ public sealed class InventoryService : ISessionInventory
         return Task.FromResult(result.Sessions);
     }
 
-    private static SessionSummary MergeSession(ScannedSessionDirectory dir)
+    private static SessionSummary MergeSession(ScannedSessionDirectory dir, IReadOnlySet<string> archivedSessionIds)
     {
         var generations = dir.Files
             .Select(static f => f.Log)
@@ -124,6 +131,8 @@ public sealed class InventoryService : ISessionInventory
         {
             TotalBytes = totalBytes,
             IsAmbiguous = isAmbiguous,
+            // N-01：归档标志按 header id 精确匹配（Ordinal）；ID 未知或归档信息不可用 → 未归档。
+            IsArchived = sessionId is not null && archivedSessionIds.Contains(sessionId),
         };
     }
 

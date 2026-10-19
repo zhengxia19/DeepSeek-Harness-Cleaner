@@ -1,0 +1,75 @@
+M-01 真实事件行格式核验（只读）· 2026-10-19
+==================================================
+
+问题：SessionEventReader / TranscriptProjector 的事件类型、角色、时间映射假设是否与真实
+v4/v0 事件行匹配？预览事件映射是否需要修复？（M-03 触发判定）
+
+方法（全部只读，未写真实 .dsh）：
+- 临时 harness `artifacts/event-check/`（本地 SDK .dotnet\dotnet.exe 10.0.402 构建，BUILD_EXIT=0）。
+- 运行：`event-check.exe %USERPROFILE%\.dsh\sessions` → RUN_EXIT=0。
+- 采样：全部 2 个 v0 文件 + 最小/中位/最大 3 个 v4 文件（共 5 个，解码前 40 行结构骨架 + 全文件词汇计数）；
+  另对全部 48 个白名单文件做根级聚合（仅 type 名与顶层键计数）。
+- 同时把同一样本文本喂给生产 SessionEventReader 与 TranscriptProjector，对照计数。
+- 输出仅结构性信息（type 名、键名、值种类、长度、计数）；本文件对会话 id 与项目目录名做掩码
+  （session-<uuid>、projA/B/C）。原始输出（含未掩码目录名）在临时目录 artifacts/event-check/raw-output.txt，M-04 删除。
+
+样本根现状：WHITELISTED_FILES=48 DIRS=47（v0=2、v4=46，全部 .zstd；较 DIAG-scan-coverage 的 45/46 增加，
+系本机 DSH 仍在使用中，属正常增长；decode_fail=0，TOTAL_EVENT_LINES=21238）。
+
+一、假设侧（代码/fixture 固化的契约）
+- SessionEventReader.KnownEventTypes = { "header", "message", "attachment_ref" }。
+- TranscriptProjector：跳过 { "header", "attachment_ref" }；仅 type=="message" 且顶层
+  role∈{"user","assistant"}、顶层 text 为字符串时产出预览条目；时间取顶层 ts 字符串按 ISO-8601 解析。
+- AttachmentIndex：假设存在 type=="attachment_ref" 事件，带 attachmentId。
+- FixtureFactory 金样：
+  header 行  {"type":"header","sessionId":…,"formatVersion":…,"createdAt":"ISO字符串"}
+  message 行 {"type":"message","role":…,"text":…,"ts":"ISO字符串"}
+  附件行     {"type":"attachment_ref","attachmentId":…}
+
+二、真实侧（实测，v0 与 v4 事件词汇一致）
+1) 首行（48/48 文件）：{"type":"session","version":0|4,"id":str(44),"createdAt":num(13位 epoch-ms),
+   "cwd":str,"delegationDepth":num,"agentPreset":str, "isSeeded"?（仅 v4）, "parentSession"?（1 个委派会话）}。
+2) 事件行信封（其余 21190 行）：{"type":<名>,"seq":num,"time":num(epoch-ms),"data":{…}}；
+   聚合型分块事件（reasoning-chunks / tool-call-chunks / text-chunks，共 1247 行）用 seq0/time0 +
+   data.dt[]/data.texts[] 数组。顶层键计数：type=21238、data=21190、seq=19943、time=19943、
+   seq0=1247、time0=1247、surfaceOp=7085、sourceEventSeqs=3600。
+3) 根级词汇 distinct=47，全部带命名空间样式；出现频次前列：
+   tool/result=3542、tool/call=3505、step/start=2986、step/end=2985、assistant/message=2959、
+   reasoning-chunks=870、user/message=534、tool-call-chunks=330、agent/inbox/spliced=304、
+   job/registered=235、job/settled=234、request/header=146、turn/start=125、turn/end=124、
+   permission/preset=74、compaction/*=177、approval/*=91、sandbox/mode=67、session=48、
+   system/message=46、session/title=46、goal/change=50、todo/write=24、developer/message=4、
+   deliverables/presented=4、llm/retry*=43、command/run|done=82、workspace/changes=59 等（完整 47 项见 raw-output）。
+4) 消息正文位置：data.role + data.content[]（块 {type:"text", text:str}）；
+   assistant/message、user/message、system/message、developer/message 为消息事件；
+   tool/result 的 data.message.role="tool"。role 值集合（任意深度 key=role）：user、assistant、system、tool、developer。
+5) 时间编码：全部 epoch-millis 数值（time/createdAt，13 位）；样本中 ISO 字符串出现次数 = 0。
+6) attachment_ref / attachmentId：48 个文件中出现次数 = 0。
+
+三、生产组件对真实样本的实测对照（同一文本）
+- SessionEventReader：物理解析全部成功（malformed=0、toolong=0、status=Valid），但已知词汇命中 valid=0，
+  全部行 Unknown（5/5、1605/1605、4/4、240/240、2727/2727）。
+- TranscriptProjector：complete=0；全部行 → "不完整事件（未知事件类型 X）"；最大文件 2000 条上限即截断
+  （truncated=True）。即真实会话预览当前完全无正文，仅不完整标记。
+
+四、逐项"假设 vs 真实"对照结论
+| # | 假设 | 真实 | 判定 |
+|---|------|------|------|
+| D1 | 首行 type=="header" | type=="session" | 不匹配 |
+| D2 | 消息事件名 "message" | user/message、assistant/message、system/message、developer/message（tool 经 tool/result.data.message.role） | 不匹配 |
+| D3 | role/text/ts 在顶层 | 信封 seq/time/data，正文在 data.content[] 块数组 | 不匹配 |
+| D4 | ts 为 ISO-8601 字符串 | time/createdAt 均为 epoch-ms 数值；ISO=0 | 不匹配 |
+| D5 | text 为单一字符串 | content 为块数组（type:"text" 等） | 不匹配 |
+| D6 | 确证角色仅 user/assistant | 另有 system/tool/developer | 不匹配（范围） |
+| D7 | attachment_ref 事件存在 | 0 次出现 | 假设未获真实数据支持 |
+| D8 | 每行单一 seq/time | 聚合分块行用 seq0/time0+dt[]/texts[] | 不匹配 |
+| D9 | v0 与 v4 事件格式可能不同 | 两代际事件词汇/信封一致，仅 header version 与 isSeeded 差异 | 假设未获支持 |
+
+结论：**预览事件映射需要修复 → M-03 触发（不记 N/A）**。
+SessionEventReader 的 KnownEventTypes 与 TranscriptProjector 的 message 映射对真实数据命中率为 0；
+物理解码层（zstd/JSONL/限行/坏行）无需改动，需改的是词汇与字段映射层。
+M-03 修复范围应覆盖 D1–D8（D7/D9 按"真实数据未观察到"处理：attachment_ref 保留为已知但非必需，
+v0–v3 仍按 design.md §2 历史格式最低保证，不宣称完整语义）。
+
+未验证项：Windows 10 干净 VM（未运行）；v1–v3 代际真实样本（本机不存在）。
+工件：artifacts/event-check/（临时 harness，未跟踪，M-04 删除）；未改动 src/、tests/、docs/。

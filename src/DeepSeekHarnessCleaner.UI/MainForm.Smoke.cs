@@ -9,7 +9,7 @@ namespace DeepSeekHarnessCleaner.UI;
 /// <summary>
 /// T-17/T-18 冒烟自检：以 <c>--smoke &lt;结果文件&gt; [--scan-root &lt;目录&gt;]</c> 启动时，窗口显示后自动执行
 /// 布局/键盘导航断言；提供 --scan-root 时额外执行数据绑定断言（后台扫描、列表/统计/筛选与服务结果一致、
-/// 排序不改变多选指向的会话），写入逐项 PASS/FAIL 结果文件并退出。
+/// 排序不改变勾选指向的会话、序号随行），写入逐项 PASS/FAIL 结果文件并退出。
 /// 字体按 1.25/1.5 倍缩放用于模拟 125%/150% DPI 下的布局（AutoScaleMode.Font 会整体重排）；
 /// 干净 VM 上的真实 DPI 实机验证由 T-33 执行。
 /// </summary>
@@ -64,6 +64,7 @@ public sealed partial class MainForm
             RunBindingChecks(_scanRootOverride);
             RunPreviewChecks();
             RunActionsChecks(_scanRootOverride);
+            RunAttachmentChecks(_scanRootOverride);
         }
 
         foreach (var (label, factor) in new[] { ("125%", 1.25f), ("150%", 1.5f) })
@@ -106,7 +107,7 @@ public sealed partial class MainForm
             Check($"{scaleLabel} {name} 中心未被遮挡", ReferenceEquals(topmost, button));
         }
 
-        Check($"{scaleLabel} 删除按钮初始禁用（未选择会话）", !_deleteButton.Enabled);
+        Check($"{scaleLabel} 删除/备份按钮初始禁用（未勾选会话）", !_deleteButton.Enabled && !_backupButton.Enabled);
     }
 
     private void VerifyKeyboardNavigation()
@@ -173,7 +174,7 @@ public sealed partial class MainForm
     /// T-18 数据绑定断言（TC-05/TC-07/TC-08）：在合成 fixture 根上执行扫描，
     /// 逐项核对 DataGridView 列表、状态栏统计、关键字/项目/日期筛选与 InventoryService、
     /// SessionFilter 的服务侧结果一致；验证扫描在后台线程执行且 UI 消息泵持续运行；
-    /// 验证列排序后多选仍指向原会话。
+    /// 验证列排序后勾选仍指向原会话、序号随行（N-02）。
     /// </summary>
     private void RunBindingChecks(string fixtureRoot)
     {
@@ -210,6 +211,48 @@ public sealed partial class MainForm
             status.Contains(expected.Sessions.Count.ToString(), StringComparison.Ordinal)
             && status.Contains(InventoryPresenter.FormatBytes(expected.TotalBytes), StringComparison.Ordinal)
             && status.Contains(expected.AnomalousFiles.Count.ToString(), StringComparison.Ordinal));
+
+        // N-01：归档列与状态栏归档统计（fixture 副本含 storages\workspace.json，归档信息可用）。
+        var expectedArchived = expected.Sessions.Count(static s => s.IsArchived);
+        var archivedCells = _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .Count(static row => (string?)row.Cells["archive"].Value == "是");
+        Check("归档列命中数与扫描结果一致（归档信息可用且命中≥1）",
+            expected.ArchiveStatus is null && expectedArchived >= 1 && archivedCells == expectedArchived);
+        Check("状态栏归档计数与服务统计一致",
+            status.Contains($"归档 {expectedArchived}", StringComparison.Ordinal));
+
+        // N-02：列序与勾选/序号列属性断言。
+        var columnNames = string.Join(",", _sessionGrid.Columns.Cast<DataGridViewColumn>().Select(static c => c.Name));
+        Check("列序：勾选/序号/会话 ID/项目/创建时间/日期来源/大小/格式/状态/归档",
+            columnNames == "check,num,id,project,created,origin,size,format,status,archive");
+        var checkColumn = _sessionGrid.Columns["check"];
+        var numColumn = _sessionGrid.Columns["num"];
+        _smokeLines.Add($"INFO 列属性 check={checkColumn?.GetType().Name} sort={checkColumn?.SortMode} ro={checkColumn?.ReadOnly}；num={numColumn?.GetType().Name} sort={numColumn?.SortMode} ro={numColumn?.ReadOnly}");
+        Check("勾选列为复选框列、不可排序、可编辑；序号列只读、不可排序",
+            checkColumn is DataGridViewCheckBoxColumn
+            && checkColumn.SortMode == DataGridViewColumnSortMode.NotSortable
+            && !checkColumn.ReadOnly
+            && numColumn is DataGridViewTextBoxColumn
+            && numColumn.ReadOnly
+            && numColumn.SortMode == DataGridViewColumnSortMode.NotSortable);
+
+        // N-02：project/created/size 三列宽度 ≥ 全行最长内容（含表头；fixture 含完整日期时间/多档字节值）。
+        var widthOk = true;
+        foreach (var name in new[] { "project", "created", "size" })
+        {
+            var column = _sessionGrid.Columns[name]!;
+            var widest = PreferredCellWidth(column.HeaderCell.InheritedStyle, column.HeaderText);
+            foreach (DataGridViewRow row in _sessionGrid.Rows)
+            {
+                var cell = row.Cells[column.Index];
+                widest = Math.Max(widest, PreferredCellWidth(cell.InheritedStyle, cell.Value as string ?? string.Empty));
+            }
+
+            widthOk &= column.Width >= widest;
+            _smokeLines.Add($"INFO 列 {name} 宽度 {column.Width}，全行最长内容首选宽度 {widest}");
+        }
+
+        Check("project/created/size 三列宽度 ≥ 最长内容（全行测量含表头）", widthOk);
 
         // 关键字筛选（TC-07）。
         var keyword = "smoke-a";
@@ -248,24 +291,32 @@ public sealed partial class MainForm
         Check("日期区间筛选列表与服务筛选一致（含当天、排除未知日期）",
             expectedDate.Count == 1 && GridMatches(expectedDate));
 
-        // 清空筛选恢复全量，验证多选与排序稳定性（TC-08）。
+        // 清空筛选恢复全量，验证勾选语义、序号随行与排序稳定性（TC-08，N-02）。
         _dateEnabledCheck.Checked = false;
         _applyFilterButton.PerformClick();
         Check("清空筛选后恢复全量列表", _sessionGrid.Rows.Count == expected.Sessions.Count);
 
         _sessionGrid.ClearSelection();
-        _sessionGrid.Rows[0].Selected = true;
-        _sessionGrid.Rows[2].Selected = true;
-        var selectedBefore = SelectedSessionIds();
-        Check("多选两条整会话且删除按钮启用", selectedBefore.Count == 2 && _deleteButton.Enabled);
+        _sessionGrid.Rows[0].Cells["check"].Value = true;
+        _sessionGrid.Rows[2].Cells["check"].Value = true;
+        var checkedBefore = CheckedSessionIds();
+        Check("勾选两行启用删除按钮（勾选语义）", checkedBefore.Count == 2 && _deleteButton.Enabled);
 
+        var numBefore = NumBySessionId();
         _sessionGrid.Sort(_sessionGrid.Columns["size"]!, System.ComponentModel.ListSortDirection.Ascending);
-        var selectedAfter = SelectedSessionIds();
-        Check("列排序后多选仍指向原会话（不指向别的会话）",
-            selectedBefore.Count == selectedAfter.Count && selectedBefore.Zip(selectedAfter).All(static p => p.First == p.Second));
+        var checkedAfter = CheckedSessionIds();
+        var numAfter = NumBySessionId();
+        Check("列排序后勾选仍指向原会话（不指向别的会话）",
+            checkedBefore.Count == checkedAfter.Count && checkedBefore.Zip(checkedAfter).All(static p => p.First == p.Second));
+        Check("排序后序号随行（序号仍为绑定顺序，不随显示位置重排）",
+            numBefore.Count == numAfter.Count && numBefore.SequenceEqual(numAfter));
 
-        _sessionGrid.ClearSelection();
-        Check("取消选择后删除按钮禁用", !_deleteButton.Enabled);
+        foreach (DataGridViewRow row in _sessionGrid.Rows)
+        {
+            row.Cells["check"].Value = false;
+        }
+
+        Check("取消勾选后删除按钮禁用", !_deleteButton.Enabled);
     }
 
     /// <summary>
@@ -313,7 +364,7 @@ public sealed partial class MainForm
         Check("取消选择后预览清空", _preview.Text.Length == 0);
     }
 
-    /// <summary>T-30：备份/删除对话框流程断言（取消不删除、未备份禁用确认、确认后精确删除、完成刷新、取消执行不阻塞 UI）。</summary>
+    /// <summary>T-30/N-04/N-05：备份/删除流程断言（取消不删除、未备份可直接确认、主窗备份→删除对话框携带、确认后精确删除、完成刷新、取消执行不阻塞 UI）。</summary>
     private void RunActionsChecks(string fixtureRoot)
     {
         var service = new InventoryService(new UiScanSource());
@@ -323,34 +374,45 @@ public sealed partial class MainForm
         var untouched = scan.Sessions.First(static s => s.SessionId == "smoke-v4-0004");
         var expectedPlan = new CleanupPlanner().Build(fixtureRoot, [sessionA, sessionB], []).Plan!;
 
-        Check("删除计划：两会话全部代际文件、要求备份",
-            expectedPlan.Targets.Count >= 2 && expectedPlan.RequiresBackup);
+        Check("删除计划：两会话全部代际文件、备份可选（不强制）",
+            expectedPlan.Targets.Count >= 2 && !expectedPlan.RequiresBackup);
         Check("删除前目标文件全部存在", expectedPlan.Targets.All(static t => File.Exists(t.AbsolutePath)));
 
         _sessionGrid.ClearSelection();
-        SelectRowBySessionId("smoke-a-0001");
-        var rowB = _sessionGrid.Rows.Cast<DataGridViewRow>()
-            .First(static r => r.Tag is SessionSummary s && s.SessionId == "smoke-b-0002");
-        rowB.Selected = true;
+        SetCheckBySessionId("smoke-a-0001", true);
+        SetCheckBySessionId("smoke-b-0002", true);
         _deleteButton.PerformClick();
         System.Windows.Forms.Application.DoEvents();
         var dialog = _lastCleanupDialog!;
         Check("删除确认对话框打开", dialog.Visible);
-        Check("未备份时确认删除按钮禁用", !dialog.ConfirmButtonEnabled);
+        Check("删除计划仅含勾选两会话（未勾选行不进入计划）",
+            dialog.Plan.Targets.Select(static t => t.AbsolutePath).OrderBy(static p => p, StringComparer.Ordinal)
+                .SequenceEqual(expectedPlan.Targets.Select(static t => t.AbsolutePath).OrderBy(static p => p, StringComparer.Ordinal)));
+        Check("未备份时确认删除按钮可用（备份可选，N-04）", dialog.ConfirmButtonEnabled);
+        Check("未备份时删除对话框展示“未备份（可选，建议）”",
+            dialog.BackupStatusText.Contains("未备份", StringComparison.Ordinal));
 
         dialog.RequestCancel();
         PumpUntil(() => !dialog.Visible, 5_000);
         Check("点击取消即关闭且不删除任何文件",
             !dialog.Visible && expectedPlan.Targets.All(static t => File.Exists(t.AbsolutePath)));
 
+        // N-05：主窗备份流——未打开删除窗，直接对勾选会话创建备份并校验。
+        _backupButton.PerformClick();
+        System.Windows.Forms.Application.DoEvents();
+        var backupDialog = _lastBackupDialog!;
+        PumpUntil(() => backupDialog.State.Stage is BackupStage.Ready or BackupStage.Failed or BackupStage.Canceled, 20_000);
+        _smokeLines.Add($"INFO 主窗备份状态：{_statusLabel.Text}");
+        Check("主窗备份：勾选会话直接备份并校验（Ready + ZIP SHA 复验）",
+            backupDialog.State.Stage == BackupStage.Ready && _lastBackup is not null && File.Exists(_lastBackup.ZipPath));
+
         _deleteButton.PerformClick();
         System.Windows.Forms.Application.DoEvents();
         var dialog2 = _lastCleanupDialog!;
         Check("重新打开为新的对话框实例", dialog2.Visible && !ReferenceEquals(dialog2, dialog));
-        dialog2.RequestBackup();
-        PumpUntil(() => dialog2.BackupReady, 20_000);
-        _smokeLines.Add($"INFO 备份状态：{dialog2.BackupStatusText}");
-        Check("备份完成并校验后确认删除按钮启用", dialog2.BackupReady && dialog2.ConfirmButtonEnabled);
+        Check("删除对话框携带主窗备份事实（已备份并校验、确认可用）",
+            dialog2.BackupStatusText.Contains("已备份并校验", StringComparison.Ordinal)
+            && dialog2.Backup is not null && dialog2.ConfirmButtonEnabled);
 
         var pumps = 0;
         dialog2.RequestConfirm();
@@ -371,21 +433,24 @@ public sealed partial class MainForm
 
         PumpUntil(() => (_statusLabel.Text ?? string.Empty).Contains("已刷新", StringComparison.Ordinal), 20_000);
         Check("删除完成后清单自动刷新（会话数减少 2）", _sessionGrid.Rows.Count == scan.Sessions.Count - 2);
+        PumpUntil(() => _lastResultsDialog is not null, 20_000);
+        Check("已备份删除：结果报告引用该 ZIP 完整位置",
+            _lastResultsDialog is { } backedReport && _lastBackup is not null
+            && backedReport.BackupText.Contains(_lastBackup.ZipPath, StringComparison.Ordinal));
 
-        // TC-16：执行中取消 → 逐项 CANCELED 跳过，正常收尾不异常。
+        // TC-16：执行中取消 → 逐项 CANCELED 跳过，正常收尾不异常。主窗备份不覆盖新计划 → 本次为未备份删除。
         _sessionGrid.ClearSelection();
         for (var i = 0; i < 60 && i < _sessionGrid.Rows.Count; i++)
         {
-            _sessionGrid.Rows[i].Selected = true;
+            _sessionGrid.Rows[i].Cells["check"].Value = true;
         }
 
         _deleteButton.PerformClick();
         System.Windows.Forms.Application.DoEvents();
         var dialog3 = _lastCleanupDialog!;
-        var prevResultsDialog = _lastResultsDialog; // dialog2 全成功报告（若有）；dialog3 终态后应替换为新实例。
-        dialog3.RequestBackup();
-        PumpUntil(() => dialog3.BackupReady, 60_000);
-        Check("60 会话批量备份完成", dialog3.BackupReady);
+        var prevResultsDialog = _lastResultsDialog; // dialog2 全成功报告；dialog3 终态后应替换为新实例。
+        Check("主窗备份不覆盖新删除计划时按未备份展示",
+            dialog3.BackupStatusText.Contains("未备份", StringComparison.Ordinal));
         dialog3.RequestConfirm();
         dialog3.RequestCancel();
         var pumps3 = 0;
@@ -407,8 +472,74 @@ public sealed partial class MainForm
             RunResultsChecks(result3, fixtureRoot);
         }
 
-        // 复位选择，保证后续缩放回归检查仍见“删除按钮初始禁用”。
+        // 复位勾选与选择，保证后续缩放回归检查仍见“删除按钮初始禁用（未勾选会话）”。
         _sessionGrid.ClearSelection();
+        foreach (DataGridViewRow row in _sessionGrid.Rows)
+        {
+            row.Cells["check"].Value = false;
+        }
+    }
+
+    /// <summary>
+    /// N-06 附件列表断言：在 fixture 副本上布置三种附件事实（被引用 / 无引用 / 悬空引用）
+    /// 与一个含 attachment_ref 的纯文本会话，断言列表行数、状态、大小、引用展开与 AttachmentIndex 一致；
+    /// fixture 含 Corrupt 会话 → 无引用附件按“不可判定”展示且页脚标注 GlobalOrphanConclusionAvailable=false。
+    /// </summary>
+    private void RunAttachmentChecks(string fixtureRoot)
+    {
+        var dataHome = Path.GetDirectoryName(fixtureRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            ?? fixtureRoot;
+        var objRoot = Path.Combine(dataHome, "attachments", "v1", "objects");
+        Directory.CreateDirectory(Path.Combine(objRoot, "ab"));
+        Directory.CreateDirectory(Path.Combine(objRoot, "cd"));
+        var referencedPath = Path.Combine(objRoot, "ab", "att-referenced");
+        var orphanPath = Path.Combine(objRoot, "cd", "att-orphan");
+        File.WriteAllBytes(referencedPath, new byte[1234]);
+        File.WriteAllBytes(orphanPath, new byte[77]);
+        var attSessionDir = Path.Combine(fixtureRoot, "att-proj", "att-src");
+        Directory.CreateDirectory(attSessionDir);
+        File.WriteAllText(Path.Combine(attSessionDir, "session.jsonl"),
+            "{\"type\":\"session\",\"id\":\"att-src\",\"version\":4,\"createdAt\":1760000000000}\n" +
+            "{\"type\":\"attachment_ref\",\"seq\":1,\"time\":1760000001000,\"attachmentId\":\"att-referenced\"}\n" +
+            "{\"type\":\"attachment_ref\",\"seq\":2,\"time\":1760000002000,\"attachmentId\":\"att-missing\"}\n");
+
+        // 重扫使 att-src 进入列表：附件索引以当前列表全部会话为输入。
+        _smokeScanFinished = false;
+        _scanButton.PerformClick();
+        PumpUntil(() => _smokeScanFinished, 20_000);
+
+        _attachmentsMenuItem!.PerformClick();
+        System.Windows.Forms.Application.DoEvents();
+        var attDialog = _lastAttachmentDialog!;
+        Check("附件列表对话框经菜单打开", attDialog.Visible);
+        PumpUntil(() => attDialog.BuildFinished, 60_000);
+        Check("附件索引后台构建完成（UI 消息泵持续）", attDialog.BuildFinished && attDialog.Outcome is not null);
+
+        var snapshot = attDialog.GridSnapshot();
+        _smokeLines.Add($"INFO 附件列表行数={snapshot.Count}；页脚={attDialog.FooterText}");
+        Check("附件列表行数与磁盘附件一致（2 个：被引用/无引用）",
+            snapshot.Count == 2
+            && snapshot[0].Id == "att-orphan" && snapshot[1].Id == "att-referenced");
+        var referencedRow = snapshot.FirstOrDefault(static r => r.Id == "att-referenced");
+        var orphanRow = snapshot.FirstOrDefault(static r => r.Id == "att-orphan");
+        Check("被引用附件：状态=被引用、引用会话数=1（att-src）",
+            referencedRow.Status == "被引用" && referencedRow.Refs == 1);
+        Check("无引用附件：fixture 含 Corrupt 会话 → 状态=不可判定（与 AttachmentIndex 一致）",
+            orphanRow.Status == "不可判定" && orphanRow.Refs == 0);
+        Check("附件大小与磁盘事实一致（1234 / 77 字节）",
+            referencedRow.Size == 1234 && orphanRow.Size == 77);
+        Check("页脚标注悬空引用 att-missing 与 GlobalOrphanConclusionAvailable=false",
+            attDialog.FooterText.Contains("att-missing", StringComparison.Ordinal)
+            && attDialog.FooterText.Contains("GlobalOrphanConclusionAvailable=false", StringComparison.Ordinal));
+        Check("选中被引用行展开引用会话 ID（att-src）",
+            attDialog.SelectRowByAttachmentId("att-referenced")
+            && attDialog.DetailText.Contains("att-src", StringComparison.Ordinal));
+        Check("附件文件只读：列表构建不写不删",
+            File.Exists(referencedPath) && new FileInfo(referencedPath).Length == 1234
+            && File.Exists(orphanPath) && new FileInfo(orphanPath).Length == 77);
+
+        attDialog.Close();
+        PumpUntil(() => !attDialog.Visible, 5_000);
     }
 
     /// <summary>T-31：执行结果报告断言（逐项一致、汇总一致、备份位置可见、脱敏日志无正文/路径泄露）。</summary>
@@ -426,7 +557,7 @@ public sealed partial class MainForm
             results.SummaryText.Contains($"删除 {result.DeletedCount} 个", StringComparison.Ordinal)
             && results.SummaryText.Contains($"跳过 {result.SkippedCount} 个", StringComparison.Ordinal)
             && results.SummaryText.Contains($"失败 {result.FailedCount} 个", StringComparison.Ordinal));
-        Check("报告展示备份 ZIP 完整位置", results.BackupText.Contains(".zip", StringComparison.Ordinal));
+        Check("未备份删除报告如实标注无备份（占位文案）", results.BackupText.Contains("无 ZIP 备份", StringComparison.Ordinal));
 
         PumpUntil(() => results.LogFilePath is not null, 5_000);
         var logPath = results.LogFilePath;
@@ -481,11 +612,27 @@ public sealed partial class MainForm
         }
     }
 
-    private List<string?> SelectedSessionIds() =>
-        _sessionGrid.SelectedRows.Cast<DataGridViewRow>()
+    /// <summary>N-02：当前勾选行对应的会话 ID（按 ID 排序，用于排序前后一致性比较）。</summary>
+    private List<string?> CheckedSessionIds() =>
+        _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .Where(static row => row.Cells["check"].Value is true)
             .Select(static row => ((SessionSummary)row.Tag!).SessionId)
             .OrderBy(static id => id ?? string.Empty, StringComparer.Ordinal)
             .ToList();
+
+    /// <summary>N-02：(会话 ID, 序号) 对按 ID 排序；用于验证排序后序号仍随行（绑定顺序不变）。</summary>
+    private List<(string? Id, int Num)> NumBySessionId() =>
+        _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .Select(static row => ((((SessionSummary)row.Tag!).SessionId, (int)row.Cells["num"].Value!)))
+            .OrderBy(static t => t.Item1 ?? string.Empty, StringComparer.Ordinal)
+            .ToList();
+
+    private void SetCheckBySessionId(string sessionId, bool value)
+    {
+        var row = _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .First(r => r.Tag is SessionSummary s && s.SessionId == sessionId);
+        row.Cells["check"].Value = value;
+    }
 
     private bool GridMatches(IReadOnlyList<SessionSummary> expected)
     {
@@ -499,12 +646,17 @@ public sealed partial class MainForm
             var row = _sessionGrid.Rows[i];
             var session = expected[i];
             var tag = row.Tag as SessionSummary;
+            // N-02：绑定后勾选列初始未选、序号列按绑定顺序 1 起赋值。
             if (tag is null
                 || !string.Equals(tag.SessionId, session.SessionId, StringComparison.Ordinal)
                 || tag.TotalBytes != session.TotalBytes
                 || !Equals(tag.Status, session.Status)
+                || tag.IsArchived != session.IsArchived
                 || (string?)row.Cells["id"].Value != (session.SessionId ?? "（未知）")
-                || (string?)row.Cells["size"].Value != InventoryPresenter.FormatBytes(session.TotalBytes))
+                || (string?)row.Cells["size"].Value != InventoryPresenter.FormatBytes(session.TotalBytes)
+                || (string?)row.Cells["archive"].Value != (session.IsArchived ? "是" : "—")
+                || row.Cells["check"].Value is not false
+                || row.Cells["num"].Value is not int num || num != i + 1)
             {
                 return false;
             }

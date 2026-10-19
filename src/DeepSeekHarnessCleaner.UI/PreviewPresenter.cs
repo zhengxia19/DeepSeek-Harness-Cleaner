@@ -56,7 +56,8 @@ public sealed class PreviewPresenter
         return new PreviewOutcome(session, _legacy.Build(session, transcript), warnings);
     }
 
-    private static string? ReadTranscript(string fullPath, bool compressed, List<string> warnings, CancellationToken ct)
+    // N-06：附件列表演示器复用同一读取方式（代际选择与解压上限一致）。
+    internal static string? ReadTranscript(string fullPath, bool compressed, List<string> warnings, CancellationToken ct)
     {
         try
         {

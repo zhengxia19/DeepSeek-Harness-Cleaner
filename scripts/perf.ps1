@@ -35,10 +35,13 @@ for ($i = 1; $i -le $SessionCount; $i++) {
     $month = 1 + ([int][Math]::Floor($i / 27) % 9)
     $created = '2026-{0:d2}-{1:d2}T08:00:00+00:00' -f $month, $day
     $lines = New-Object string[] 201
-    $lines[0] = '{"type":"header","sessionId":"__ID__","formatVersion":4,"createdAt":"__CREATED__"}'.Replace('__ID__', $id).Replace('__CREATED__', $created)
+    # M-02 真实 header 契约：type:"session"/id/version/createdAt epoch-millis 数值。
+    $createdMs = ([DateTimeOffset]::Parse($created, [System.Globalization.CultureInfo]::InvariantCulture)).ToUnixTimeMilliseconds()
+    $lines[0] = '{"type":"session","id":"__ID__","version":4,"createdAt":__CREATEDMS__}'.Replace('__ID__', $id).Replace('__CREATEDMS__', $createdMs)
     for ($k = 1; $k -le 200; $k++) {
         $role = if ($k % 2 -eq 1) { 'user' } else { 'assistant' }
-        $lines[$k] = '{"type":"message","role":"__ROLE__","content":"perf sample line __K__ for session __ID__"}'.Replace('__ROLE__', $role).Replace('__K__', $k).Replace('__ID__', $id)
+        # M-03 真实消息信封：type:"<role>/message" + data.role + data.content[] 文本块。
+        $lines[$k] = '{"type":"__ROLE__/message","seq":__K__,"data":{"role":"__ROLE__","content":[{"type":"text","text":"perf sample line __K__ for session __ID__"}]}}'.Replace('__ROLE__', $role).Replace('__K__', $k).Replace('__ID__', $id)
     }
     [System.IO.File]::WriteAllLines((Join-Path $dir 'session.v4.jsonl'), $lines)
 }

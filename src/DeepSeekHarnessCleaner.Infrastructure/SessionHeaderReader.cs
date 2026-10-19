@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security;
 using System.Text;
 using System.Text.Json;
@@ -30,8 +29,10 @@ public sealed record SessionHeaderReadResult(
 }
 
 /// <summary>
-/// T-09 受限日志头部读取（design.md §2/§3）：只读取每个物理文件的首条 header 行，
-/// 验证 sessionId、formatVersion、createdAt（可选 cwd）；不解析其余事件行。
+/// T-09 受限日志头部读取（design.md §2/§3，M-02 对齐真实契约）：只读取每个物理文件的首条 header 行，
+/// 验证 <c>type=="session"</c>、<c>id</c>（非空字符串）、<c>version</c>（int，0～<see cref="MaxSupportedFormatVersion"/>）、
+/// <c>createdAt</c>（仅 epoch-millis JSON 数值；可选 cwd）；不解析其余事件行。
+/// 旧假设格式（<c>type:"header"</c>/<c>sessionId</c>/<c>formatVersion</c>/ISO 字符串日期）不再接受，按 HEADER_MISSING 安全失败。
 /// 明文按首行切分；.zstd 经 ZstdFrameDecoder 多帧解码。全程只读，源字节不变。
 /// </summary>
 public sealed class SessionHeaderReader
@@ -202,22 +203,26 @@ public sealed class SessionHeaderReader
         using (document)
         {
             var root = document.RootElement;
+            // M-02 真实契约（DIAG-scan-coverage / DIAG-event-format 实测）：
+            // 首行为 {"type":"session","id":"session-<uuid>","version":<int>,"createdAt":<epoch-millis 数值>,…}。
+            // 旧假设格式（type:"header" 等）不再接受 → HEADER_MISSING（安全失败，不放宽门禁）。
             if (root.ValueKind != JsonValueKind.Object
                 || !root.TryGetProperty("type", out var type)
                 || type.ValueKind != JsonValueKind.String
-                || type.GetString() != "header")
+                || type.GetString() != "session")
             {
                 return new SessionHeaderReadResult(ParseStatus.Corrupt, null, HeaderMissingErrorCode);
             }
 
-            if (!root.TryGetProperty("sessionId", out var id)
+            if (!root.TryGetProperty("id", out var id)
                 || id.ValueKind != JsonValueKind.String
                 || string.IsNullOrEmpty(id.GetString()))
             {
                 return new SessionHeaderReadResult(ParseStatus.Corrupt, null, HeaderIdMissingErrorCode);
             }
 
-            if (!root.TryGetProperty("formatVersion", out var version)
+            if (!root.TryGetProperty("version", out var version)
+                || version.ValueKind != JsonValueKind.Number
                 || !version.TryGetInt32(out var formatVersion)
                 || formatVersion < 0)
             {
@@ -227,13 +232,25 @@ public sealed class SessionHeaderReader
             if (formatVersion > MaxSupportedFormatVersion)
                 return new SessionHeaderReadResult(ParseStatus.Unsupported, null, HeaderVersionUnsupportedErrorCode);
 
+            // createdAt 仅接受 epoch-millis JSON 数值；字符串/缺失/非整数/超 DateTimeOffset 范围 → HEADER_DATE_INVALID。
             if (!root.TryGetProperty("createdAt", out var createdAt)
-                || createdAt.ValueKind != JsonValueKind.String
-                || !DateTimeOffset.TryParse(createdAt.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var created))
+                || createdAt.ValueKind != JsonValueKind.Number
+                || !createdAt.TryGetInt64(out var createdAtMillis))
             {
                 return new SessionHeaderReadResult(ParseStatus.Corrupt, null, HeaderDateInvalidErrorCode);
             }
 
+            DateTimeOffset created;
+            try
+            {
+                created = DateTimeOffset.FromUnixTimeMilliseconds(createdAtMillis);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return new SessionHeaderReadResult(ParseStatus.Corrupt, null, HeaderDateInvalidErrorCode);
+            }
+
+            // 其余字段（cwd/isSeeded/delegationDepth/agentPreset…）可选、不校验语义；cwd 仅约束 JSON 类型。
             string? cwd = null;
             if (root.TryGetProperty("cwd", out var cwdElement))
             {

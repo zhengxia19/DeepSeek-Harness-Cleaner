@@ -41,7 +41,7 @@ public sealed class AttachmentCleanupTests
         var plan = result.Plan!;
         Assert.Equal(2, plan.Targets.Count);
         Assert.All(plan.Targets, t => Assert.Equal(CleanupCategory.Attachment, t.Category));
-        Assert.True(plan.RequiresBackup);
+        Assert.False(plan.RequiresBackup); // N-04（D1）：附件删除备份可选。
         Assert.Equal(AttachmentCleanupSelection.NotSelectedReason, Assert.Single(result.Exclusions).Reason);
     }
 
@@ -151,13 +151,13 @@ public sealed class AttachmentCleanupTests
 
         var plan = a1.Plan!;
         Assert.Matches("^[0-9a-f]{64}$", plan.RootFingerprint);
-        Assert.True(plan.RequiresBackup);
+        Assert.False(plan.RequiresBackup); // N-04（D1）：附件删除备份可选。
         Assert.Equal(a1.Plan!.RootFingerprint, a2.Plan!.RootFingerprint);
         Assert.NotEqual(a1.Plan!.RootFingerprint, b.Plan!.RootFingerprint);
         Assert.Equal([P("attachments", "a.png"), P("attachments", "z.png")], plan.Targets.Select(t => t.AbsolutePath));
     }
 
-    // ---- 同一安全 executor 通道：强制源文件 ZIP 备份及确认；未备份不得删除 ----
+    // ---- 同一安全 executor 通道（N-04/D1）：备份可选、确认必需；提供备份仍校验 ----
 
     private static string Sha256Of(string path) =>
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
@@ -213,18 +213,25 @@ public sealed class AttachmentCleanupTests
     }
 
     [Fact]
-    public void Executor_WithoutBackup_NotDeleted()
+    public void Executor_WithoutBackup_ConfirmationStillRequired_DeletesWhenConfirmed()
     {
         var (fx, plan, target, _) = SetupAttachments();
         using (fx)
         {
             var probe = new HarnessProcessProbe(() => []);
 
-            var result = new CleanupExecutor(probe).Execute(plan, null, null, fx.DshHome, userConfirmed: true);
-
-            Assert.True(result.Aborted);
-            Assert.Equal(CleanupExecutor.GateBackupRequiredCode, result.AbortCode);
+            // 未确认：确认门禁仍生效（N-04 保留项 D4）。
+            var notConfirmed = new CleanupExecutor(probe).Execute(plan, null, null, fx.DshHome, userConfirmed: false);
+            Assert.True(notConfirmed.Aborted);
+            Assert.Equal(CleanupExecutor.GateNotConfirmedCode, notConfirmed.AbortCode);
             Assert.True(File.Exists(target));
+
+            // 已确认、无备份：删除成功且逐项报告（N-04/D1 备份可选）。
+            var result = new CleanupExecutor(probe).Execute(plan, null, null, fx.DshHome, userConfirmed: true);
+            Assert.False(result.Aborted);
+            Assert.True(result.AllSucceeded);
+            Assert.Single(result.Outcomes);
+            Assert.False(File.Exists(target));
         }
     }
 

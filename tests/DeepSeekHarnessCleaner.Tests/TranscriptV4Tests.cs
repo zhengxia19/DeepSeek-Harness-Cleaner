@@ -43,10 +43,10 @@ public sealed class TranscriptV4Tests
     }
 
     [Fact]
-    public void MissingTextField_MarkedIncomplete()
+    public void MissingContent_MarkedIncomplete()
     {
         var text = FixtureFactory.HeaderLine("s", 4, "2026-02-10T10:00:00Z") + "\n"
-            + "{\"type\":\"message\",\"role\":\"user\",\"ts\":\"2026-02-10T10:01:00Z\"}\n";
+            + "{\"type\":\"user/message\",\"seq\":1,\"time\":1770000000000,\"data\":{\"role\":\"user\"}}\n";
 
         var result = Projector.Project(text);
 
@@ -59,7 +59,7 @@ public sealed class TranscriptV4Tests
     [Fact]
     public void NonTextContent_MarkedIncomplete()
     {
-        var text = "{\"type\":\"message\",\"role\":\"user\",\"text\":42}\n";
+        var text = "{\"type\":\"user/message\",\"seq\":1,\"data\":{\"role\":\"user\",\"content\":[{\"type\":\"image\",\"source\":\"synthetic\"}]}}\n";
 
         var result = Projector.Project(text);
 
@@ -70,7 +70,7 @@ public sealed class TranscriptV4Tests
     [Fact]
     public void UnconfirmedRole_MarkedIncomplete()
     {
-        // fixture 仅确证 user/assistant；tool 角色不得猜测为可预览。
+        // tool/message 不在确证消息类型内（工具正文经 tool/result 确证）；不得猜测为可预览。
         var text = FixtureFactory.MessageLine("tool", "tool output", "2026-02-10T10:01:00Z") + "\n";
 
         var result = Projector.Project(text);
@@ -111,8 +111,10 @@ public sealed class TranscriptV4Tests
     [Fact]
     public void ReasoningAndSecretFields_NotDisplayed()
     {
-        var text = "{\"type\":\"message\",\"role\":\"assistant\",\"text\":\"visible answer\","
-            + "\"reasoning\":\"hidden chain of thought\",\"api_key\":\"sk-secret\"}\n";
+        var text = "{\"type\":\"assistant/message\",\"seq\":1,\"data\":{\"usage\":{\"synthetic\":true},"
+            + "\"api_key\":\"sk-secret\",\"message\":{\"role\":\"assistant\","
+            + "\"content\":[{\"type\":\"reasoning\",\"text\":\"hidden chain of thought\"},"
+            + "{\"type\":\"text\",\"text\":\"visible answer\"}]}}}\n";
 
         var result = Projector.Project(text);
 
@@ -177,6 +179,120 @@ public sealed class TranscriptV4Tests
         Assert.Equal(["user", "assistant"], result.Items.Select(i => i.Role));
         Assert.Equal(["synthetic v4 prompt", "synthetic v4 reply"], result.Items.Select(i => i.Text));
         Assert.True(result.IsProjectionComplete);
+    }
+
+    // ---- M-03 真实信封映射用例（M-01 证据 DIAG-event-format.txt） ----
+
+    [Fact]
+    public void MultiTextBlocks_ConcatenatedWithNewline()
+    {
+        // assistant/message 正文嵌套在 data.message（M-03 msg-probe 确证）。
+        var text = "{\"type\":\"assistant/message\",\"seq\":1,\"data\":{\"message\":{\"role\":\"assistant\",\"content\":["
+            + "{\"type\":\"text\",\"text\":\"part one\"},{\"type\":\"image\",\"source\":\"synthetic\"},"
+            + "{\"type\":\"text\",\"text\":\"part two\"}]}}}\n";
+
+        var result = Projector.Project(text);
+
+        Assert.Single(result.Items);
+        Assert.Equal("assistant", result.Items[0].Role);
+        Assert.Equal("part one\npart two", result.Items[0].Text);
+        Assert.True(result.IsProjectionComplete);
+    }
+
+    [Fact]
+    public void AssistantMessage_TextOnlyBlocks_Projected()
+    {
+        // 真实 assistant/message 多数仅含 tool-call/reasoning 块：无文本块按不完整处理，不猜测正文。
+        var text = "{\"type\":\"assistant/message\",\"seq\":1,\"data\":{\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"name\":\"synthetic\"}]}}}\n";
+
+        var result = Projector.Project(text);
+
+        Assert.Single(result.Items);
+        Assert.True(result.Items[0].IsPartial);
+    }
+
+    [Fact]
+    public void SystemAndDeveloperMessages_Projected()
+    {
+        var text = "{\"type\":\"system/message\",\"seq\":1,\"data\":{\"message\":{\"role\":\"system\",\"content\":[{\"type\":\"text\",\"text\":\"sys note\"}]}}}\n"
+            + "{\"type\":\"developer/message\",\"seq\":2,\"data\":{\"message\":{\"role\":\"developer\",\"content\":[{\"type\":\"text\",\"text\":\"dev note\"}]}}}\n";
+
+        var result = Projector.Project(text);
+
+        Assert.Equal(["system", "developer"], result.Items.Select(i => i.Role));
+        Assert.Equal(["sys note", "dev note"], result.Items.Select(i => i.Text));
+        Assert.True(result.IsProjectionComplete);
+    }
+
+    [Fact]
+    public void ToolResult_ProjectedWithToolRole()
+    {
+        var text = "{\"type\":\"tool/result\",\"seq\":1,\"time\":1770000060000,\"data\":{\"message\":"
+            + "{\"role\":\"tool\",\"content\":[{\"type\":\"text\",\"text\":\"tool output\"}]}}}\n";
+
+        var result = Projector.Project(text);
+
+        Assert.Single(result.Items);
+        Assert.Equal("tool", result.Items[0].Role);
+        Assert.Equal("tool output", result.Items[0].Text);
+        Assert.Equal(
+            DateTimeOffset.FromUnixTimeMilliseconds(1770000060000),
+            result.Items[0].At);
+        Assert.True(result.IsProjectionComplete);
+    }
+
+    [Fact]
+    public void ToolResult_MissingMessage_MarkedIncomplete()
+    {
+        var text = "{\"type\":\"tool/result\",\"seq\":1,\"data\":{\"toolName\":\"synthetic\"}}\n";
+
+        var result = Projector.Project(text);
+
+        Assert.Single(result.Items);
+        Assert.True(result.Items[0].IsPartial);
+    }
+
+    [Fact]
+    public void AggregateChunkLines_SkippedNotIncomplete()
+    {
+        // 聚合 chunk 行（seq0/time0 + data.dt[]/data.texts[]）为流式片段：预览跳过、不重复投影、不标不完整。
+        var text = "{\"type\":\"reasoning-chunks\",\"seq0\":1,\"time0\":1770000000000,\"data\":{\"dt\":[1,2],\"texts\":[\"a\",\"b\"]}}\n"
+            + "{\"type\":\"tool-call-chunks\",\"seq0\":3,\"time0\":1770000001000,\"data\":{\"dt\":[1],\"texts\":[\"c\"]}}\n"
+            + "{\"type\":\"text-chunks\",\"seq0\":4,\"time0\":1770000002000,\"data\":{\"dt\":[1],\"texts\":[\"d\"]}}\n";
+
+        var result = Projector.Project(text);
+
+        Assert.Empty(result.Items);
+        Assert.Equal(0, result.IncompleteCount);
+        Assert.True(result.IsProjectionComplete);
+    }
+
+    [Fact]
+    public void EnvelopeTime_EpochMillisParsed_MissingTimeNullAt()
+    {
+        var text = "{\"type\":\"user/message\",\"seq\":1,\"time\":1770000060000,\"data\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"with time\"}]}}\n"
+            + "{\"type\":\"user/message\",\"seq\":2,\"data\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"no time\"}]}}\n";
+
+        var result = Projector.Project(text);
+
+        Assert.Equal(2, result.Items.Count);
+        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1770000060000), result.Items[0].At);
+        Assert.Null(result.Items[1].At);
+        Assert.True(result.IsProjectionComplete);
+    }
+
+    [Fact]
+    public void KnownNonMessageTypes_MarkedIncompleteWithTypeAndLine()
+    {
+        // 词汇表内但未投影的类型（如 step/start）仍按类型/行号 + 不完整摘要输出，不猜测语义。
+        var text = "{\"type\":\"step/start\",\"seq\":1,\"time\":1770000000000,\"data\":{\"synthetic\":true}}\n";
+
+        var result = Projector.Project(text);
+
+        Assert.Single(result.Items);
+        Assert.True(result.Items[0].IsPartial);
+        Assert.Contains("step/start", result.Items[0].Text);
+        Assert.Contains("第 1 行", result.Items[0].Text);
     }
 
     private static string ReadDecodedPlainText(string path) => File.ReadAllText(path, Encoding.UTF8);

@@ -1,0 +1,35 @@
+诊断（非 T 任务）：扫描覆盖与归档会话核验 · 2026-10-19
+==========================================================
+
+问题：当前程序能否成功扫描本机所有 DSH 历史记录（含已归档）？
+
+方法（全部只读，未写真实 .dsh）：
+- 复用 UI 同一扫描栈（SessionLogDiscovery + PathGuard + SessionHeaderReader + InventoryService）
+  建临时 harness：artifacts/scan-check/（本地 SDK .dotnet\dotnet.exe 10.0.402 构建，exit=0）。
+- 运行：scan-check.exe %USERPROFILE%\.dsh\sessions → exit=0。
+- 与文件系统 ground truth 及 storages\workspace.json 的 archivedSessionIds 交叉核对。
+
+结果：
+1) 发现层 = 完整覆盖。
+   - SESSIONS=45（FS ground truth session-* 目录=45，白名单文件=46，含 1 个双代际目录）；ANOMALIES=0。
+   - 项目分布 8 个目录（--D-Code-...-- 编码名）。
+   - 归档核验：workspace.json archivedSessionIds=16；16/16 目录仍在 sessions 根内且 16/16 被扫描命中。
+     DSH 归档是 UI 标志（asar: workspace controller 事件 type:"archived"/archivedSessionIds），不移动文件。
+   - 全机仅此一个会话存储根：.dsh\sessions；.dsh 其余处（含 storages\session_projcache\sessions）无 session*.jsonl；
+     dsh-desktop 根只有 Electron 缓存目录，无历史日志。
+2) 语义层 = 全部解析失败（真实缺陷）。
+   - 46/46 文件 HEADER_READ Corrupt:HEADER_MISSING；SESSIONS 全部 NO_SESSION_ID / NO_CREATED_AT / Ambiguous。
+   - zstd 帧本身正常（magic 28B52FFD，无字典，多帧），解码成功。
+   - 真实 header 行（首行）：{"type":"session","version":4|0,"id":"session-<uuid>","createdAt":<epoch-millis 数值>,
+     "cwd":...,"isSeeded"?,"delegationDepth","agentPreset"}；id 与目录名一致。
+   - 代码期望（SessionHeaderReader.ParseHeaderLine）：type=="header"、sessionId、formatVersion、createdAt 为 ISO 字符串。
+     三处不匹配：type 值、字段名（id/version）、createdAt 编码（epoch 毫秒数值 vs 字符串）。
+   - 后果：UI 列表能列出全部会话但状态 Corrupt、无 ID/日期、Ambiguous → 按 design.md §2 不允许自动清理；
+     按 header 日期的筛选不可用（NO_CREATED_AT=45）。
+   - 注：design.md §2 第 29 行本就写"读取 header `id`"，实现与文档/真实格式均偏离；fixture 金样沿用了假设格式。
+
+建议（待用户确认后按任务流程立项）：
+- 修正 SessionHeaderReader 以匹配真实格式（type:"session"、id、version、createdAt epoch-millis），
+  同步更新 T-04 fixture 金样与相关测试断言；重跑 267 测试与冒烟。
+
+工件：artifacts/scan-check/（临时 harness，可删）；未改动 src/、docs/、tests/。

@@ -14,6 +14,7 @@ public sealed class UiScanSource : ISessionScanSource
 {
     private readonly SessionLogDiscovery _discovery = new(new PathGuard());
     private readonly SessionHeaderReader _reader = new();
+    private readonly SessionArchiveIndex _archiveIndex = new();
 
     /// <summary>最近一次 Scan 实际运行的托管线程 id（冒烟自检据此证明扫描不在 UI 线程执行）。</summary>
     public int LastScanThreadId { get; private set; } = -1;
@@ -73,7 +74,13 @@ public sealed class UiScanSource : ISessionScanSource
             anomalies.Add(new AnomalousFile(anomaly.FullPath, anomaly.RelativePath, anomaly.Reason, bytes));
         }
 
-        return new SessionScanData(null, sessions, anomalies);
+        // N-01/D5：归档标志只读索引；不可用时空集 + 状态码，扫描不失败。
+        var archive = _archiveIndex.Read(sessionRoot);
+        return new SessionScanData(null, sessions, anomalies)
+        {
+            ArchivedSessionIds = archive.ArchivedSessionIds,
+            ArchiveStatus = archive.Status,
+        };
     }
 
     private static DateTimeOffset SafeModifiedUtc(string path)
@@ -151,6 +158,10 @@ public sealed class InventoryPresenter
             return $"扫描失败：{result.RootErrorCode}";
 
         var text = $"共 {result.Sessions.Count} 个会话，合计 {FormatBytes(result.TotalBytes)}；异常文件 {result.AnomalousFiles.Count} 个";
+        // N-01/D5：归档计数可解释；归档信息不可用时明确提示，会话按未归档显示。
+        text += result.ArchiveStatus is null
+            ? $"；归档 {result.Sessions.Count(static s => s.IsArchived)}"
+            : "；归档信息不可用";
         if (filtered is not null)
             text += $"；筛选后 {filtered.Count} 条";
         return text;
