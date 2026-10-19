@@ -77,7 +77,16 @@ public sealed partial class MainForm : Form
         MainMenuStrip = _menu;
 
         _sessionGrid.SelectionChanged += OnSessionGridSelectionChanged;
-        _deleteButton.Enabled = false; // UX-01：未选择会话时禁用删除。
+        // N-02：勾选即时提交并刷新删除按钮启用态（预览仍按行选中触发）。
+        _sessionGrid.CurrentCellDirtyStateChanged += (_, _) =>
+        {
+            if (_sessionGrid.IsCurrentCellDirty)
+            {
+                _sessionGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            }
+        };
+        _sessionGrid.CellValueChanged += OnSessionGridValueChanged;
+        _deleteButton.Enabled = false; // UX-01：未勾选会话时禁用删除（N-02 起按勾选行判定）。
 
         if (_smokeResultPath is not null)
         {
@@ -112,23 +121,71 @@ public sealed partial class MainForm : Form
         _sessionGrid.Dock = DockStyle.Fill;
         _sessionGrid.MultiSelect = true;
         _sessionGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _sessionGrid.ReadOnly = true;
+        // N-02：网格级 ReadOnly 置 false，由列级 ReadOnly=true 锁定除勾选外的全部列。
+        // （列级 ReadOnly=false 会被 setter 移除并回退到网格级值，无法覆盖 true。）
+        _sessionGrid.ReadOnly = false;
         _sessionGrid.AllowUserToAddRows = false;
         _sessionGrid.AllowUserToDeleteRows = false;
         _sessionGrid.AllowUserToResizeRows = false;
         _sessionGrid.RowHeadersVisible = false;
         _sessionGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
         _sessionGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        // N-02：勾选列可编辑（其余列继承网格级 ReadOnly），进入单元格即编辑，单击即可切换勾选。
+        _sessionGrid.EditMode = DataGridViewEditMode.EditOnEnter;
         _sessionGrid.TabIndex = 9;
+        // N-02：列序 [勾选][序号][会话 ID][项目][创建时间][日期来源][大小][格式][状态][归档]。
+        // 勾选列：删除/备份目标选择，不可排序；序号列：绑定顺序赋值、只读、不可排序。
+        _sessionGrid.Columns.Add(new DataGridViewCheckBoxColumn
+        {
+            Name = "check",
+            HeaderText = "选",
+            Width = 40,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+            ReadOnly = false,
+        });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "num",
+            HeaderText = "序号",
+            Width = 50,
+            SortMode = DataGridViewColumnSortMode.NotSortable,
+        });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "id", HeaderText = "会话 ID", Width = 190 });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "project", HeaderText = "项目", Width = 130 });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "created", HeaderText = "创建时间", Width = 140 });
+        // N-02：project/created/size 三列按内容自适应（AllCells）；绑定后另有全行兜底（EnsureContentColumnWidths）。
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "project",
+            HeaderText = "项目",
+            Width = 130,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells,
+        });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "created",
+            HeaderText = "创建时间",
+            Width = 140,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells,
+        });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "origin", HeaderText = "日期来源", Width = 110 });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "size", HeaderText = "大小", Width = 110 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            Name = "size",
+            HeaderText = "大小",
+            Width = 110,
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells,
+        });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "format", HeaderText = "格式（代际）", Width = 140 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = "状态", Width = 110 });
         // N-01：归档标志列（是/—），来自 storages\workspace.json 只读识别；仅展示，不参与删除门禁。
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "archive", HeaderText = "归档", Width = 60 });
+        // N-02：除勾选列外全部列只读（序号/数据列不可编辑）。
+        foreach (DataGridViewColumn column in _sessionGrid.Columns)
+        {
+            if (column.Name != "check")
+            {
+                column.ReadOnly = true;
+            }
+        }
         _split.Panel1.Controls.Add(_sessionGrid);
 
         BuildFilterPanel();
@@ -250,8 +307,24 @@ public sealed partial class MainForm : Form
 
     private void OnSessionGridSelectionChanged(object? sender, EventArgs e)
     {
-        _deleteButton.Enabled = _sessionGrid.SelectedRows.Count > 0;
+        UpdateDeleteButtonEnabled();
         _ = RequestPreviewAsync();
+    }
+
+    /// <summary>N-02：勾选列值变化即时刷新删除按钮启用态（按勾选行数）。</summary>
+    private void OnSessionGridValueChanged(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex >= 0 && _sessionGrid.Columns[e.ColumnIndex].Name == "check")
+        {
+            UpdateDeleteButtonEnabled();
+        }
+    }
+
+    /// <summary>N-02：删除按钮启用条件 = 存在勾选行（备份按钮 N-05 迁入后同样按勾选行启用）。</summary>
+    private void UpdateDeleteButtonEnabled()
+    {
+        _deleteButton.Enabled = _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .Any(static row => row.Cells["check"].Value is true);
     }
 
     /// <summary>
@@ -273,7 +346,7 @@ public sealed partial class MainForm : Form
 
         if (rows.Count > 1)
         {
-            _preview.Text = $"已选择 {rows.Count} 个会话；单选时显示预览（删除按整会话选择）。";
+            _preview.Text = $"已选择 {rows.Count} 个会话；单选时显示预览（删除按勾选行）。";
             return;
         }
 
@@ -416,14 +489,18 @@ public sealed partial class MainForm : Form
         _statusLabel.Text = _presenter.BuildStatusText(filtered);
     }
 
-    /// <summary>绑定列表：每行 Tag 持有对应 SessionSummary，排序/筛选后选中项仍指向原会话。</summary>
+    /// <summary>绑定列表：每行 Tag 持有对应 SessionSummary，排序/筛选后选中项仍指向原会话。
+    /// N-02：首列勾选（初始未选）、次列序号按绑定顺序 1 起赋值；绑定后对内容列做全行宽度兜底。</summary>
     private void BindSessions(IReadOnlyList<SessionSummary> sessions)
     {
         _sessionGrid.SuspendLayout();
         _sessionGrid.Rows.Clear();
+        var num = 1;
         foreach (var session in sessions)
         {
             var index = _sessionGrid.Rows.Add(
+                false,
+                num++,
                 session.SessionId ?? "（未知）",
                 session.Project ?? "（未知）",
                 FormatDate(session.CreatedAt),
@@ -436,6 +513,43 @@ public sealed partial class MainForm : Form
         }
 
         _sessionGrid.ResumeLayout();
+        EnsureContentColumnWidths();
+        UpdateDeleteButtonEnabled();
+    }
+
+    /// <summary>
+    /// N-02：AllCells 只按已显示行计算宽度，虚拟化的未显示行可能漏算最长内容；
+    /// 绑定后逐行测量文本首选宽度（含表头与单元格内边距），不足则切到手动宽度兜底。
+    /// </summary>
+    private void EnsureContentColumnWidths()
+    {
+        foreach (var name in new[] { "project", "created", "size" })
+        {
+            var column = _sessionGrid.Columns[name]!;
+            var preferred = PreferredCellWidth(column.HeaderCell.InheritedStyle, column.HeaderText);
+            foreach (DataGridViewRow row in _sessionGrid.Rows)
+            {
+                var cell = row.Cells[column.Index];
+                preferred = Math.Max(preferred, PreferredCellWidth(cell.InheritedStyle, cell.Value as string ?? string.Empty));
+            }
+
+            preferred = Math.Max(preferred, column.MinimumWidth);
+            if (column.Width < preferred)
+            {
+                column.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+                column.Width = preferred;
+            }
+        }
+    }
+
+    /// <summary>N-02：单元格文本首选宽度 = MeasureText + 样式内边距 + 6px 边框/余量。</summary>
+    private int PreferredCellWidth(DataGridViewCellStyle style, string text)
+    {
+        var font = style.Font ?? _sessionGrid.Font;
+        var measured = TextRenderer.MeasureText(
+            text, font, new Size(int.MaxValue / 4, int.MaxValue / 4),
+            TextFormatFlags.Left | TextFormatFlags.NoPrefix);
+        return measured.Width + style.Padding.Horizontal + 6;
     }
 
     private static string FormatDate(DateTimeOffset? value) =>
@@ -463,12 +577,14 @@ public sealed partial class MainForm : Form
             return;
         }
 
-        var sessions = _sessionGrid.SelectedRows.Cast<DataGridViewRow>()
+        // N-02：删除目标 = 勾选行（按列表顺序取 Tag），不再依赖行选中。
+        var sessions = _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .Where(static row => row.Cells["check"].Value is true)
             .Select(static row => (SessionSummary)row.Tag!)
             .ToList();
         if (sessions.Count == 0)
         {
-            _statusLabel.Text = "未选择会话。";
+            _statusLabel.Text = "未勾选会话。";
             return;
         }
 
