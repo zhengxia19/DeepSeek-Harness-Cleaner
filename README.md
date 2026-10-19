@@ -1,6 +1,6 @@
 # DeepSeek Harness Cleaner
 
-> 状态：**已实施并通过 T-01～T-33 验收；0.1.0 发布包已构建（`dist/v0.1.0/win-x64/`），最终发布复核见 `artifacts/evidence/T-34.txt`**。文档日期：2026-10-18。目标：Windows 10 x64，DeepSeek Harness 0.2.0.0 本地数据（0.2.1-rc.2 只读识别、禁止清理）。方案 B：C# / .NET 10 / WinForms。
+> 状态：**已实施并通过 T-01～T-34 验收；M 系列真实格式修正已归档闭环，0.1.1 发布包已构建（`dist/v0.1.1/win-x64/`）**；下一线为 v0.2.0 N 系列（计划见 `docs/change-plan-v0.2.0.md`）。文档日期：2026-10-19。目标：Windows 10 x64，DeepSeek Harness 0.2.0.0 本地数据（0.2.1-rc.2 只读识别、禁止清理）。方案 B：C# / .NET 10 / WinForms。
 
 ## 项目目标
 

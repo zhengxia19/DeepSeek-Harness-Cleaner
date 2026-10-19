@@ -1,9 +1,9 @@
-# AGENT_CHECKPOINT — DeepSeek Harness Cleaner 维护任务（M 系列）
+# AGENT_CHECKPOINT — DeepSeek Harness Cleaner 维护任务（M 系列，已归档）
 
-更新：M-01～M-04 全部完成，v0.1.1 已发布。任务来源 docs/maintenance-tasks.md 已闭环。
+更新：M-01～M-04 全部完成，v0.1.1 已发布；M 系列改动已提交推送（`953d9bc` fix + `7a6c742` docs，分支 docs/post-release-maintenance-20261019），docs/maintenance-tasks.md 已归档。下一线：docs/change-plan-v0.2.0.md（N 系列，决策 D1～D6 已确认）。
 
 ## 状态
-- 分支 docs/post-release-maintenance-20261019，HEAD 起点 9b5b3b3；工作树含全部 M 系列改动**未提交**（8 源码/测试 + 4 文档 + 3 脚本 + 证据；packages.lock.json ×4 已复原干净）。
+- 分支 docs/post-release-maintenance-20261019；工作树干净（M 系列全部改动已提交）。
 - M-01 ✅ DIAG-event-format.txt；M-02 ✅ M-02.txt（header 契约）；M-03 ✅ M-03.txt（事件信封/角色/时间映射）；M-04 ✅ M-04.txt + M-04-win10.txt（发布 v0.1.1）。
 
 ## v0.1.1 发布要点
@@ -18,7 +18,7 @@
 
 ## 未验证 / 遗留（如实）
 - freshly-provisioned Win10 干净 VM 未验证（release.md §7 已声明）。
-- 工作树未提交；如需提交按 git-commit-push.cmd 或手工 commit（提交信息建议引用 M-01～M-04 证据）。
+- 工作树已提交推送（953d9bc / 7a6c742）；packages.lock.json 保持复原干净。
 - 真实根为活动根：会话数随时间漂移（45→49→51），证据均为时点快照。
 
 ## 命令备忘

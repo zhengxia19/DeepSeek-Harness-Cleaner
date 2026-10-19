@@ -1,5 +1,7 @@
 # 维护任务清单（M 系列）— 真实 header/事件格式修正
 
+> **归档状态（2026-10-19）：已闭环。** M-01～M-04 全部完成并通过验收（证据 `artifacts/evidence/M-01.txt`～`M-04-win10.txt`），v0.1.1 已发布（`dist/v0.1.1/win-x64/`）；提交 `953d9bc` 已推送。本清单归档，不再更新；§不做项中"归档标志的 UI 展示"已被 v0.2.0 N 系列取代。后续工作见 `docs/change-plan-v0.2.0.md`。
+
 > 来源：`artifacts/evidence/DIAG-scan-coverage.txt`（2026-10-19 只读核验）。
 > 已确证缺陷：真实 DSH 会话 header 为 `{"type":"session","version":<int>,"id":"session-<uuid>","createdAt":<epoch-millis 数值>,"cwd"?,…}`；
 > `SessionHeaderReader` 却期望 `type:"header"` / `sessionId` / `formatVersion` / ISO 字符串日期，
