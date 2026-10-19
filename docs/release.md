@@ -2,7 +2,7 @@
 
 ## 1. 发布版本和产物
 
-- 当前发布：**`0.1.1`**（真实格式修正维护版，见 §7）；首发 `0.1.0`，方案为 `win-x64` 自包含 WinForms EXE；单文件优先，但若 ZstdSharp 与 single-file 组合造成真实问题，保留自包含目录发布并追加 ADR，不能偷偷改路线。
+- 当前发布：**`0.2.0`**（UI 功能与维护版，N-01～N-09，见 §8）；上一版 `0.1.1`（真实格式修正维护版，见 §7），首发 `0.1.0`，方案为 `win-x64` 自包含 WinForms EXE；单文件优先，但若 ZstdSharp 与 single-file 组合造成真实问题，保留自包含目录发布并追加 ADR，不能偷偷改路线。
 - **自 v0.2.0 起发布改为 framework-dependent（N-08/R9）**：`publish.ps1` 使用 `-p:SelfContained=false`（保留 `-r win-x64 -p:PublishSingleFile=true`），EXE 不捆绑 .NET 运行时（体积 ~103MB → ~1MB），需预装 .NET 10 Windows Desktop Runtime（x64）；THIRD-PARTY-NOTICES 移除“.NET 运行时捆绑”条目。0.1.x 历史产物仍为自包含。
 - 发布目录 `dist/v<版本>/win-x64/`，包含程序 EXE、README 摘要、LICENSE/THIRD-PARTY-NOTICES（如适用）、`SHA256SUMS.txt`。
 - 不分发 NuGet 缓存、SDK、真实会话数据、配置或测试 fixtures。
@@ -41,6 +41,17 @@ Get-FileHash .\dist\v0.1.1\win-x64\DeepSeekHarnessCleaner.UI.exe -Algorithm SHA2
 - 真实根只读核验（COMPAT-01，前后快照证明零写入）：51 会话全部 `Valid`（Corrupt=0、Ambiguous=0、异常文件=0），51/51 带 `createdAt`（日期可筛选），快照 changed=0/deleted=0/added=0。任务书预期“45 会话”为诊断时点计数，真实根为活动根（51 为核验时点），如实记录。
 - 验证环境同 §6：Windows 10 Pro 22H2 (19045.6466) x64 VMware 隔离 VM；**freshly-provisioned 干净 VM 仍未验证**，不宣称兼容通过。
 - 逐项证据：`artifacts/evidence/M-01.txt`～`M-04.txt`、`M-04-win10.txt`；诊断 `DIAG-event-format.txt`、`DIAG-scan-coverage.txt`。
+
+## 8. 0.2.0 发布记录（UI 功能与维护版，N 系列）
+
+- 版本 0.2.0，日期 2026-10-19；代码基线 commit `5c988e5`（N-08；N-09 发布 commit 仅含文档与证据，不改代码）。变更范围：N-01 归档只读识别、N-02 列表结构与勾选语义、N-03 窗口位置持久化、N-04 删除备份改可选（ADR-0003）、N-05 备份入口移至主窗、N-06 附件列表只读展示、N-07 删除对话框自适应布局与居中修复、N-08 framework-dependent 发布。
+- 产物 `dist/v0.2.0/win-x64/DeepSeekHarnessCleaner.UI.exe`（**0.9 MB**，framework-dependent，需预装 .NET 10 Windows Desktop Runtime（x64），SHA-256 `151c2ef7936624a9248943fbce558487ea13481bbc9f7afad77647f702436fa2`；包内 `SHA256SUMS.txt` 另含 LICENSE.txt/README.md/THIRD-PARTY-NOTICES.txt 哈希）。未签名。
+- 门禁：build 0 警告（`-warnaserror`）；测试 310/310；`dotnet format --verify-no-changes` 干净；`dotnet package list --vulnerable --include-transitive` 五工程均“没有易受攻击的包”。
+- 冒烟：`scripts/smoke-win10.ps1` 全 13 项 PASS（自包含副本 Smoke 94 PASS/0 FAIL、TC-18 运行期 0 条 TCP 连接、COMPAT-01 真实根只读）；`bin` EXE 直接冒烟 94/94；**发布 EXE 本体**冒烟 94/94（N-08、N-09 各一次）。证据 `artifacts/evidence/N-01.txt`～`N-09.txt`、`N-0*-win10-smoke.txt`。
+- 真实根只读核验（COMPAT-01，前后快照零写入）：**54** 会话全部 `Valid`（Corrupt=0、Ambiguous=0、异常文件=0），54/54 带 `createdAt`；归档命中 19 与 `workspace.json` 交叉核对一致（stamp 前后 `4824|639279880895552083` 不变）；快照 changed=0/deleted=0/added=0；附件根 2 文件零变更零删除（dangling=0，全局孤儿结论可得）。任务书预期“45 会话/归档 16”为计划时点计数，真实根为活动根（54/19 为核验时点），如实记录。
+- 验证环境：Windows 10 Pro 22H2 (19045.6466) x64 VMware 隔离 VM；SDK 10.0.402（项目本地）。**freshly-provisioned 干净 VM 仍未验证**；framework-dependent 的“未装运行时”负向场景本机无机可测，**未验证**（预期 apphost 报 framework not found 非零退出）。
+- 遗留观察（未修复，非阻断）：`BackupDialog`/`ResultsDialog`/`AttachmentListDialog` 仍以 `CenterParent` + 非模态 `Show(owner)` 打开，存在与 N-07 相同的潜在不居中问题（N-07 边界外，待后续决策）。
+- 发布审批人：用户（§1 决策点 D1～D6 已确认）。
 
 ## 4. 验证及回滚
 

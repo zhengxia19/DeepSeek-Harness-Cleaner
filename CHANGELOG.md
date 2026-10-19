@@ -2,7 +2,7 @@
 
 > 2026-10-19 文档维护：对齐 v0.1.0 已交付状态、Agent 后续维护规则与发布证据的表述；不构成新版本功能发布。
 
-## [Unreleased]（v0.2.0 进行中）
+## [0.2.0] — 2026-10-19（win-x64 framework-dependent 单文件，未签名；发布记录见 docs/release.md §8）
 
 ### Added
 - **归档会话只读识别与展示（N-01）**：扫描时只读读取 `storages/workspace.json`（与会话根同级）的 `global.archivedSessionIds`，会话列表新增“归档”列（是/—），状态栏显示“归档 N”。文件缺失/超限(32MiB)/不可读/JSON 非法/结构未知时扫描不失败，全部按未归档展示并提示“归档信息不可用”。归档 id 按 header `id` 精确匹配；该文件永不写入或删除（见 docs/design.md §2、docs/interfaces.md §3/§5、docs/testing.md §2.3）。

@@ -1,0 +1,52 @@
+N-09 全量回归 + 冒烟 + 发布 v0.2.0 证据
+=========================================
+分支: docs/post-release-maintenance-20261019（代码基线 HEAD 5c988e5 = N-08；本任务仅文档/证据）
+日期: 2026-10-19（本地）
+
+一、门禁命令与退出码（全部在最终代码状态执行）
+1) 漏洞门禁: .\.dotnet\dotnet.exe package list --vulnerable --include-transitive
+   → Domain/Application/Infrastructure/UI/Tests 五工程均“没有易受攻击的包”，VULN_EXIT=0
+2) build: .\.dotnet\dotnet.exe build DeepSeekHarnessCleaner.sln -c Release -warnaserror --nologo
+   → 0 个警告 / 0 个错误，BUILD_EXIT=0
+3) test: …test… --no-build → 失败 0 / 通过 310 / 总计 310，TEST_EXIT=0
+4) format: …format --verify-no-changes → FMT_EXIT=0
+5) 合成 fixture 直接冒烟（全新副本 n09-fixture\sessions + storages\workspace.json utf8NoBOM，
+   基于 golden fixture dsh-t18-fixture：305 会话/1 异常）：
+   bin EXE --smoke → EXIT=0，PASS=94 FAIL=0
+6) scripts/smoke-win10.ps1 -EvidencePath artifacts/evidence/N-09-win10-smoke.txt
+   → 13/13 PASS，WIN10_RESULT=PASS，SCRIPT_EXIT=0
+   关键数值：PUBLISH_EXIT=0 sizeMB=102.8（脚本自包含验证副本）；SMOKE 94/0；TC18_NETWORK_CONNECTIONS=0；
+   COMPAT sessions=54 anomalies=0 ambiguous=0 corrupt=0 dateSessions=54；archived=19 wsGroundTruthMatched=19；
+   wsStampBefore=wsStampAfter=4824|639279880895552083；status={"Valid":54}；generations={"gen4":53,"gen0":2}；
+   snapshot files=55 changed=0 deleted=0 added=0；attachments count=2 dangling=0 orphanConclusion=TRUE snapshot 零变更
+7) 发布: .\scripts\publish.ps1 -Version 0.2.0 → PUBLISH_OK，PUBLISH_EXIT=0
+   dist/v0.2.0/win-x64/：DeepSeekHarnessCleaner.UI.exe, LICENSE.txt, README.md, SHA256SUMS.txt, THIRD-PARTY-NOTICES.txt
+   EXE_MB=0.9（framework-dependent，N-08 语义生效）
+8) 发布 EXE 本体冒烟（全新副本 n09d-fixture）：EXIT=0，PASS=94 FAIL=0
+
+二、发布产物哈希（磁盘 dist/v0.2.0/win-x64/SHA256SUMS.txt，小写）
+- DeepSeekHarnessCleaner.UI.exe  151c2ef7936624a9248943fbce558487ea13481bbc9f7afad77647f702436fa2  （0.9 MB）
+- LICENSE.txt                    13f641720e2987c5bf46f44945043e283d48867ff2b2f78f264a4fa0a7681414
+- README.md                      7d379106d19776e3956959938b6c2bb7a97186d8981985dbbdac31b8e0a4d7cf
+- THIRD-PARTY-NOTICES.txt        8be129cacf8f4e58de15d084d6f2d7107d4421072fbaa64b121f57cdb5638245
+（dist/ 被 .gitignore 排除，哈希以本文件与包内 SHA256SUMS.txt 留存；未签名）
+
+三、真实根只读核验（红线合规）
+- 全程未对真实 %USERPROFILE%\.dsh / %APPDATA%\dsh-desktop 写入/删除；workspace.json 前后 stamp 一致；
+  会话根快照 changed=0/deleted=0/added=0；附件根快照零变更；删除操作仅发生在合成 fixture 副本。
+- 核验时点事实：54 会话全部 Valid（无 Corrupt）、54/54 带 createdAt、归档命中 19 与 workspace.json 一致、附件 2（dangling=0）。
+- 计划预期“45 会话/归档列 16”为计划时点计数；真实根为活动根，54/19 为核验时点计数，如实记录（同 M-04 先例）。
+
+四、文档定稿
+- CHANGELOG.md：[Unreleased]（v0.2.0 进行中）→ [0.2.0] — 2026-10-19（Added N-01/03/05/06，Changed N-04/02/07/08）
+- docs/release.md：§1 当前发布 → 0.2.0；新增 §8 0.2.0 发布记录（版本/日期/commit/SDK/OS/测试统计/冒烟/哈希/依赖扫描/限制/审批人）
+- README.md：无自包含表述，无需改动（N-08 已核）
+
+五、如实标注的未验证项
+- freshly-provisioned 干净 Windows 10 VM 首启：未验证（无该环境；等效证据同 §6/§7 先例）
+- framework-dependent 未装运行时负向场景：本机即运行时宿主，无机可测，未验证（见 N-08.txt）
+- BackupDialog/ResultsDialog/AttachmentListDialog 非模态 CenterParent 潜在不居中：观察记录，未修复（N-07 边界外，待决策）
+
+六、备注
+- publish.ps1 的 -p:Version 注入改写 packages.lock.json（已知副作用），提交前已 git checkout 还原。
+- 本仓库无 git tag 先例（0.1.0/0.1.1 未打 tag），v0.2.0 沿用：发布 = dist 产物 + 文档定稿 + 证据，不新增 tag。
