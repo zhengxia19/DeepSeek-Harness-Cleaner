@@ -42,6 +42,7 @@ public sealed partial class MainForm : Form
     private ResultsDialog? _lastResultsDialog;
     private readonly string? _scanRootOverride;
     private readonly string? _logDirOverride;
+    private readonly bool _persistWindowSettings;
     private string? _effectiveScanRoot;
     private CancellationTokenSource? _previewCts;
     private bool _scanning;
@@ -62,6 +63,14 @@ public sealed partial class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(1100, 680);
         MinimumSize = new Size(640, 420);
+
+        // N-03：仅正常模式读写用户配置；冒烟/--scan-root 覆盖模式不触碰真实 %LOCALAPPDATA%（避免 CI 污染）。
+        _persistWindowSettings = _smokeResultPath is null && _scanRootOverride is null;
+        if (_persistWindowSettings)
+        {
+            ApplySavedWindowGeometry();
+            FormClosing += OnFormClosingSaveGeometry;
+        }
 
         BuildMenu();
         BuildListRegion();
@@ -92,6 +101,52 @@ public sealed partial class MainForm : Form
         {
             Shown += OnSmokeShown;
         }
+    }
+
+    /// <summary>
+    /// N-03：按已保存几何恢复窗口。有保存位置且与任一屏幕工作区相交 → Manual + 位置/大小；
+    /// 全出屏（如外接显示器已移除）→ 位置回退 CenterScreen，大小仍恢复；最大化标志独立生效。
+    /// </summary>
+    private void ApplySavedWindowGeometry()
+    {
+        var settings = new SettingsStore().Load().Settings;
+        var workingAreas = Screen.AllScreens.Select(static screen => screen.WorkingArea).ToArray();
+        if (WindowGeometry.TryResolve(settings, workingAreas, out var bounds))
+        {
+            StartPosition = FormStartPosition.Manual;
+            Location = bounds.Location;
+        }
+
+        var size = WindowGeometry.RestoreSize(settings);
+        Size = new Size(Math.Max(size.Width, MinimumSize.Width), Math.Max(size.Height, MinimumSize.Height));
+        if (settings.WindowMaximized == true)
+        {
+            WindowState = FormWindowState.Maximized;
+        }
+    }
+
+    /// <summary>
+    /// N-03：正常退出与关窗均保存窗口几何（先 Load 保留其余设置字段；既有文件损坏/未知 schema
+    /// 时 SettingsStore 拒绝覆写，保持既有语义）。最大化时保存 RestoreBounds（正常态几何）。
+    /// </summary>
+    private void OnFormClosingSaveGeometry(object? sender, FormClosingEventArgs e)
+    {
+        var store = new SettingsStore();
+        var current = store.Load();
+        var bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            return;
+        }
+
+        _ = store.Save(current.Settings with
+        {
+            WindowX = bounds.X,
+            WindowY = bounds.Y,
+            WindowWidth = bounds.Width,
+            WindowHeight = bounds.Height,
+            WindowMaximized = WindowState == FormWindowState.Maximized,
+        });
     }
 
     private void BuildMenu()

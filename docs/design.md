@@ -112,6 +112,7 @@ BackupValidated → Recheck → AwaitConfirm → Deleting → Completed/PartialF
 
 - 工具配置独立存放 `%LOCALAPPDATA%\DeepSeekHarnessCleaner\settings.json`（非 Harness 目录）。初次启动不存在时使用默认值；损坏则报告并使用默认（不覆写损坏文件）。
 - 仅保存 `schemaVersion`、最近选择的受控根、备份路径、日期筛选偏好、窗口布局；不保存会话正文、身份凭据或敏感模型配置；原始根路径显示须明确本地使用。
+- **窗口位置/大小持久化（N-03，R2）**：正常模式启动时按已保存几何恢复（`windowX/windowY` 有值且与任一屏幕工作区相交 → Manual 定位；全出屏仅位置回退居中，尺寸仍恢复；`windowMaximized=true` 最大化启动）；正常退出与关窗均在 `FormClosing` 保存几何（最大化时保存 RestoreBounds；先读后改，保留其余字段，损坏/未知 schema 拒绝覆写的既有语义不变）。冒烟与 `--scan-root` 覆盖模式不读写用户配置，避免 CI 污染真实 `%LOCALAPPDATA%`。跨屏判定为 Infrastructure 纯函数 `WindowGeometry.TryResolve`（可单测）。
 - 配置更新使用临时文件与替换，并可选择不记住路径。
 
 ## 10. 错误与取消

@@ -5,7 +5,7 @@ namespace DeepSeekHarnessCleaner.Infrastructure;
 
 /// <summary>
 /// 工具设置模型（interfaces.md §4，schemaVersion=1）。仅保存记忆路径开关、
-/// 受控根路径、日期筛选偏好、预览上限与窗口尺寸；不含会话正文或凭据。
+/// 受控根路径、日期筛选偏好、预览上限与窗口几何（尺寸 + N-03 位置/最大化）；不含会话正文或凭据。
 /// </summary>
 public sealed record AppSettings
 {
@@ -21,6 +21,14 @@ public sealed record AppSettings
     public int PreviewMaxItems { get; init; } = SettingsStore.PreviewMaxItemsLimit;
     public int WindowWidth { get; init; } = DefaultWindowWidth;
     public int WindowHeight { get; init; } = DefaultWindowHeight;
+
+    /// <summary>N-03：窗口位置（外层 Bounds 坐标，负值对多屏合法）；null = 未保存过。</summary>
+    public int? WindowX { get; init; }
+
+    public int? WindowY { get; init; }
+
+    /// <summary>N-03：退出时是否处于最大化；null = 未保存过。</summary>
+    public bool? WindowMaximized { get; init; }
 
     public static AppSettings Default { get; } = new AppSettings();
 }
@@ -62,6 +70,9 @@ public sealed class SettingsStore
 
     private const int MinWindowSide = 320;
     private const int MaxWindowSide = 8192;
+
+    /// <summary>N-03：窗口坐标钳制界（负值对多屏布局合法；超出视为异常值）。</summary>
+    public const int MaxWindowCoordinate = 1_000_000;
 
     private static readonly JsonSerializerOptions WriteOptions = new()
     {
@@ -147,6 +158,9 @@ public sealed class SettingsStore
                 PreviewMaxItems = ReadInt(root, "previewMaxItems", PreviewMaxItemsLimit, 1, PreviewMaxItemsLimit),
                 WindowWidth = ReadInt(root, "windowWidth", AppSettings.DefaultWindowWidth, MinWindowSide, MaxWindowSide),
                 WindowHeight = ReadInt(root, "windowHeight", AppSettings.DefaultWindowHeight, MinWindowSide, MaxWindowSide),
+                WindowX = ReadNullableInt(root, "windowX", -MaxWindowCoordinate, MaxWindowCoordinate),
+                WindowY = ReadNullableInt(root, "windowY", -MaxWindowCoordinate, MaxWindowCoordinate),
+                WindowMaximized = ReadNullableBool(root, "windowMaximized"),
             };
 
             return new SettingsLoadResult(settings, SettingsLoadStatus.Loaded, null);
@@ -218,8 +232,14 @@ public sealed class SettingsStore
             WindowHeight = settings.WindowHeight > 0
                 ? Math.Clamp(settings.WindowHeight, MinWindowSide, MaxWindowSide)
                 : AppSettings.DefaultWindowHeight,
+            WindowX = ClampCoordinateOrNull(settings.WindowX),
+            WindowY = ClampCoordinateOrNull(settings.WindowY),
+            WindowMaximized = settings.WindowMaximized,
         };
     }
+
+    private static int? ClampCoordinateOrNull(int? value) =>
+        value is null ? null : Math.Clamp(value.Value, -MaxWindowCoordinate, MaxWindowCoordinate);
 
     private static SettingsDto ToDto(AppSettings settings) => new(
         settings.SchemaVersion,
@@ -230,7 +250,10 @@ public sealed class SettingsStore
         DateFieldToToken(settings.DateField),
         settings.PreviewMaxItems,
         settings.WindowWidth,
-        settings.WindowHeight);
+        settings.WindowHeight,
+        settings.WindowX,
+        settings.WindowY,
+        settings.WindowMaximized);
 
     private static string? RootOrNull(string? root)
     {
@@ -264,6 +287,26 @@ public sealed class SettingsStore
             return fallback;
         return Math.Clamp(parsed, min, max);
     }
+
+    /// <summary>N-03：可选整数（窗口坐标）；缺失、null、非整数或非 int64 数值 → null（未保存），在界内则钳制。</summary>
+    private static int? ReadNullableInt(JsonElement root, string name, int min, int max)
+    {
+        if (!root.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.Number)
+            return null;
+        if (!value.TryGetInt64(out var parsed))
+            return null;
+        return (int)Math.Clamp(parsed, min, max);
+    }
+
+    private static bool? ReadNullableBool(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var value)
+            ? value.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                _ => null,
+            }
+            : null;
 
     private static DateFilterField ReadDateField(JsonElement root, string name)
     {
@@ -311,5 +354,8 @@ public sealed class SettingsStore
         string DateField,
         int PreviewMaxItems,
         int WindowWidth,
-        int WindowHeight);
+        int WindowHeight,
+        int? WindowX,
+        int? WindowY,
+        bool? WindowMaximized);
 }

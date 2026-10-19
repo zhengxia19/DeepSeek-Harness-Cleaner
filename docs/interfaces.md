@@ -48,13 +48,17 @@ interface ICleanupExecutor { Task<CleanupResult> ExecuteAsync(CleanupPlan plan, 
   "dateField": "fileModified",
   "previewMaxItems": 2000,
   "windowWidth": 1100,
-  "windowHeight": 700
+  "windowHeight": 700,
+  "windowX": null,
+  "windowY": null,
+  "windowMaximized": null
 }
 ```
 
 - `rememberRoots=false` 时不得持久化所选绝对路径；默认扫描位置为系统环境推导。
 - `previewMaxItems` 固定上限 2000；恶意大值按设计上限截断或报配置错误；不得扩展到未授权根。
 - 任何未知 `schemaVersion`：只读提示/回退默认，不覆盖用户已有配置。
+- **窗口几何（N-03，schemaVersion 保持 1）**：`windowX/windowY/windowMaximized` 为可选字段，`null` = 未保存过；旧文件缺字段等价 `null`（向后兼容）。坐标为窗口外层 Bounds（DIP），负值对多屏布局合法，读写钳制 ±1,000,000，非数值按未保存处理；恢复时与任一屏幕工作区不相交（全出屏）仅位置回退居中，尺寸仍恢复；`windowMaximized=true` 时以最大化启动。冒烟/`--scan-root` 覆盖模式不读写该文件。
 
 ## 5. 错误码
 

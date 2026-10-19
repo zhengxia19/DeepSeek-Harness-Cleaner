@@ -28,6 +28,7 @@ public sealed class SettingsDialog : Form
     ];
 
     private readonly SettingsStore _store;
+    private readonly AppSettings _loadedSettings;
     private readonly CheckBox _rememberRoots = new() { Text = "记住选择的扫描根与备份根" };
     private readonly TextBox _sessionRoot = new();
     private readonly TextBox _desktopRoot = new();
@@ -49,6 +50,7 @@ public sealed class SettingsDialog : Form
 
         var loaded = _store.Load();
         var settings = loaded.Settings;
+        _loadedSettings = settings;
 
         Text = "设置";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -146,6 +148,10 @@ public sealed class SettingsDialog : Form
             PreviewMaxItems = (int)_previewMaxItems.Value,
             WindowWidth = (int)_windowWidth.Value,
             WindowHeight = (int)_windowHeight.Value,
+            // N-03：本对话框无窗口位置入口；保存时原样保留已保存的几何字段，避免被清空。
+            WindowX = _loadedSettings.WindowX,
+            WindowY = _loadedSettings.WindowY,
+            WindowMaximized = _loadedSettings.WindowMaximized,
         };
 
         var result = _store.Save(settings);

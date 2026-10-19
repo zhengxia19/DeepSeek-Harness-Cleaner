@@ -222,4 +222,106 @@ public sealed class SettingsTests
         Assert.Equal(SettingsLoadStatus.Loaded, loaded.Status);
         Assert.Equal(1200, loaded.Settings.WindowWidth);
     }
+
+    // N-03：窗口位置/大小/最大化持久化（R2）。
+
+    [Fact]
+    public void WindowGeometry_RoundTripsIncludingNegativeCoordinatesAndMaximized()
+    {
+        using var fx = FixtureRoot.Create();
+        var store = new SettingsStore(SettingsPath(fx));
+
+        Assert.Equal(SettingsSaveStatus.Saved, store.Save(new AppSettings
+        {
+            WindowX = -1920,
+            WindowY = 40,
+            WindowWidth = 1280,
+            WindowHeight = 800,
+            WindowMaximized = true,
+        }).Status);
+        var raw = File.ReadAllText(store.FilePath);
+        Assert.Contains("\"windowX\": -1920", raw, StringComparison.Ordinal);
+        Assert.Contains("\"windowMaximized\": true", raw, StringComparison.Ordinal);
+
+        var loaded = store.Load();
+        Assert.Equal(SettingsLoadStatus.Loaded, loaded.Status);
+        Assert.Equal(-1920, loaded.Settings.WindowX);
+        Assert.Equal(40, loaded.Settings.WindowY);
+        Assert.Equal(1280, loaded.Settings.WindowWidth);
+        Assert.Equal(800, loaded.Settings.WindowHeight);
+        Assert.True(loaded.Settings.WindowMaximized);
+    }
+
+    [Fact]
+    public void OldFileWithoutGeometryFields_LoadsAsUnsaved()
+    {
+        using var fx = FixtureRoot.Create();
+        var store = new SettingsStore(SettingsPath(fx));
+        Directory.CreateDirectory(Path.GetDirectoryName(store.FilePath)!);
+        File.WriteAllText(store.FilePath, """
+            { "schemaVersion": 1, "rememberRoots": false, "windowWidth": 1100, "windowHeight": 700 }
+            """);
+
+        var loaded = store.Load();
+
+        Assert.Equal(SettingsLoadStatus.Loaded, loaded.Status);
+        Assert.Null(loaded.Settings.WindowX);
+        Assert.Null(loaded.Settings.WindowY);
+        Assert.Null(loaded.Settings.WindowMaximized);
+    }
+
+    [Fact]
+    public void GeometryFields_OutOfBoundsAreClamped_NonNumericTreatedAsUnsaved()
+    {
+        using var fx = FixtureRoot.Create();
+        var store = new SettingsStore(SettingsPath(fx));
+        Directory.CreateDirectory(Path.GetDirectoryName(store.FilePath)!);
+        File.WriteAllText(store.FilePath, """
+            { "schemaVersion": 1, "windowX": 999999999, "windowY": -999999999, "windowMaximized": "yes" }
+            """);
+
+        var loaded = store.Load();
+
+        Assert.Equal(SettingsLoadStatus.Loaded, loaded.Status);
+        Assert.Equal(SettingsStore.MaxWindowCoordinate, loaded.Settings.WindowX);
+        Assert.Equal(-SettingsStore.MaxWindowCoordinate, loaded.Settings.WindowY);
+        Assert.Null(loaded.Settings.WindowMaximized);
+    }
+
+    [Fact]
+    public void GeometryFields_NonIntegerAreTreatedAsUnsaved()
+    {
+        using var fx = FixtureRoot.Create();
+        var store = new SettingsStore(SettingsPath(fx));
+        Directory.CreateDirectory(Path.GetDirectoryName(store.FilePath)!);
+        File.WriteAllText(store.FilePath, """
+            { "schemaVersion": 1, "windowX": "abc", "windowY": 1.5, "windowMaximized": 1 }
+            """);
+
+        var loaded = store.Load();
+
+        Assert.Equal(SettingsLoadStatus.Loaded, loaded.Status);
+        Assert.Null(loaded.Settings.WindowX);
+        Assert.Null(loaded.Settings.WindowY);
+        Assert.Null(loaded.Settings.WindowMaximized);
+    }
+
+    [Fact]
+    public void SaveWithoutGeometry_WritesNulls_AndCorruptFileStillRejectsOverwrite()
+    {
+        using var fx = FixtureRoot.Create();
+        var store = new SettingsStore(SettingsPath(fx));
+
+        Assert.Equal(SettingsSaveStatus.Saved, store.Save(new AppSettings { WindowX = 100 }).Status);
+        var raw = File.ReadAllText(store.FilePath);
+        Assert.Contains("\"windowX\": 100", raw, StringComparison.Ordinal);
+        Assert.Contains("\"windowY\": null", raw, StringComparison.Ordinal);
+        Assert.Contains("\"windowMaximized\": null", raw, StringComparison.Ordinal);
+
+        // 既有语义保持：损坏文件仍拒绝覆写（含窗口几何保存路径）。
+        File.WriteAllText(store.FilePath, "{ \"schemaVersion\": 1, oops");
+        var saved = store.Save(new AppSettings { WindowX = 10, WindowY = 20 });
+        Assert.Equal(SettingsSaveStatus.RejectedCorrupt, saved.Status);
+        Assert.Equal("{ \"schemaVersion\": 1, oops", File.ReadAllText(store.FilePath));
+    }
 }

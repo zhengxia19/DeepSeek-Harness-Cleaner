@@ -1,0 +1,53 @@
+N-03 窗口位置/大小持久化（R2）
+日期：2026-10-19（本地）  分支：docs/post-release-maintenance-20261019  基线提交：2de6a48（N-02）
+执行者：v0.2.0 变更实施 Agent（goal loop）
+
+== 改动范围（边界(改)内）==
+- src/DeepSeekHarnessCleaner.Infrastructure/SettingsStore.cs：
+  * AppSettings 新增 WindowX/WindowY（int?，null=未保存）、WindowMaximized（bool?，null=未保存）；schemaVersion 保持 1。
+  * Load：ReadNullableInt（缺失/null/非数值 → null；数值钳制 ±MaxWindowCoordinate=1,000,000，负值合法保留）+ ReadNullableBool；旧文件缺字段 = 未保存（向后兼容）。
+  * Normalize/ToDto/SettingsDto：坐标钳制、null 原样落盘（"windowX": null）。
+- src/DeepSeekHarnessCleaner.Infrastructure/WindowGeometry.cs（新）：TryResolve 纯函数——有保存位置且与任一工作区相交 → 恢复矩形；全出屏 → false（调用方回退 CenterScreen）；RestoreSize 尺寸恢复。跨屏判定可单测（不依赖真实屏幕）。
+- src/DeepSeekHarnessCleaner.UI/MainForm.cs：
+  * _persistWindowSettings = 非冒烟且无 --scan-root 覆盖；仅该模式 ApplySavedWindowGeometry()（相交→StartPosition=Manual+Location；尺寸恢复并受 MinimumSize 约束；WindowMaximized=true→WindowState=Maximized）+ FormClosing 保存。
+  * OnFormClosingSaveGeometry：先 Load 保留其余字段再 Save（损坏/未知 schema 拒绝覆写的既有语义保持）；最大化时保存 RestoreBounds；正常退出（退出按钮→Close）与关窗均触发。
+- src/DeepSeekHarnessCleaner.UI/SettingsDialog.cs：无新增 UI 入口（边界(不改)），但保存时原样保留 WindowX/Y/Maximized，避免设置保存清空窗口几何。
+- 边界(不改)遵守：rememberRoots 语义不变；SettingsDialog 无窗口位置入口。
+
+== 门禁命令与退出码 ==
+1) build -warnaserror：0 警告 0 错误，BUILD_EXIT=0
+2) test：已通过! 失败:0 通过:309 总计:309，TEST_EXIT=0（298→309，+11：SettingsTests 5 个窗口几何用例 + WindowGeometryTests 6 个跨屏/回退用例）
+3) format --verify-no-changes：FORMAT_EXIT=0
+4) 直接冒烟（全新 fixture .artifacts\tmp\n03-fixture，sessions + 91B storages\workspace.json）：
+   SMOKE_EXIT=0 PASS=79 FAIL=0 SMOKE_RESULT=PASS（报告 .artifacts\tmp\n03-smoke-report.txt；断言数不变 79）
+5) .\scripts\smoke-win10.ps1 -EvidencePath artifacts\evidence\N-03-win10-smoke.txt：
+   SCRIPT_EXIT=0 12/12 WIN10_RESULT=PASS；自包含冒烟 79/79；TC-18 零新增 TCP；
+   COMPAT-01 真实根只读 sessions=54 archived=19 archiveStatus=OK wsGroundTruthMatched=19；
+   workspace.json 指纹前后一致 4824|639279880895552083；既有文件 changed=0 deleted=0。
+
+== 冒烟不读写用户配置（验收：settings.json 对比）==
+- 真实 %LOCALAPPDATA%\DeepSeekHarnessCleaner\settings.json 运行前：NOT_EXISTS（用户从未保存过设置）。
+- 直接冒烟（--smoke --scan-root 合成根）后：NOT_EXISTS。
+- smoke-win10.ps1（含真实根 --scan-root 冒烟）前后：False → False。
+→ 冒烟/覆盖模式零写入验证通过（无 mtime 可比的既有文件，以“不存在→仍不存在”为更强判据）。
+
+== 手工核验（脚本化等价：启动→移动/缩放→关闭→重启恢复）==
+环境：Windows 10 22H2，主屏 150% DPI（DIP↔物理系数 1.5）。user32 MoveWindow/GetWindowRect 操作物理像素；settings.json 保存 WinForms DIP 值。
+- 启动1（无配置，默认 CenterScreen）→ MoveWindow 物理 (137,173,981×613) → CloseMainWindow（ExitCode=0）。
+  settings.json 生成（299B）：windowX=206 windowY=260 windowWidth=1472 windowHeight=920 windowMaximized=false
+  （= 物理值 ×1.5 的 DIP 表示，往返自洽）。
+- 启动2：GetWindowRect 物理 (137,173,981×613) —— 与启动1 完全一致，位置/大小恢复成功。
+- 启动3（把 windowMaximized 置 true 后启动）：GetWindowRect (-7,-7,2480,1448) 覆盖全屏工作区（最大化边框外沿），非最小化；关闭后 windowMaximized=true 仍保留（最大化时保存 RestoreBounds）。
+- 核验后清理：删除 %LOCALAPPDATA%\DeepSeekHarnessCleaner，恢复用户原始状态（原本不存在）。
+说明：该目录为工具私有配置目录（非 Harness 数据根），写入属本功能语义，未触碰 %USERPROFILE%\.dsh 与 %APPDATA% 红线。
+
+== 验收逐项 ==
+- [x] 手工核验（启动→移动/缩放→关闭→重启恢复）：PASS（见上，脚本化等价 + 物理/DIP 换算记录）。
+- [x] 自动化测试覆盖往返/回退分支：往返（含负坐标/最大化）、旧文件缺字段回退 null、超界钳制、非数值按未保存、null 落盘、全出屏回退、左屏负坐标、部分可见恢复、非正尺寸回退——11 用例全过。
+- [x] 冒烟不写真实配置：NOT_EXISTS→NOT_EXISTS（直接冒烟与 Win10 脚本均验证）。
+- [x] 证据 artifacts/evidence/N-03.txt：本文件；脚本证据 artifacts/evidence/N-03-win10-smoke.txt。
+
+== 诚实记录（非门禁失败）==
+- 实现期缺陷（测试捕获）：ReadNullableInt 初版用 TryGetInt32，对 JSON null/String 元素抛 InvalidOperationException（非返回 false），5 个既有/新测试失败；加 ValueKind==Number 守卫 + TryGetInt64 后全过。既有 ReadInt 对非数值 windowWidth 有同类潜在抛出，未在本轮范围内改动。
+- 手工核验第一次最大化尝试无效：脚本替换目标写错（文件里是 false 而非 null），产品行为正确（按 false 恢复非最大化）；修正替换后重跑验证通过。
+- 本轮 COMPAT totalBytes 与 N-02 轮不同（24524339 vs 24119273）：真实根为实时 Harness，两次运行间宿主写入所致；同轮快照 changed=0/deleted=0/added=0，无门禁影响。
