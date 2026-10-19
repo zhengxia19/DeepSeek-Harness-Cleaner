@@ -106,7 +106,7 @@ public sealed partial class MainForm
             Check($"{scaleLabel} {name} 中心未被遮挡", ReferenceEquals(topmost, button));
         }
 
-        Check($"{scaleLabel} 删除按钮初始禁用（未勾选会话）", !_deleteButton.Enabled);
+        Check($"{scaleLabel} 删除/备份按钮初始禁用（未勾选会话）", !_deleteButton.Enabled && !_backupButton.Enabled);
     }
 
     private void VerifyKeyboardNavigation()
@@ -363,7 +363,7 @@ public sealed partial class MainForm
         Check("取消选择后预览清空", _preview.Text.Length == 0);
     }
 
-    /// <summary>T-30/N-04：备份/删除对话框流程断言（取消不删除、未备份可直接确认、已备份校验后才删、确认后精确删除、完成刷新、取消执行不阻塞 UI）。</summary>
+    /// <summary>T-30/N-04/N-05：备份/删除流程断言（取消不删除、未备份可直接确认、主窗备份→删除对话框携带、确认后精确删除、完成刷新、取消执行不阻塞 UI）。</summary>
     private void RunActionsChecks(string fixtureRoot)
     {
         var service = new InventoryService(new UiScanSource());
@@ -388,20 +388,30 @@ public sealed partial class MainForm
             dialog.Plan.Targets.Select(static t => t.AbsolutePath).OrderBy(static p => p, StringComparer.Ordinal)
                 .SequenceEqual(expectedPlan.Targets.Select(static t => t.AbsolutePath).OrderBy(static p => p, StringComparer.Ordinal)));
         Check("未备份时确认删除按钮可用（备份可选，N-04）", dialog.ConfirmButtonEnabled);
+        Check("未备份时删除对话框展示“未备份（可选，建议）”",
+            dialog.BackupStatusText.Contains("未备份", StringComparison.Ordinal));
 
         dialog.RequestCancel();
         PumpUntil(() => !dialog.Visible, 5_000);
         Check("点击取消即关闭且不删除任何文件",
             !dialog.Visible && expectedPlan.Targets.All(static t => File.Exists(t.AbsolutePath)));
 
+        // N-05：主窗备份流——未打开删除窗，直接对勾选会话创建备份并校验。
+        _backupButton.PerformClick();
+        System.Windows.Forms.Application.DoEvents();
+        var backupDialog = _lastBackupDialog!;
+        PumpUntil(() => backupDialog.State.Stage is BackupStage.Ready or BackupStage.Failed or BackupStage.Canceled, 20_000);
+        _smokeLines.Add($"INFO 主窗备份状态：{_statusLabel.Text}");
+        Check("主窗备份：勾选会话直接备份并校验（Ready + ZIP SHA 复验）",
+            backupDialog.State.Stage == BackupStage.Ready && _lastBackup is not null && File.Exists(_lastBackup.ZipPath));
+
         _deleteButton.PerformClick();
         System.Windows.Forms.Application.DoEvents();
         var dialog2 = _lastCleanupDialog!;
         Check("重新打开为新的对话框实例", dialog2.Visible && !ReferenceEquals(dialog2, dialog));
-        dialog2.RequestBackup();
-        PumpUntil(() => dialog2.BackupReady, 20_000);
-        _smokeLines.Add($"INFO 备份状态：{dialog2.BackupStatusText}");
-        Check("备份完成并校验后确认删除按钮启用", dialog2.BackupReady && dialog2.ConfirmButtonEnabled);
+        Check("删除对话框携带主窗备份事实（已备份并校验、确认可用）",
+            dialog2.BackupStatusText.Contains("已备份并校验", StringComparison.Ordinal)
+            && dialog2.Backup is not null && dialog2.ConfirmButtonEnabled);
 
         var pumps = 0;
         dialog2.RequestConfirm();
@@ -422,8 +432,12 @@ public sealed partial class MainForm
 
         PumpUntil(() => (_statusLabel.Text ?? string.Empty).Contains("已刷新", StringComparison.Ordinal), 20_000);
         Check("删除完成后清单自动刷新（会话数减少 2）", _sessionGrid.Rows.Count == scan.Sessions.Count - 2);
+        PumpUntil(() => _lastResultsDialog is not null, 20_000);
+        Check("已备份删除：结果报告引用该 ZIP 完整位置",
+            _lastResultsDialog is { } backedReport && _lastBackup is not null
+            && backedReport.BackupText.Contains(_lastBackup.ZipPath, StringComparison.Ordinal));
 
-        // TC-16：执行中取消 → 逐项 CANCELED 跳过，正常收尾不异常。
+        // TC-16：执行中取消 → 逐项 CANCELED 跳过，正常收尾不异常。主窗备份不覆盖新计划 → 本次为未备份删除。
         _sessionGrid.ClearSelection();
         for (var i = 0; i < 60 && i < _sessionGrid.Rows.Count; i++)
         {
@@ -433,10 +447,9 @@ public sealed partial class MainForm
         _deleteButton.PerformClick();
         System.Windows.Forms.Application.DoEvents();
         var dialog3 = _lastCleanupDialog!;
-        var prevResultsDialog = _lastResultsDialog; // dialog2 全成功报告（若有）；dialog3 终态后应替换为新实例。
-        dialog3.RequestBackup();
-        PumpUntil(() => dialog3.BackupReady, 60_000);
-        Check("60 会话批量备份完成", dialog3.BackupReady);
+        var prevResultsDialog = _lastResultsDialog; // dialog2 全成功报告；dialog3 终态后应替换为新实例。
+        Check("主窗备份不覆盖新删除计划时按未备份展示",
+            dialog3.BackupStatusText.Contains("未备份", StringComparison.Ordinal));
         dialog3.RequestConfirm();
         dialog3.RequestCancel();
         var pumps3 = 0;
@@ -481,7 +494,7 @@ public sealed partial class MainForm
             results.SummaryText.Contains($"删除 {result.DeletedCount} 个", StringComparison.Ordinal)
             && results.SummaryText.Contains($"跳过 {result.SkippedCount} 个", StringComparison.Ordinal)
             && results.SummaryText.Contains($"失败 {result.FailedCount} 个", StringComparison.Ordinal));
-        Check("报告展示备份 ZIP 完整位置", results.BackupText.Contains(".zip", StringComparison.Ordinal));
+        Check("未备份删除报告如实标注无备份（占位文案）", results.BackupText.Contains("无 ZIP 备份", StringComparison.Ordinal));
 
         PumpUntil(() => results.LogFilePath is not null, 5_000);
         var logPath = results.LogFilePath;

@@ -1,0 +1,65 @@
+N-05 备份入口移至主窗 — 实施证据
+日期：2026-10-19（UTC）  分支：docs/post-release-maintenance-20261019
+
+== 变更范围（边界内） ==
+- src/DeepSeekHarnessCleaner.UI/MainForm.cs：操作区新增“创建备份(&B)”按钮（TabIndex 12，有勾选会话时启用）；
+  新增 OnBackupClick（勾选会话 → BuildSessionManifest(dataHome 为根) → BackupDialog 后台创建+校验 →
+  成功后 BackupService.VerifyZip 复验 → 主窗持有 BackupFacts，状态栏显示 ZIP 位置）；
+  新增 ManifestCoversPlan（manifest 条目覆盖当前删除计划全部目标才携带）；
+  OnDeleteClick 仅携带覆盖当前计划的既有备份事实，否则按未备份打开删除窗。
+- src/DeepSeekHarnessCleaner.UI/ActionsPresenter.cs：新增 BackupFacts record（ZipPath/Manifest/Verified）。
+- src/DeepSeekHarnessCleaner.UI/CleanupDialog.cs：构造入参末位改为 BackupFacts?（可选既有备份事实仅展示）；
+  移除对话框内备份按钮与 OnBackupClick/RequestBackup/BackupReady；备份状态标签
+  “未备份（可选，建议）。”或“已备份并校验（N 个文件，X）。可确认删除。”；
+  Backup/ZipPath 属性取自携带事实；OnConfirmClick 提交携带的 Manifest/Verified。
+- src/DeepSeekHarnessCleaner.UI/MainForm.Smoke.cs：冒烟改为主窗备份流（断言 79 → 82）：
+  新增“未备份时删除对话框展示未备份”“主窗备份：勾选会话直接备份并校验（Ready + ZIP SHA 复验）”
+  “删除对话框携带主窗备份事实（已备份并校验、确认可用）”“主窗备份不覆盖新删除计划时按未备份展示”
+  “已备份删除：结果报告引用该 ZIP 完整位置”；“报告展示备份 ZIP 完整位置”改为
+  “未备份删除报告如实标注无备份（占位文案）”；移除“60 会话批量备份完成”；
+  “删除按钮初始禁用”扩展为“删除/备份按钮初始禁用”。
+- scripts/smoke-win10.ps1：冒烟期望断言数 79 → 82。
+- 文档同步：docs/requirements.md REQ-009（备份入口/携带语义）；docs/design.md §7 第 7 条、§8 首段
+  （备份入口为主窗、对话框仅携带展示）；docs/interfaces.md §5 新增“备份入口（N-05）”注记；
+  docs/testing.md TC-11（主窗备份后删除报告引用 ZIP、未备份如实标注）；CHANGELOG.md [Unreleased] Added N-05；
+  README.md 安全默认值（主窗“创建备份”按钮）。
+- 边界（不改）确认：BackupService/BackupManifestBuilder/BackupDialog 内部逻辑、ZIP 命名与临时目录规则、
+  AttachmentIndex、缓存/桌面规则均未改动（git diff 仅涉及上述文件）。
+
+== 验收（计划 §N-05） ==
+1) 勾选会话（未开删除窗）直接备份并校验（Ready+SHA）：冒烟断言
+   “主窗备份：勾选会话直接备份并校验（Ready + ZIP SHA 复验）” PASS。
+2) 备份后删除报告引用该 ZIP：冒烟断言“已备份删除：结果报告引用该 ZIP 完整位置” PASS。
+3) 未备份删除报告如实标注无备份：冒烟断言“未备份时删除对话框展示‘未备份（可选，建议）’”、
+   “主窗备份不覆盖新删除计划时按未备份展示”、“未备份删除报告如实标注无备份（占位文案）” PASS。
+4) 全部测试与冒烟 PASS：见下。
+
+== 门禁命令与结果 ==
+$env:NUGET_PACKAGES='D:\Code\DeepSeek-Harness-Cleaner\.nuget'; .\.dotnet\dotnet.exe build DeepSeekHarnessCleaner.sln -c Release -warnaserror --nologo
+  → 已成功生成，0 个警告 0 个错误，BUILD_EXIT=0
+.\.dotnet\dotnet.exe test DeepSeekHarnessCleaner.sln -c Release --no-build --nologo
+  → 已通过! 失败:0 通过:310 总计:310，TEST_EXIT=0（基线 310 不变，N-05 为 UI 流程搬迁，无新增单测）
+.\.dotnet\dotnet.exe format --verify-no-changes
+  → FORMAT_EXIT=0
+直接冒烟（新合成 fixture 副本 .artifacts\tmp\n05-fixture2：305 会话 + 同级 storages\workspace.json；
+  删除检查消耗 smoke-a-0001/smoke-b-0002，每次全新副本）：
+  Start-Process <bin\Release exe> --smoke <report> --scan-root <fixtureCopy>\sessions --log-dir <dir> -Wait
+  → SMOKE_EXIT=0  PASS=82 FAIL=0
+scripts/smoke-win10.ps1 -EvidencePath artifacts/evidence/N-05-win10-smoke.txt
+  → WIN10_RESULT=PASS  SCRIPT_EXIT=0  12/12 检查 PASS
+  → 自包含发布冒烟 SMOKE_EXIT=0 PASS=82 FAIL=0；TC18_NETWORK_CONNECTIONS=0；
+    COMPAT 真实根只读：sessions=54 changed=0 deleted=0 added=0；
+    workspace.json 只读 stamp 前后一致 4824|639279880895552083（详见 N-05-win10-smoke.txt）
+
+== 如实标注（非产品缺陷） ==
+- 首跑直接冒烟（n05-fixture）19 PASS/9 FAIL + 自检异常：根因是本轮 PowerShell Set-Content 编码参数
+  拼写错误（utfNoBOM）导致 fixture 副本缺 storages\workspace.json；该次列表为空属一次性环境异常，
+  未复现。复现跑（n05-fixture3，同样缺 workspace.json）产品按 N-01 优雅降级：仅 2 条归档断言 FAIL、
+  80 PASS、列表正常——确认非产品缺陷。
+- smoke-win10.ps1 首跑 COMPAT-01 快照 changed=1 FAIL：变更文件为当前 Harness 会话自身的会话文件
+  （本仓库 agent 会话，mtime 落在脚本窗口内），属外部实时写入而非本工具写入；第二跑 12/12 PASS
+  （changed=0）。真实根红线（本工具零写入）由 workspace.json stamp 前后一致与 changed 归因佐证。
+- CleanupDialog 构造仍保留 dataHome 参数（当前未使用，签名兼容），无行为变化。
+
+== 未验证项 ==
+- 无新增单元测试（N-05 为 UI 备份入口搬迁，验收由冒烟断言覆盖；BackupService/BackupDialog 内部未改）。

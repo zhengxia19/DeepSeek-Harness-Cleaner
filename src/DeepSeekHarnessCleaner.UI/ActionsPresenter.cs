@@ -23,6 +23,9 @@ public sealed record BackupUiState(
     string? ErrorCode,
     string? Message);
 
+/// <summary>N-05：主窗完成一次备份+校验后持有的备份事实（ZIP 路径 + 清单 + 已校验备份），供删除对话框可选携带。</summary>
+public sealed record BackupFacts(string ZipPath, BackupManifest Manifest, VerifiedBackup Verified);
+
 /// <summary>
 /// 备份/删除操作的演示逻辑（T-30）：把 Application/Infrastructure 契约
 /// （CleanupPlanner、BackupManifestBuilder、BackupService、CleanupExecutor）包装成

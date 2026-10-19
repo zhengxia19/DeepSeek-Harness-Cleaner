@@ -30,6 +30,7 @@ public sealed partial class MainForm : Form
     private readonly RichTextBox _preview = new();
     private readonly FlowLayoutPanel _actionPanel = new();
     private readonly Button _scanButton = new();
+    private readonly Button _backupButton = new();
     private readonly Button _deleteButton = new();
     private readonly Button _exitButton = new();
     private readonly StatusStrip _statusStrip = new();
@@ -39,6 +40,8 @@ public sealed partial class MainForm : Form
     private readonly PreviewPresenter _previewPresenter = new();
     private readonly ActionsPresenter _actionsPresenter;
     private CleanupDialog? _lastCleanupDialog;
+    private BackupDialog? _lastBackupDialog;
+    private BackupFacts? _lastBackup;
     private ResultsDialog? _lastResultsDialog;
     private readonly string? _scanRootOverride;
     private readonly string? _logDirOverride;
@@ -96,6 +99,7 @@ public sealed partial class MainForm : Form
         };
         _sessionGrid.CellValueChanged += OnSessionGridValueChanged;
         _deleteButton.Enabled = false; // UX-01：未勾选会话时禁用删除（N-02 起按勾选行判定）。
+        _backupButton.Enabled = false; // N-05：备份按钮同样按勾选行启用。
 
         if (_smokeResultPath is not null)
         {
@@ -332,14 +336,16 @@ public sealed partial class MainForm : Form
         _actionPanel.Padding = new Padding(8, 6, 8, 6);
 
         ConfigureActionButton(_scanButton, "扫描(&S)", 11);
-        ConfigureActionButton(_deleteButton, "删除(&D)", 12);
-        ConfigureActionButton(_exitButton, "退出(&X)", 13);
+        ConfigureActionButton(_backupButton, "创建备份(&B)", 12);
+        ConfigureActionButton(_deleteButton, "删除(&D)", 13);
+        ConfigureActionButton(_exitButton, "退出(&X)", 14);
 
         _scanButton.Click += OnScanClick;
+        _backupButton.Click += OnBackupClick;
         _deleteButton.Click += OnDeleteClick;
         _exitButton.Click += OnExitClick;
 
-        _actionPanel.Controls.AddRange(new Control[] { _scanButton, _deleteButton, _exitButton });
+        _actionPanel.Controls.AddRange(new Control[] { _scanButton, _backupButton, _deleteButton, _exitButton });
     }
 
     private static void ConfigureActionButton(Button button, string text, int tabIndex)
@@ -375,11 +381,13 @@ public sealed partial class MainForm : Form
         }
     }
 
-    /// <summary>N-02：删除按钮启用条件 = 存在勾选行（备份按钮 N-05 迁入后同样按勾选行启用）。</summary>
+    /// <summary>N-02/N-05：删除与备份按钮启用条件 = 存在勾选行。</summary>
     private void UpdateDeleteButtonEnabled()
     {
-        _deleteButton.Enabled = _sessionGrid.Rows.Cast<DataGridViewRow>()
+        var anyChecked = _sessionGrid.Rows.Cast<DataGridViewRow>()
             .Any(static row => row.Cells["check"].Value is true);
+        _deleteButton.Enabled = anyChecked;
+        _backupButton.Enabled = anyChecked;
     }
 
     /// <summary>
@@ -651,16 +659,89 @@ public sealed partial class MainForm : Form
             return;
         }
 
-        var zipPath = Path.Combine(
-            Path.GetTempPath(), "dshcleaner-backups", $"cleanup-{DateTime.Now:yyyyMMdd-HHmmss}-{Environment.ProcessId}.zip");
         // 备份清单以数据根（sessions 的父目录，即 .dsh 主目录）为根。
         var dataHome = Path.GetDirectoryName(_effectiveScanRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
             ?? _effectiveScanRoot;
-        var dialog = new CleanupDialog(planResult, _effectiveScanRoot, dataHome, sessions, _actionsPresenter, zipPath);
+        // N-05：主窗已有备份且清单覆盖本次全部删除目标时，作为既有备份事实传入对话框（仅展示）；否则按未备份。
+        BackupFacts? backupFacts = _lastBackup is { } facts && ManifestCoversPlan(facts.Manifest, dataHome, planResult.Plan)
+            ? facts
+            : null;
+        var dialog = new CleanupDialog(planResult, _effectiveScanRoot, dataHome, sessions, _actionsPresenter, backupFacts);
         dialog.CleanupFinished += OnCleanupFinished;
         _lastCleanupDialog = dialog;
         dialog.Show(this);
-        _statusLabel.Text = "删除确认对话框已打开：备份可选（建议），确认删除后执行。";
+        _statusLabel.Text = backupFacts is null
+            ? "删除确认对话框已打开：备份可选（建议），确认删除后执行。"
+            : "删除确认对话框已打开：已携带主窗备份（已校验），确认删除后执行。";
+    }
+
+    /// <summary>N-05：主窗备份按钮——对勾选会话构建清单并复用 BackupDialog 后台创建+校验；成功后持有备份事实。</summary>
+    private void OnBackupClick(object? sender, EventArgs e)
+    {
+        if (_effectiveScanRoot is null)
+        {
+            _statusLabel.Text = "请先扫描，再创建备份。";
+            return;
+        }
+
+        var sessions = _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .Where(static row => row.Cells["check"].Value is true)
+            .Select(static row => (SessionSummary)row.Tag!)
+            .ToList();
+        if (sessions.Count == 0)
+        {
+            _statusLabel.Text = "未勾选会话。";
+            return;
+        }
+
+        // 清单/备份以数据根（.dsh 主目录）为根：条目名须为 sessions/… 类别前缀。
+        var dataHome = Path.GetDirectoryName(_effectiveScanRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            ?? _effectiveScanRoot;
+        var manifestResult = _actionsPresenter.BuildSessionManifest(dataHome, sessions);
+        if (manifestResult.Manifest is null)
+        {
+            _statusLabel.Text = "清单构建失败：" + string.Join("；", manifestResult.Issues.Select(static i => $"{i.Code}:{i.Path}"));
+            return;
+        }
+
+        var zipPath = Path.Combine(
+            Path.GetTempPath(), "dshcleaner-backups", $"cleanup-{DateTime.Now:yyyyMMdd-HHmmss}-{Environment.ProcessId}.zip");
+        var manifest = manifestResult.Manifest;
+        var dialog = new BackupDialog(manifest, zipPath, _actionsPresenter);
+        _lastBackupDialog = dialog;
+        dialog.Completed += (_, _) =>
+        {
+            if (dialog.State.Stage == BackupStage.Ready)
+            {
+                // 打开既有 ZIP 复验（SHA-256 逐项），成功才作为删除可携带的备份事实。
+                var verified = new BackupService().VerifyZip(zipPath, manifest);
+                if (verified.Success && verified.Backup is not null)
+                {
+                    _lastBackup = new BackupFacts(zipPath, manifest, verified.Backup);
+                    _statusLabel.Text = $"备份完成并校验：{zipPath}";
+                }
+                else
+                {
+                    _statusLabel.Text = $"备份校验失败：{verified.ErrorCode ?? "UNKNOWN"}，未持有备份事实。";
+                }
+            }
+            else
+            {
+                _statusLabel.Text = $"备份未完成：{dialog.State.Stage}（{dialog.State.ErrorCode ?? "—"} {dialog.State.Message}）。";
+            }
+        };
+        dialog.Show(this);
+        _statusLabel.Text = "正在创建并校验 ZIP 备份…";
+    }
+
+    /// <summary>N-05：清单是否覆盖计划全部目标（按数据根相对路径，Windows 大小写不敏感）。</summary>
+    private static bool ManifestCoversPlan(BackupManifest manifest, string dataHome, CleanupPlan plan)
+    {
+        var entries = manifest.Entries
+            .Select(static entry => entry.ZipPath.Replace('/', Path.DirectorySeparatorChar))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return plan.Targets.All(target =>
+            entries.Contains(Path.GetRelativePath(dataHome, target.AbsolutePath)));
     }
 
     private async void OnCleanupFinished(object? sender, CleanupExecutionResult result)

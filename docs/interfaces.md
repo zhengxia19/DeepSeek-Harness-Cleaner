@@ -82,6 +82,7 @@ interface ICleanupExecutor { Task<CleanupResult> ExecuteAsync(CleanupPlan plan, 
 | ARCHIVE_STRUCTURE_UNKNOWN | 根/`global` 非对象、`archivedSessionIds` 非数组或含非字符串元素 | 同上 |
 
 - **备份门禁（N-04/ADR-0003）**：会话/附件删除备份可选——未备份不触发备份类错误码，确认（`GATE_NOT_CONFIRMED` 仍必需）、进程、根指纹与逐文件复验不变；提供 manifest+ZIP 时仍校验，失败按 `BACKUP_INVALID`（`GATE_BACKUP_INVALID:*`）中止零删除；`RequiresBackup=true` 的计划（调用方显式要求）缺备份仍报 `GATE_BACKUP_REQUIRED`。
+- **备份入口（N-05）**：主窗操作区“创建备份”按钮对勾选会话构建 manifest（dataHome 为根）并创建/校验 ZIP；主窗持有已校验备份事实（ZIP 路径 + manifest + 校验结果）。删除确认对话框不再自建备份：仅当 manifest 覆盖当前计划全部目标时携带事实展示“已备份并校验”，否则按未备份展示；结果报告引用携带的 ZIP 完整位置或如实标注无备份。
 
 ## 6. 兼容性与版本
 
