@@ -23,6 +23,7 @@ interface ICleanupExecutor { Task<CleanupResult> ExecuteAsync(CleanupPlan plan, 
 
 - 会话目录：每个会话的规范代际日志文件 `session.jsonl[.zstd]` 或 `session.vN.jsonl[.zstd]`；遍历时只读读取 `SessionHeader` / 事件。首行 header 契约为 `{"type":"session","id":…,"version":0–4,"createdAt":<epoch-millis 数值>}`（M-02，详见 design.md §2）。事件行契约为 `{"type":…,"seq":…,"time":<epoch-millis 数值>,"data":…}`；消息正文在 `data`（`user/message`）或 `data.message`（`assistant/system/developer/message`、`tool/result`）（M-03，详见 design.md §2）。
 - 投影缓存：`storages/session_projcache/sessions/<id>.json`、`storages/session_projcache.json`；不是权威会话日志。
+- 归档标志输入（N-01）：`storages/workspace.json`（与会话根同级）`global.archivedSessionIds` 字符串数组；只读识别，永不写入/删除；解析失败按 §5 `ARCHIVE_*` 状态降级为全部未归档，扫描不失败。
 - 桌面清理目录：`Cache`、`Code Cache`、`GPUCache`、`DawnGraphiteCache`、`DawnWebGPUCache`、`logs`。
 
 ### ZIP 导出契约（schemaVersion=1）
@@ -70,6 +71,11 @@ interface ICleanupExecutor { Task<CleanupResult> ExecuteAsync(CleanupPlan plan, 
 | FILE_CHANGED | 计划/备份后文件变化 | 停止或跳过 |
 | FILE_ACCESS_DENIED | 文件权限拒绝/被占用 | 报告，禁止提权 |
 | OP_CANCELLED | 用户取消 | 停止于安全边界并报告部分结果 |
+| ARCHIVE_FILE_MISSING | `storages/workspace.json` 不存在 | 扫描不失败；全部会话按未归档展示，状态栏提示“归档信息不可用” |
+| ARCHIVE_FILE_TOO_LARGE | `workspace.json` 超过 32MiB 上限 | 同上 |
+| ARCHIVE_FILE_UNREADABLE | `workspace.json` 权限拒绝/被占用 | 同上 |
+| ARCHIVE_JSON_INVALID | `workspace.json` JSON 解析失败 | 同上 |
+| ARCHIVE_STRUCTURE_UNKNOWN | 根/`global` 非对象、`archivedSessionIds` 非数组或含非字符串元素 | 同上 |
 
 ## 6. 兼容性与版本
 

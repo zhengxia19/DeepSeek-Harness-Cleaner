@@ -211,6 +211,15 @@ public sealed partial class MainForm
             && status.Contains(InventoryPresenter.FormatBytes(expected.TotalBytes), StringComparison.Ordinal)
             && status.Contains(expected.AnomalousFiles.Count.ToString(), StringComparison.Ordinal));
 
+        // N-01：归档列与状态栏归档统计（fixture 副本含 storages\workspace.json，归档信息可用）。
+        var expectedArchived = expected.Sessions.Count(static s => s.IsArchived);
+        var archivedCells = _sessionGrid.Rows.Cast<DataGridViewRow>()
+            .Count(static row => (string?)row.Cells["archive"].Value == "是");
+        Check("归档列命中数与扫描结果一致（归档信息可用且命中≥1）",
+            expected.ArchiveStatus is null && expectedArchived >= 1 && archivedCells == expectedArchived);
+        Check("状态栏归档计数与服务统计一致",
+            status.Contains($"归档 {expectedArchived}", StringComparison.Ordinal));
+
         // 关键字筛选（TC-07）。
         var keyword = "smoke-a";
         _keywordBox.Text = keyword;
@@ -503,8 +512,10 @@ public sealed partial class MainForm
                 || !string.Equals(tag.SessionId, session.SessionId, StringComparison.Ordinal)
                 || tag.TotalBytes != session.TotalBytes
                 || !Equals(tag.Status, session.Status)
+                || tag.IsArchived != session.IsArchived
                 || (string?)row.Cells["id"].Value != (session.SessionId ?? "（未知）")
-                || (string?)row.Cells["size"].Value != InventoryPresenter.FormatBytes(session.TotalBytes))
+                || (string?)row.Cells["size"].Value != InventoryPresenter.FormatBytes(session.TotalBytes)
+                || (string?)row.Cells["archive"].Value != (session.IsArchived ? "是" : "—"))
             {
                 return false;
             }

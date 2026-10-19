@@ -1,0 +1,81 @@
+N-01 归档会话识别与列表列 — 验收证据
+生成时间：2026-10-19T07:1xZ（本地）
+分支：docs/post-release-maintenance-20261019
+基线 HEAD：见本任务提交（提交信息含本文件路径）
+
+== 变更文件 ==
+- src/DeepSeekHarnessCleaner.Domain/SessionSummary.cs
+  SessionSummary.IsArchived（init，默认 false）；SessionScanData 新增 init 属性
+  ArchivedSessionIds（默认空集合）/ArchiveStatus（默认 null）——保持既有 3 参构造调用点兼容。
+- src/DeepSeekHarnessCleaner.Infrastructure/SessionArchiveIndex.cs（新增）
+  只读读取 <会话根同级>\storages\workspace.json 的 global.archivedSessionIds；
+  上限 32MiB；缺失/超限/不可读/reparse/JSON 非法/结构未知 → 空集合 + 状态码
+  （ARCHIVE_FILE_MISSING / ARCHIVE_FILE_TOO_LARGE / ARCHIVE_FILE_UNREADABLE /
+    ARCHIVE_JSON_INVALID / ARCHIVE_STRUCTURE_UNKNOWN / PATH_REPARSE）；永不写入。
+- src/DeepSeekHarnessCleaner.Application/InventoryService.cs
+  MergeSession 按 header id 精确匹配写 IsArchived（SessionId=null 永不标记）；
+  InventoryResult.ArchiveStatus 透传状态码。
+- src/DeepSeekHarnessCleaner.UI/InventoryPresenter.cs
+  UiScanSource.Scan 调 SessionArchiveIndex；BuildStatusText 追加“归档 N”或“归档信息不可用”。
+- src/DeepSeekHarnessCleaner.UI/MainForm.cs
+  列表新增“归档”列（是/—），列序：id/project/created/origin/size/format/status/archive。
+- src/DeepSeekHarnessCleaner.UI/MainForm.Smoke.cs
+  GridMatches 逐行核对 tag.IsArchived 与 archive 单元格；新增 2 项冒烟检查
+  （归档列命中数一致且可用；状态栏归档计数一致）。冒烟检查 72→74。
+- scripts/smoke-win10.ps1
+  fixture 副本追加 storages/workspace.json（归档 2 个 fixture id + 1 个未知 id）；
+  期望 PASS 72→74；COMPAT 新增归档统计与 3 项检查（归档可用/交叉核对一致/workspace.json 零写入），
+  脚本检查 9→12。
+- tests/DeepSeekHarnessCleaner.Tests/ArchiveIndexTests.cs（新增 16 用例）
+  正向解析；缺失；根非对象；global 非对象；ids 非数组；非字符串元素；global/ids 缺失→可用空集；
+  JSON 非法；>32MiB；junction reparse；只读（字节+mtime 不变）；全栈 header id 匹配→IsArchived、
+  未知 id 容忍；workspace 缺失→扫描成功全部未归档+状态码；MergeSession 匹配/不匹配/身份不匹配；
+  SessionScanData 默认值向后兼容。
+- 文档：docs/design.md §2（归档标志条目）、docs/interfaces.md §3 输入类型 + §5 ARCHIVE_* 5 行、
+  docs/testing.md §2.3 + COMPAT-01 行、CHANGELOG.md [Unreleased]、
+  docs/maintenance-tasks.md §不做项标注“已被 v0.2.0 N-01 取代”。
+
+== 验收命令与结果 ==
+1) $env:NUGET_PACKAGES='D:\Code\DeepSeek-Harness-Cleaner\.nuget';
+   .\.dotnet\dotnet.exe build DeepSeekHarnessCleaner.sln -c Release -warnaserror --nologo
+   → 0 个警告 0 个错误，BUILD_EXIT=0
+2) .\.dotnet\dotnet.exe test DeepSeekHarnessCleaner.sln -c Release --no-build --nologo
+   → 通过 298 / 失败 0（基线 282 + 新增 16），TEST_EXIT=0
+   （首轮 1 失败为 junction 测试 fixture 递归清理进入链接目标，测试内先删链接后复跑全绿）
+3) .\.dotnet\dotnet.exe format --verify-no-changes → FORMAT_EXIT=0
+4) 直接冒烟（bin EXE，fixture 副本 dsh-n01-fixture：dsh-t18-fixture 拷贝 + storages/workspace.json）
+   → SMOKE_EXIT=0，PASS=74 FAIL=0；新增两项均 PASS：
+     PASS 归档列命中数与扫描结果一致（归档信息可用且命中≥1）
+     PASS 状态栏归档计数与服务统计一致
+5) .\scripts\smoke-win10.ps1 -EvidencePath artifacts/evidence/N-01-win10-smoke.txt（完整端到端）
+   → WIN10_RESULT=PASS，SMOKE_SCRIPT_EXIT=0，12/12 检查 PASS：
+     发布退出码 0；单文件 EXE 存在；自包含冒烟退出码 0；冒烟 74 PASS/0 FAIL；
+     TC-18 运行期零新增 TCP 连接；COMPAT 真实根只读扫描（sessions=54）；无 Corrupt；
+     全部带 createdAt；归档信息可用（archiveStatus=OK）；
+     归档命中与 workspace.json 交叉核对一致（archived=19 == wsGroundTruthMatched=19，命中>0）；
+     workspace.json 零写入（前后指纹 4824|639279880895552083 不变）；
+     真实根既有文件零变更零删除（changed=0 deleted=0 added=0）。
+   详见 artifacts/evidence/N-01-win10-smoke.txt。
+6) 真实根只读交叉核对 harness（.artifacts/tmp/n01-real-harness.ps1，Add-Type 加载 bin DLL，
+   仅输出计数与集合 SHA-256 前 16 位，不含 UUID/正文/私有路径）：
+   scanSessions=54 archived=19 archiveStatus=OK nullIdArchived=0
+   wsIdCount=19（全部字符串）matchedCount=19 unknownWsIdCount=0
+   scanArchivedHash=F188D02D683BF831 == wsMatchedHash=F188D02D683BF831（归档集合与
+   workspace.json id∩目录名 ground truth 集合一致）
+   前后快照：files=55 changed=0 deleted=0 added=0；workspace.json 指纹 4824|639279880895552083 不变。
+   HARNESS_EXIT=0
+
+== 如实标注 ==
+- 计划中“16/16”为规划时点快照；真实根为活动根（Harness 运行中），本轮实测 54 会话目录、
+  workspace.json 19 个归档 id、19/19 命中（交叉核对哈希一致）。漂移处理沿用 M-04 先例。
+- smoke-win10.ps1 首次运行失败：脚本内部调用裸 `dotnet`，当次 PATH 无本地 SDK
+  （global.json 钉 10.0.402，系统 dotnet 无该 SDK → PUBLISH_EXIT=-2147450725），
+  旧 EXE 跑 72 PASS 触发两项 FAIL。属运行环境问题非代码缺陷：将 .\.dotnet 前置 PATH 后复跑。
+  脚本本身未因此修改。
+- 第二次脚本运行出现一次不可复现的冒烟异常（19 PASS/7 FAIL，“No row can be added to a
+  DataGridView control that does not have columns”，且当次 COMPAT changed=1——实时 Harness
+  在扫描窗口内写入自身会话文件）。同一 EXE 随后直接冒烟 74/0、脚本两次运行 12/12 PASS
+  （changed=0），异常未再复现；按“同一验收项两次失败才停”规则继续，如实记录。
+- 冒烟 fixture 副本含合成 storages/workspace.json（归档 smoke-a-0001、smoke-v4-0004 + 未知 id
+  session-unknown-9999），验证未知 id 容忍路径；真实根仅只读。
+- 未验证项：无（本任务验收项全部执行并通过；真实根数字为当轮实测，后续轮次可能漂移）。

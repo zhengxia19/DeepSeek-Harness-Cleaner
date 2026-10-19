@@ -47,6 +47,12 @@ public sealed record SessionSummary(
     public long TotalBytes { get; init; }
 
     public bool IsAmbiguous { get; init; }
+
+    /// <summary>
+    /// 归档标志（N-01/D5）：会话 ID 命中 storages\workspace.json 的 archivedSessionIds 才为 true；
+    /// 归档信息不可用或 ID 未知时恒为 false（按未归档显示）。仅展示用，不参与删除门禁。
+    /// </summary>
+    public bool IsArchived { get; init; }
 }
 
 /// <summary>不属于任何会话目录的异常文件（非白名单/位置异常/访问受阻）。</summary>
@@ -69,4 +75,13 @@ public sealed record ScannedSessionDirectory(
 public sealed record SessionScanData(
     string? RootErrorCode,
     IReadOnlyList<ScannedSessionDirectory> Sessions,
-    IReadOnlyList<AnomalousFile> AnomalousFiles);
+    IReadOnlyList<AnomalousFile> AnomalousFiles)
+{
+    /// <summary>归档会话 ID 集合（N-01，来自 storages\workspace.json，只读）；不可用时为空集。</summary>
+    public IReadOnlySet<string> ArchivedSessionIds { get; init; } = EmptyArchivedIds;
+
+    /// <summary>归档信息状态码（D5）：null=可用；非空=不可用（缺失/损坏/超限/结构未知），集合按空处理。</summary>
+    public string? ArchiveStatus { get; init; }
+
+    private static readonly IReadOnlySet<string> EmptyArchivedIds = new HashSet<string>(StringComparer.Ordinal);
+}

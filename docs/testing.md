@@ -47,6 +47,14 @@
 - `time` 为 epoch-millis 数值 → 解析为事件时间；缺失/非法数值 → 时间为空但仍投影，不失败。
 - 未列出的已知外类型（如 `step/start`）→ 不完整摘要含类型名与行号；`KnownEventTypes` 由真实根实测 47 类硬编码（`EventReaderTests` 词表断言）。
 
+### 2.3 归档标志只读识别用例（N-01，`tests/ArchiveIndexTests.cs`）
+
+- 正向：`storages/workspace.json` 的 `global.archivedSessionIds` 解析为归档集合；归档 id 按 header `id` 精确匹配 → `SessionSummary.IsArchived=true`；集合中的未知 id 容忍忽略，不影响其余会话。
+- 负向（扫描均不失败、全部未归档并回报状态码）：文件缺失（`ARCHIVE_FILE_MISSING`）、超 32MiB（`ARCHIVE_FILE_TOO_LARGE`）、JSON 非法（`ARCHIVE_JSON_INVALID`）、根/`global` 非对象或 `archivedSessionIds` 非数组/含非字符串元素（`ARCHIVE_STRUCTURE_UNKNOWN`）、junction reparse（`PATH_REPARSE`）。
+- `global` 或 `archivedSessionIds` 缺失 → 归档信息可用且集合为空（正常未归档），非错误。
+- header 身份不匹配（`SessionId=null`）的会话即使目录名在归档集合中也不标记。
+- 只读红线：读取前后 `workspace.json` 字节与 mtime 不变；真实根只读 harness 的归档命中集合与 `workspace.json` id∩目录名 ground truth 集合哈希一致（见 `artifacts/evidence/N-01.txt`）。
+
 ## 3. 非功能测试
 
 - PERF-01：Windows 10 x64 + SSD + ≥8GB RAM，在 1000 个小会话 ≤200MB 的 fixtures 上计时，完整元数据初扫 ≤15 秒；筛选响应 ≤200ms，工作集 <512MiB；记录机器 CPU/SSD/Build，失败必须修复或用户明确豁免。
@@ -54,7 +62,7 @@
 - SEC-01：从目录外的文件通过 reparse point 或 `..` 逃逸到可控根时禁止清理；测试文件内容 hash 仍然相同。
 - SEC-02：活动 Harness 进程、权限不可见的托管进程、占用文件、不一致清单均阻断清理。
 - SEC-03：人为破坏 ZIP 的单字节后，校验必须失败；删前文件变化时要求重新备份。
-- COMPAT-01：实测 DeepSeek Harness 0.2.0.0 V4 与旧版日志（允许脱敏只读样本）；报告物理解码/语义预览分开结论。
+- COMPAT-01：实测 DeepSeek Harness 0.2.0.0 V4 与旧版日志（允许脱敏只读样本）；报告物理解码/语义预览分开结论。自 N-01 起含归档交叉核对：真实根扫描归档命中数与 `workspace.json` `archivedSessionIds`∩会话目录名一致、`ARCHIVE` 状态可用、`workspace.json` 前后指纹不变（`scripts/smoke-win10.ps1`）。
 - WIN10-01：记录 `winver` 的 Edition/Version/Build，在该版本下测试 WinForms 单文件自包含、中文 UI、操作完成和退出。官方支持范围无法覆盖的 Windows 10 SKU 必须诚实标注实测而非官方支持。
 
 ## 4. 任务级与发布级检查

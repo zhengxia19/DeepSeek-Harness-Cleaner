@@ -32,6 +32,7 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 - 文件名白名单：`session.jsonl`、`session.jsonl.zstd`、`session.vN.jsonl`、`session.vN.jsonl.zstd`（N 为正整数）；大写/临时/备份/不匹配项不自动删除。
 - 同一会话保留多个 format generation 是正常的；扫描归组，同一目录不应把多个代际计为多个会话。用于预览的代际为 numerically highest canonical generation；**最高代际无法读取时显示异常，不回退到旧代际假装当前内容**。
 - 同一个会话目录同时存在相同代际 `.jsonl` 与 `.jsonl.zstd` 或 header 身份冲突，标记 Ambiguous，阻止清理。
+- **归档标志（N-01，D5 已确认语义）**：Harness 的会话归档是 `storages/workspace.json`（与会话根同级，即 `<dshHome>\storages\workspace.json`）中 `global.archivedSessionIds` 的 JSON 字符串数组，不是目录标志。扫描时由 `SessionArchiveIndex` **只读**读取（上限 32MiB）：文件缺失、超限、不可读、JSON 非法、结构未知（根/`global` 非对象、`archivedSessionIds` 非数组或含非字符串元素）时扫描**不失败**，全部会话按未归档展示并回报状态码（见 interfaces.md §5 `ARCHIVE_*`）。归档 id 与扫描会话按 **header `id`** 精确匹配（目录名不匹配 header 的会话永不标记）；集合中的未知 id 容忍忽略。该文件永不写入、移动或删除；发现层、删除门禁与缓存清理对 `storages` 的处理不变。
 - 物理读取：以 Zstandard 串接帧解码，分割 UTF-8 JSONL，每行含一个可解析对象。解压库对 *concatenated frames* 和 *truncated tail* 的处理先由 T-04 的 fixture 验证；不能把最后一帧截断当成正常 EOF。
 - 限制：单行 ≤8MiB、单会话解压总量 ≤256MiB、单次预览 ≤2000 行；达到限制显示截断提示，不记录消息正文到日志。备份不限于能否完成语义解析，可按原始字节备份。
 - **历史格式**：对于 v0-v3，物理解码与安全只读元数据为最低保证；不在 v1 强制重新实现官方的完整多阶段迁移。仅对经 fixture 验证的事件提供文本预览；对不支持的事件显示其类型/行号与“不完整”。V4 的消息角色和内容也只基于验证的事件 schema。

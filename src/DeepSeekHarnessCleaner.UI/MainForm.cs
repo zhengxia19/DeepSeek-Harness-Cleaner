@@ -127,6 +127,8 @@ public sealed partial class MainForm : Form
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "size", HeaderText = "大小", Width = 110 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "format", HeaderText = "格式（代际）", Width = 140 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = "状态", Width = 110 });
+        // N-01：归档标志列（是/—），来自 storages\workspace.json 只读识别；仅展示，不参与删除门禁。
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "archive", HeaderText = "归档", Width = 60 });
         _split.Panel1.Controls.Add(_sessionGrid);
 
         BuildFilterPanel();
@@ -428,7 +430,8 @@ public sealed partial class MainForm : Form
                 DateOriginText(session.DateOrigin),
                 InventoryPresenter.FormatBytes(session.TotalBytes),
                 FormatsText(session),
-                StatusText(session));
+                StatusText(session),
+                session.IsArchived ? "是" : "—");
             _sessionGrid.Rows[index].Tag = session;
         }
 
