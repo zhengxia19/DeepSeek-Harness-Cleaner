@@ -1,68 +1,42 @@
-# 独立视角设计复审报告（Review Report）
+# 项目设计与交付复审报告
 
-日期：2026-10-16。性质：**静态设计复审，不是源代码执行、Windows 构建或真实数据验证报告**。设计阶段所有任务均未验收。
+> 2026-10-19 基于 `main` HEAD `2aa70a915ed5472788bd16afb4cee2f46c43c414` 的仓库文件、代码布局、已提交 T-01～T-34 证据与发布记录进行文档复核。**本次为仓库静态核验，未重跑 Windows 构建或现场测试。** 原 2026-10-16 的“开工前设计复审”属于历史时点，不代表当前状态。
 
-## 1. 文档结构审查
+## 1. 当前结论
 
-| 审查项 | 结论 | 证据/处置 |
+- **历史实施已完成**：`docs/implementation-tasks.md` 中 T-01～T-34 全部标记 `[x]`，`artifacts/evidence/` 中有逐项文件与 T-32/T-33/T-34 汇总。
+- **代码具备实际结构**：`src/DeepSeekHarnessCleaner.{Domain,Application,Infrastructure,UI}/`、`tests/DeepSeekHarnessCleaner.Tests/`、解决方案及脚本均存在；此前“仅设计、尚待建项目”的描述已过时。
+- **历史质量结果**：T-32 记录 267 项测试通过；T-33 记录 1000 会话初扫 2766.2ms、筛选平均 0.96ms、峰值工作集 197.1MiB，以及 Windows 10 Pro 22H2 的 72/72 冒烟。上述数字是**历史证据报告值**，不是本次独立复测。
+- **发布**：T-34 记录 0.1.0 自包含 win-x64 EXE（约 102.8 MB）、SHA-256 `c5464a2df7fc7b04d99520c790b0706dffcd51abc670089adf68a7cf91cf6eea`；`dist/` 被 Git 忽略，不能仅凭仓库确认下载包当前仍存在。
+- **能力边界**：0.2.0.0 V4 的受验证样本映射是已实现语义路径；真实 0.2.1-rc.2 数据虽可物理解压，头部 schema 不一致导致 44/44 会话识别为 Corrupt/ambiguous，**不得清理**。
+
+## 2. 原文档与实际交付的差异
+
+| 事项 | 原先不准确的表述 | 现行处理 |
 |---|---|---|
-| 用户要求的文档类型 | 通过（设计层） | README、需求、架构、详细设计、开发、规范、依赖、接口、测试、发布、变更、贡献及 2 个 ADR 均有实体文件；另加原子任务与本报告 |
-| 当前说明与历史决策分离 | 通过 | ADR 记录决策，其他文档维护当前方案 |
-| 权威信息单一来源 | 通过 | SDK 与包版本只在未来 global.json/中央包文件锁定；REQ 在 requirements，TC 在 testing |
-| 无不必要管理制度 | 通过 | 无数据库、服务、REST API、OpenAPI、自动更新；CONTRIBUTING 仅规定 Agent 执行门禁 |
-| 追踪完整 | 待实施核验 | REQ-001～020 映射 TC-01～20；T-01～34 关联测试（静态校验） |
+| 项目阶段 | “开工前/待实施/不可宣称已实现” | 现已完成历史 T-01～T-34；保留原设计判断的时点 |
+| Agent 领取任务 | 自动查找未完成 T-XX | 已无未完成 T-XX；新工作从用户指令/Issue/PR 启动 |
+| Windows 10 验证 | 将“VM/实机/干净 VM”混为一谈 | 历史验证为 Win10 Pro 22H2 隔离 VMware VM；**未做 freshly-provisioned 干净 VM** |
+| 0.2.1-rc.2 兼容 | 只写“新版本兼容待验证” | 物理解码成功，但语义 schema 未适配；拒绝删除（R-02） |
+| 历史完成信息 | 将验收勾选视为本轮验证 | 勾选 + 原始证据仅说明历史过程，不能替代当轮实测 |
+| 环境与二进制 | 发布目录作为仓库现存成品 | dist 已被忽略，Hash/环境结论来自 T-34 证据 |
 
-## 2. 四个审查角色的结论
+## 3. 安全契约复核
 
-**安全审查：** 删除前要求 Harness 退出、范围白名单、拒绝 reparse/越界、文件重验、会话/附件强制 ZIP 校验，未选目标必须 hash 不变。无法达到跨文件 ACID，明确允许 PartialFailed 并要求重扫。**风险：中；需 T-32 实测关闭。**
+现有方案遵循“只读扫描 → 合法根与白名单 → 进程退出 → 构造计划 → 文件指纹复验 → 会话/附件原始 ZIP 备份和 SHA-256 验证 → 用户确认 → 精确执行与结果报告”。保护配置、凭据、浏览器状态，拒绝符号链接/越界与不明格式，禁止自动判断孤儿附件。相关实现与测试位置见 `src/DeepSeekHarnessCleaner.Infrastructure/`、`src/DeepSeekHarnessCleaner.Application/`、`tests/DeepSeekHarnessCleaner.Tests/`。
 
-**持久化格式审查：** 官网主分支与装机 0.2.0.0 不保证一致；V0/V4 代际可能共存；官方迁移不覆盖旧代际。设计决定保留全部物理代际备份，对旧版语义投影保守退化。**风险：中；需 T-05/T-13 fixture 验证关闭。**
+此项为对架构、代码目录和历史验收记录的一致性核验；如下一版本修改任何删除路径，必须重新运行对应正/负向测试，不能引用原 T-32 结果直接放行。
 
-**Windows 工程审查：** WinForms 不引入现代 UI 框架；本地 SDK/包缓存满足项目隔离；.NET 10 在 Windows 10 上的官方支持有限。**风险：中；需 T-33 真实目标 Build 测试关闭。**
+## 4. 仍然存在的差距
 
-**Agent 实施审查：** 34 个任务单一结果、输入/修改范围/前置/验收/TC/证据齐备；Zstd PoC 只在 T-05、压缩事件读取 T-12、语义 T-13；备份规划 T-21/执行 T-22 与删除 T-24/26 明确分离；缓存和附件统一复用删除执行器。**风险：低（设计层）**。
+1. **R-02（功能限制）**：DeepSeek Harness 0.2.1-rc.2 的真实头部/事件 schema 未适配。当前安全失败是正确行为，但不能把它宣传为支持该版本的完整清理能力。
+2. **干净环境首启未验证**：T-34 用隔离 VMware Win10 VM、自包含独立运行和 fixture 冒烟替代；未验证全新预置干净 VM。
+3. **分发和签名**：0.1.0 EXE 未签名；`dist/` 不在仓库内，发布哈希不能替代制品当前可获取性。
+4. **环境声明**：Windows 10 Pro 22H2 的实测可运行，不等于 Microsoft 对该 SKU 的 .NET 10 官方支持承诺。
+5. **本次证据范围**：仅远程仓库核查，未在本次复审重新执行编译、测试、二进制分析或实际删除验证。
 
-## 3. 交叉一致性检查
+## 5. 结论和维护原则
 
-| 争议或典型缺陷 | 当前处理 |
-|---|---|
-| 按日期删除“消息片段”易毁坏日志 | 明确只删除按日期筛选的整会话；REQ-008 / design §3 / TC-08 / T-11/T-24 一致 |
-| 仅删除最新 v4 遗留 v0 副本 | ZIP 与清理计划均覆盖同一会话的全部已识别 generation |
-| 会话缓存 `session_projcache.json` 意外清空 | 只有全量缓存清理显式勾选，单会话不清空全局缓存 |
-| 附件是否“孤儿”无法证明 | Unknown 保留，不自动联动删除 |
-| 备份可直接恢复 Harness 的错误承诺 | 声明备份为原始文件留存，不实现自动恢复或官方 ZIP 回导 |
-| Harness 进程只检查 GUI，忽略后台使用者 | 进程探测异常/状态 Unknown 拒绝清理，无法建立稳定状态不删除 |
-| Windows 10 与 .NET 10 支持不一致 | 发布必做 OS Build 验证，区分官方支持与实测兼容 |
-| 默认清理浏览器状态 | 明确排除 Local Storage/Session Storage/Network |
-| 自动环境污染 | `.dotnet/.nuget/.artifacts` + 进程级变量，不修改系统 PATH |
-| “任务完成”只凭代码提交 | 必须 TC 和负向测试证据，未通过不能勾选 |
+**结论：历史 v0.1.0 开发交付和验收记录完整可追溯；仓库存在明确的后续兼容与验证限制。** 修订 Agent 规则和文档索引，使现行陈述与交付状态一致。历史任务清单、原始日志、决策记录保留原状；新增缺陷和需求以独立变更管理，不修改已验收事实。
 
-## 4. 依赖有向性、数量和精简性
-
-- 任务共 34 个，编号连续且全部前置引用早于任务自身。覆盖环境/解析/展示/备份/清理/测试/发布。
-- 没有额外数据库建模、后台任务系统、远程接口、备份恢复 UI、云端删除等范围外任务。
-- `README/CHANGELOG/CONTRIBUTING` 不额外独立立项，纳入 T-01、T-34，以减少文档管理任务。
-- 首次实施时只开发经样本验证的语义投影，不复制官方 V0→V4 完整迁移系统。
-
-## 5. 开工前与发布前剩余验证（不能视为已通过）
-
-1. 用户实际 Windows 10 Edition/Build 是否在微软官方 .NET 10 支持矩阵内，及自包含 EXE 可运行性。
-2. 本地 Harness 0.2.0.0 的实物 V0/V4 header、事件消息角色、压缩帧行为、附件引用和缓存格式。
-3. 通过编译、自动测试、Win10 现场测试和性能测试证明代码与设计一致。
-4. 核查 ZstdSharp.Port 在选定版本的流式 API 行为，以及 ZIP 校验和坏尾帧的失败模式。
-
-## 6. 结论
-
-**设计层复审：有条件通过。** 当前文件可直接作为开发实施依据；但**不能据此宣称工具已实现或真实文件格式兼容性已验证**。所有关键阻断项已落实到 T-05、T-13、T-25、T-32、T-33 等任务中。代码交付前应在此附实际测试结果和关键缺陷清单。
-
-## 7. 外部来源核验（截至 2026-10-16）
-
-- 官方 JSONL/Zstd backend：<https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-persistence-jsonl/README.md>
-- 官方事件会话模型：<https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/core/session/README.md>
-- 投影缓存：<https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-projection-cache/README.md>
-- 格式 V4 变更：<https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/persistence-changes/2026-09-16-session-format-v4.md>
-- 迁移与物理 generation：<https://github.com/deepseek-ai/deepseek-harness/blob/master/.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md>
-- 官方 Web ZIP 导出：<https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session-query/session-log-export/README.md>
-- NuGet ZstdSharp.Port：<https://www.nuget.org/packages/zstdsharp.port>
-- 微软 Win10/.NET 支持矩阵：<https://learn.microsoft.com/en-us/dotnet/core/install/windows>
-- 微软本地 SDK 安装：<https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-install-script>
+证据索引：`artifacts/evidence/T-32.txt`、`T-33.txt`、`T-33-win10.txt`、`T-34.txt`；发布说明：`docs/release.md`；历史设计决策：`docs/decisions/`。
