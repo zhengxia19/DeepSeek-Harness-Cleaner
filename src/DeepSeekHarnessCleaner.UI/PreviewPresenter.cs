@@ -22,6 +22,7 @@ public sealed class PreviewPresenter
 {
     private readonly PathGuard _pathGuard = new();
     private readonly LegacyPreview _legacy = new();
+    private const int MaxPreviewReadBytes = 8 * 1024 * 1024;
 
     public Task<PreviewOutcome> PreviewAsync(string sessionRoot, SessionSummary session, CancellationToken ct)
     {
@@ -63,7 +64,7 @@ public sealed class PreviewPresenter
             using var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             if (compressed)
             {
-                var decoded = ZstdFrameDecoder.Decode(stream, CompressionLimits.MaxSessionDecompressedBytes);
+                var decoded = ZstdFrameDecoder.Decode(stream, MaxPreviewReadBytes);
                 switch (decoded.Status)
                 {
                     case ZstdDecodeStatus.Success:
@@ -84,7 +85,7 @@ public sealed class PreviewPresenter
             }
 
             // 明文：读取上限 + 1 字节判定是否超限，超限不提供正文（与事件流同一上限）。
-            var limit = CompressionLimits.MaxSessionDecompressedBytes;
+            var limit = MaxPreviewReadBytes;
             var buffer = new byte[checked((int)limit) + 1];
             var total = 0;
             int read;
@@ -96,8 +97,8 @@ public sealed class PreviewPresenter
 
             if (total > limit)
             {
-                warnings.Add("预览文件超过大小上限，不提供预览正文。");
-                return null;
+                warnings.Add("预览正文超过 8 MiB，仅显示文件开头的可读部分（不完整）。");
+                return Encoding.UTF8.GetString(buffer, 0, checked((int)limit));
             }
 
             return Encoding.UTF8.GetString(buffer, 0, total);
