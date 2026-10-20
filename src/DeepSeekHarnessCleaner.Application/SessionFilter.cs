@@ -23,7 +23,8 @@ public sealed record FilterRequest(
     DateFilter? Date,
     string? Project,
     string? SessionId,
-    string? Keyword);
+    string? Keyword,
+    string? Title = null);
 
 /// <summary>
 /// T-11 会话日期与搜索筛选（TC-07/TC-08）。筛选只按完整会话粒度取舍，
@@ -51,6 +52,7 @@ public static class SessionFilter
         var project = Normalize(request.Project);
         var sessionId = Normalize(request.SessionId);
         var keyword = Normalize(request.Keyword);
+        var title = Normalize(request.Title);
 
         var result = new List<SessionSummary>();
         foreach (var session in sessions)
@@ -60,6 +62,8 @@ public static class SessionFilter
             if (project is not null && !(session.Project?.Contains(project, StringComparison.OrdinalIgnoreCase) ?? false))
                 continue;
             if (sessionId is not null && !(session.SessionId?.Contains(sessionId, StringComparison.OrdinalIgnoreCase) ?? false))
+                continue;
+            if (title is not null && !(session.Title?.Contains(title, StringComparison.OrdinalIgnoreCase) ?? false))
                 continue;
             if (keyword is not null && !MatchesKeyword(session, keyword))
                 continue;
@@ -102,7 +106,8 @@ public static class SessionFilter
 
     private static bool MatchesKeyword(SessionSummary session, string keyword) =>
         (session.Project is not null && session.Project.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-        || (session.SessionId is not null && session.SessionId.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+        || (session.SessionId is not null && session.SessionId.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+        || (session.Title is not null && session.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase));
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
