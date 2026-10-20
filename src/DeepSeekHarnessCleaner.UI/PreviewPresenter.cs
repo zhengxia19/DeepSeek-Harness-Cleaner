@@ -53,7 +53,7 @@ public sealed class PreviewPresenter
             }
         }
 
-        return new PreviewOutcome(session, _legacy.Build(session, transcript), warnings);
+        return new PreviewOutcome(session, _legacy.Build(session, transcript, ct), warnings);
     }
 
     private static string? ReadTranscript(string fullPath, bool compressed, List<string> warnings, CancellationToken ct)
@@ -137,10 +137,18 @@ public sealed class PreviewPresenter
         {
             foreach (var item in projection.Items)
             {
+                if (sb.Length >= 240_000)
+                {
+                    sb.AppendLine("（预览显示达到 240,000 字符上限；可通过原始备份保留全部内容）");
+                    break;
+                }
                 var at = item.At is null
                     ? string.Empty
                     : $" @ {item.At.Value.ToLocalTime():yyyy-MM-dd HH:mm:ss}";
-                sb.AppendLine($"[{item.Role}]{at} {item.Text}");
+                var limited = item.Text.Length > 16_000
+                    ? item.Text[..16_000] + "（当前消息仅显示前 16,000 字符）"
+                    : item.Text;
+                sb.AppendLine($"[{item.Role}]{at} {limited}");
             }
 
             if (projection.Truncated)
