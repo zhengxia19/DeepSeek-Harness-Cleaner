@@ -33,10 +33,10 @@ public sealed class SessionTitleTests
     public void CompressedLog_ReadsLatestDurableTitle()
     {
         using var fx = FixtureRoot.Create();
+        var events = "{\"type\":\"header\",\"sessionId\":\"title-zstd\",\"formatVersion\":4,\"createdAt\":\"2026-01-01T00:00:00Z\"}" + "\n"
+            + "{\"type\":\"session/title\",\"data\":{\"title\":\"Compressed title\"}}" + "\n";
         var path = fx.Factory.WriteSessionFile("proj-title", "title-zstd", "session.v4.jsonl.zstd",
-            FixtureFactory.ZstdFrames(
-                "{\\"type\\":\\"header\\",\\"sessionId\\":\\"title-zstd\\",\\"formatVersion\\":4,\\"createdAt\\":\\"2026-01-01T00:00:00Z\\"}\\n" +
-                "{\\"type\\":\\"session/title\\",\\"data\\":{\\"title\\":\\"Compressed title\\"}}\\n"));
+            FixtureFactory.ZstdFrames(events));
         Assert.Equal("Compressed title", new SessionTitleReader().Read(path, compressed: true));
     }
 
