@@ -124,6 +124,7 @@ public sealed class InventoryService : ISessionInventory
         {
             TotalBytes = totalBytes,
             IsAmbiguous = isAmbiguous,
+            Title = dir.Files.OrderByDescending(static f => f.Log.Generation).Select(static f => f.Title).FirstOrDefault(static t => !string.IsNullOrEmpty(t)),
         };
     }
 
