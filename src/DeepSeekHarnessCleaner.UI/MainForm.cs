@@ -526,7 +526,7 @@ public sealed partial class MainForm : Form
         string.Join("，", session.Generations.Select(static g => $"v{g.Generation}{(g.Compressed ? " zstd" : " 明文")}"));
 
     private static string StatusText(SessionSummary session) =>
-        session.Status + (session.IsAmbiguous ? "（歧义）" : string.Empty);
+        session.IsAmbiguous ? "身份歧义" : session.Status == ParseStatus.Valid ? string.Empty : session.Status.ToString();
 
     private void OnDeleteClick(object? sender, EventArgs e)
     {
