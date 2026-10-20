@@ -4,7 +4,7 @@
 
 | 依赖 | 作用 | 决策 |
 |---|---|---|
-| Microsoft .NET 10 SDK / WindowsDesktop Runtime | C# 编译与 WinForms 运行 | 项目本地 SDK，发行时自包含 |
+| Microsoft .NET 10 SDK / WindowsDesktop Runtime | C# 编译与 WinForms 运行 | SDK 仅安装在项目本地；发行包不捆绑运行时，客户端自行安装 .NET 10 Windows Desktop Runtime x64 |
 | WinForms / System.IO / System.Text.Json / System.IO.Compression | UI、文件与 ZIP | BCL / Framework 引用，无 GUI 三方包 |
 | ZstdSharp.Port | 解压 Harness `.zstd` 会话物理日志 | 选择纯托管兼容包，实际 API 和多帧行为必须 fixture 验证 |
 | xUnit + Microsoft.NET.Test.Sdk | 单元与集成测试 | 仅开发依赖 |

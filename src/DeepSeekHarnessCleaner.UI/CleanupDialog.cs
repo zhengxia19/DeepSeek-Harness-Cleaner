@@ -8,7 +8,7 @@ namespace DeepSeekHarnessCleaner.UI;
 
 /// <summary>
 /// 删除确认对话框（T-30）：展示最终删除清单（逐文件路径/大小）、排除项与进程警告、备份状态；
-/// “确认删除”在备份完成前禁用；确认后后台执行删除（可取消），完成触发 <see cref="CleanupFinished"/>。
+/// 备份可选；选择备份时校验通过才允许确认。后台执行删除（可取消）。
 /// 取消（未开始执行时）直接关闭，不产生任何删除。
 /// </summary>
 public sealed class CleanupDialog : Form
@@ -17,6 +17,7 @@ public sealed class CleanupDialog : Form
     private readonly Label _planLabel = new();
     private readonly TextBox _warningLabel = new() { Multiline = true, ReadOnly = true, WordWrap = true, ScrollBars = ScrollBars.Vertical, BorderStyle = BorderStyle.None };
     private readonly Label _backupLabel = new();
+    private readonly CheckBox _backupRequested = new() { Text = "删除前备份原始文件（可选）", AutoSize = true };
     private readonly Label _resultLabel = new();
     private readonly Button _backupButton = new();
     private readonly Button _confirmButton = new();
@@ -27,11 +28,13 @@ public sealed class CleanupDialog : Form
     private readonly string _root;
     private readonly string _dataHome;
     private readonly IReadOnlyList<SessionSummary> _sessions;
+    private readonly IReadOnlyList<string>? _attachmentPaths;
     private string _zipPath;
     private CancellationTokenSource? _cts;
     private BackupManifest? _manifest;
     private VerifiedBackup? _backup;
     private bool _running;
+    private bool _backingUp;
 
     public CleanupDialog(
         CleanupPlanResult planResult,
@@ -39,7 +42,8 @@ public sealed class CleanupDialog : Form
         string dataHome,
         IReadOnlyList<SessionSummary> sessions,
         ActionsPresenter presenter,
-        string zipPath)
+        string zipPath,
+        IReadOnlyList<string>? attachmentPaths = null)
     {
         _plan = planResult.Plan!;
         _exclusions = planResult.Exclusions;
@@ -48,8 +52,9 @@ public sealed class CleanupDialog : Form
         _sessions = sessions;
         _presenter = presenter;
         _zipPath = zipPath;
+        _attachmentPaths = attachmentPaths;
 
-        Text = "删除确认：会话原始文件";
+        Text = attachmentPaths is null ? "删除确认：会话原始文件" : "删除确认：独立附件文件";
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         MaximizeBox = false;
@@ -59,7 +64,7 @@ public sealed class CleanupDialog : Form
         _planLabel.AutoSize = false;
         _planLabel.SetBounds(12, 10, 796, 24);
         _planLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _planLabel.Text = $"会话 {sessions.Count} 个；待删除文件 {_plan.Targets.Count} 个" +
+        _planLabel.Text = (attachmentPaths is null ? $"会话 {sessions.Count} 个；" : "显式选择的附件；") + $"待删除文件 {_plan.Targets.Count} 个" +
             $"（合计 {InventoryPresenter.FormatBytes(_plan.Targets.Sum(static t => t.ExpectedLength))}）" +
             (_exclusions.Count > 0 ? $"；排除项 {_exclusions.Count} 个" : string.Empty);
 
@@ -71,20 +76,25 @@ public sealed class CleanupDialog : Form
         _warningLabel.Text = probe.AllowsWrite
             ? "进程状态：Harness 未运行，可执行删除。"
             : $"警告：进程状态 {probe.State}（{(probe.ErrorCode ?? string.Join("；", probe.RiskNotes))}），删除将被阻断。";
+        if (attachmentPaths is not null)
+            _warningLabel.Text += " 附件独立删除；已引用/Unknown 均可能被历史会话使用。删除会使相应历史附件不可用，请核对下方文件。";
+
+        _backupRequested.Location = new Point(12, 98);
+        _backupRequested.CheckedChanged += (_, _) => UpdateConfirmation();
 
         _backupLabel.AutoSize = false;
-        _backupLabel.SetBounds(12, 98, 796, 36);
+        _backupLabel.SetBounds(12, 123, 796, 30);
         _backupLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        _backupLabel.Text = "备份状态：未备份（删除前必须先完成原始文件 ZIP 备份）。";
+        _backupLabel.Text = "备份状态：未备份；可直接确认删除。未备份删除的文件无法由本工具恢复。";
 
-        _targetList.Location = new Point(12, 140);
-        _targetList.Size = new Size(796, 270);
+        _targetList.Location = new Point(12, 158);
+        _targetList.Size = new Size(796, 252);
         _targetList.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         _targetList.Scrollable = true;
         _targetList.View = View.Details;
         _targetList.FullRowSelect = true;
         _targetList.HideSelection = true;
-        _targetList.Columns.Add("会话标题", 210);
+        _targetList.Columns.Add(attachmentPaths is null ? "会话标题" : "操作对象", 210);
         _targetList.Columns.Add("文件（相对数据根）", 450);
         _targetList.Columns.Add("大小", 80, HorizontalAlignment.Right);
         _targetList.Columns.Add("类别", 90);
@@ -96,7 +106,7 @@ public sealed class CleanupDialog : Form
         foreach (var target in _plan.Targets)
         {
             var relative = Path.GetRelativePath(_root, target.AbsolutePath);
-            var title = titleByPath.TryGetValue(target.AbsolutePath, out var found) ? found : "（未命名）";
+            var title = attachmentPaths is not null ? "独立附件" : titleByPath.TryGetValue(target.AbsolutePath, out var found) ? found : "（未命名）";
             _targetList.Items.Add(new ListViewItem(new[]
             {
                 title,
@@ -118,7 +128,7 @@ public sealed class CleanupDialog : Form
         _confirmButton.Location = new Point(360, 424);
         _confirmButton.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
         _confirmButton.TabIndex = 21;
-        _confirmButton.Enabled = false; // 未备份不得删除。
+        _confirmButton.Enabled = probe.AllowsWrite && _plan.Targets.Count > 0;
         _confirmButton.Click += OnConfirmClick;
 
         _cancelButton.Text = "取消(&C)";
@@ -135,10 +145,20 @@ public sealed class CleanupDialog : Form
 
         Controls.AddRange(new Control[]
         {
-            _planLabel, _warningLabel, _backupLabel, _targetList,
+            _planLabel, _warningLabel, _backupRequested, _backupLabel, _targetList,
             _backupButton, _confirmButton, _cancelButton, _resultLabel,
         });
     }
+
+    protected override void OnShown(EventArgs e)
+    {
+        OwnedFormPosition.Center(this);
+        base.OnShown(e);
+    }
+
+    private void UpdateConfirmation() => _confirmButton.Enabled = !_running && !_backingUp
+        && _plan.Targets.Count > 0 && (!_backupRequested.Checked || _backup is not null)
+        && _presenter.ProbeProcesses().AllowsWrite;
 
     public bool BackupReady => _backup is not null;
 
@@ -151,9 +171,9 @@ public sealed class CleanupDialog : Form
     public CleanupExecutionResult? LastResult { get; private set; }
 
     /// <summary>本对话框使用的计划与备份事实（T-31 结果报告构建源）。</summary>
-    public CleanupPlan Plan => _plan;
+    public CleanupPlan Plan => _plan with { RequiresBackup = _backupRequested.Checked };
 
-    public VerifiedBackup? Backup => _backup;
+    public VerifiedBackup? Backup => _backupRequested.Checked ? _backup : null;
 
     public string ZipPath => _zipPath;
 
@@ -169,20 +189,24 @@ public sealed class CleanupDialog : Form
 
     private void OnBackupClick(object? sender, EventArgs e)
     {
+        if (_running || _backingUp) return;
         // UI 点击选择目标文件夹；冒烟入口 RequestBackup 保持无交互，避免破坏自动化。
         if (ReferenceEquals(sender, _backupButton))
         {
             using var folderPicker = new FolderBrowserDialog
             {
-                Description = "选择会话 ZIP 备份保存目录",
+                Description = "选择原始文件 ZIP 备份保存目录",
                 SelectedPath = Path.GetDirectoryName(_zipPath) ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                 ShowNewFolderButton = true,
             };
             if (folderPicker.ShowDialog(this) != DialogResult.OK) return;
             _zipPath = Path.Combine(folderPicker.SelectedPath, Path.GetFileName(_zipPath));
         }
+        _backupRequested.Checked = true;
+        _backup = null;
+        UpdateConfirmation();
         // 清单/备份以数据根（.dsh 主目录）为根：条目名须为 sessions/… 类别前缀。
-        var manifestResult = _presenter.BuildSessionManifest(_dataHome, _sessions);
+        var manifestResult = _presenter.BuildSessionManifest(_dataHome, _sessions, _attachmentPaths);
         if (manifestResult.Manifest is null)
         {
             _backupLabel.Text = "清单构建失败：" + string.Join("；", manifestResult.Issues.Select(static i => $"{i.Code}:{i.Path}"));
@@ -190,18 +214,25 @@ public sealed class CleanupDialog : Form
         }
 
         _manifest = manifestResult.Manifest;
+        _backingUp = true;
+        _backupRequested.Enabled = false;
+        UpdateConfirmation();
         _backupButton.Enabled = false;
         _backupLabel.Text = "备份状态：正在备份…";
         var dialog = new BackupDialog(_manifest, _zipPath, _presenter);
         dialog.Completed += (_, _) =>
         {
+            if (IsDisposed) return;
+            _backingUp = false;
+            _backupRequested.Enabled = true;
+            _backupButton.Enabled = true;
             if (dialog.State.Stage == BackupStage.Ready)
             {
                 _backup = dialog.State.ZipPath is null ? null : ReopenVerifiedBackup();
                 _backupLabel.Text = _backup is null
                     ? "备份复验失败，禁止删除。"
                     : $"备份状态：已备份并校验（{dialog.State.EntryCount} 个文件，{InventoryPresenter.FormatBytes(dialog.State.TotalBytes)}）。可确认删除。";
-                _confirmButton.Enabled = _backup is not null && _presenter.ProbeProcesses().AllowsWrite;
+                UpdateConfirmation();
                 if (!_confirmButton.Enabled && _backup is not null)
                     _backupLabel.Text += " 当前检测到 Harness 运行或状态未知；请完全退出后重新打开删除窗口。";
             }
@@ -210,6 +241,7 @@ public sealed class CleanupDialog : Form
                 _backupLabel.Text = $"备份状态：{dialog.State.Stage}（{dialog.State.ErrorCode} {dialog.State.Message}）。";
                 _backupButton.Enabled = true;
             }
+            UpdateConfirmation();
         };
         dialog.Show(this);
     }
@@ -222,12 +254,13 @@ public sealed class CleanupDialog : Form
 
     private async void OnConfirmClick(object? sender, EventArgs e)
     {
-        if (_manifest is null || _backup is null)
+        if (_running || _backingUp || !_confirmButton.Enabled || (_backupRequested.Checked && (_manifest is null || _backup is null)))
         {
             return;
         }
 
         _running = true;
+        _backupRequested.Enabled = false;
         _backupButton.Enabled = false;
         _confirmButton.Enabled = false;
         _cancelButton.Text = "取消执行(&C)";
@@ -236,7 +269,8 @@ public sealed class CleanupDialog : Form
         _cts = cts;
         try
         {
-            var result = await _presenter.RunCleanupAsync(_plan, _manifest, _backup, _root, userConfirmed: true, cts.Token);
+            var result = await _presenter.RunCleanupAsync(Plan, _backupRequested.Checked ? _manifest : null,
+                Backup, _root, userConfirmed: true, cts.Token);
             LastResult = result;
             _resultLabel.Text = result.Aborted
                 ? $"已中止：{result.AbortCode}（未执行任何删除）"
@@ -249,12 +283,12 @@ public sealed class CleanupDialog : Form
         }
 
         _running = false;
-        RunFinished = true;
         _cancelButton.Text = "关闭(&L)";
         if (LastResult is not null)
         {
             CleanupFinished?.Invoke(this, LastResult);
         }
+        RunFinished = true;
     }
 
     private void OnCancelClick(object? sender, EventArgs e)

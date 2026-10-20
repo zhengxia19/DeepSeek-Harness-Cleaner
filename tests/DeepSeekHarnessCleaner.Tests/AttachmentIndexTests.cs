@@ -101,7 +101,8 @@ public sealed class AttachmentIndexTests
 
         var result = index.Build(sessions, ["att-001"]);
 
-        Assert.Equal(AttachmentEvidenceStatus.ConfirmedUnreferenced, Find(result, "att-001")!.Status);
+        Assert.Equal(AttachmentEvidenceStatus.Unknown, Find(result, "att-001")!.Status);
+        Assert.False(result.GlobalOrphanConclusionAvailable);
         Assert.Empty(result.DanglingReferences);
     }
 

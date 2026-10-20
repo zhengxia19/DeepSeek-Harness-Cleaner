@@ -39,7 +39,8 @@ public static class ZstdFrameDecoder
     /// 流式解压连接帧序列。截断尾帧与损坏帧分别返回 TruncatedTail/CorruptData，
     /// 绝不返回 Success；解压量超过 <paramref name="maxTotalBytes"/> 立即中止。
     /// </summary>
-    public static ZstdDecodeResult Decode(Stream input, long maxTotalBytes = CompressionLimits.MaxSessionDecompressedBytes)
+    public static ZstdDecodeResult Decode(Stream input, long maxTotalBytes = CompressionLimits.MaxSessionDecompressedBytes,
+        bool retainPrefixOnLimit = false, CancellationToken cancellationToken = default)
     {
         if (maxTotalBytes <= 0)
             throw new ArgumentOutOfRangeException(nameof(maxTotalBytes));
@@ -56,12 +57,17 @@ public static class ZstdFrameDecoder
             int read;
             while ((read = decompression.Read(buffer, 0, buffer.Length)) > 0)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 total += read;
                 if (total > maxTotalBytes)
                 {
+                    // Opt-in for read-only preview only. Status still refuses full decoding;
+                    // all validation/cleanup callers retain the default empty-content result.
+                    if (retainPrefixOnLimit)
+                        output.Write(buffer, 0, checked((int)(maxTotalBytes - output.Length)));
                     return new ZstdDecodeResult(
                         ZstdDecodeStatus.DecompressedLimitExceeded,
-                        Array.Empty<byte>(),
+                        retainPrefixOnLimit ? output.ToArray() : Array.Empty<byte>(),
                         $"解压量超过上限 {maxTotalBytes} 字节。");
                 }
 

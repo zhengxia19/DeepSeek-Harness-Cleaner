@@ -98,10 +98,10 @@ public sealed class LegacyPreview
         return new LegacyPreviewResult(
             LegacyPreviewMode.Projected, selected, metadata, projection,
             SupportsRawBackup: true,
-            projection.IsProjectionComplete
-                ? "事件 schema 经 fixture 确证，投影完整。"
-                : $"投影含 {projection.IncompleteCount} 个不完整事件标记"
-                  + (projection.Truncated ? "，且达到预览上限被截断" : string.Empty) + "。");
+            "按日志事件顺序展示文本，未重放 Harness 的历史替换操作。" + (projection.IsProjectionComplete
+                ? "已支持的文本投影完整；内部状态未展开。"
+                : $"投影含 {projection.IncompleteCount - projection.UnsupportedCount} 个格式不完整标记、{projection.UnsupportedCount} 个未支持事件"
+                  + (projection.Truncated ? "，且达到预览上限被截断" : string.Empty) + "。"));
     }
 
     private static IReadOnlyList<string> BuildMetadataLines(SessionSummary summary)

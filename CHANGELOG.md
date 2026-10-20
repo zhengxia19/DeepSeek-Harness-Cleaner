@@ -1,4 +1,22 @@
-## Unreleased (2026-10-20, not yet Windows-validated)
+## [0.2.3] — 2026-10-20
+
+- 会话与附件删除备份改为可选；选择备份时仍须完成原始 ZIP 校验。无备份结果报告不再显示未创建的 ZIP 路径，保留进程、路径、指纹及文件复验。
+- 删除与附件窗口在非模态打开时按直接父窗体居中，并限制在可用工作区内。
+- 附件列表增加可核实名称、类型及关联会话；会话列表增加归档列，解析状态明确显示正常或具体异常。
+- 修复备份窗口在任务启动前或执行中关闭时的取消处理，防止删除窗口停留在等待状态。
+- 324 自动测试、38 Windows 窗口专项、72 发布 EXE 合成夹具冒烟通过；证据 `artifacts/evidence/2026-10-20/T-31.txt`。
+
+## [0.2.2] — 2026-10-20
+
+- 修复原生 v0/v4 会话只能查看、无法生成删除目标的问题；删除前重新核对身份、代际集合、JSONL 完整性及哈希，仍要求原始 ZIP 备份及 Harness 退出。
+- 区分正常内部事件、工具文本、未知扩展和损坏 JSON，避免把未支持事件误报为会话内容损坏。
+- 接入附件管理窗口，支持只读盘点、原生图片引用匹配、人工逐文件选择、独立 ZIP 备份和安全删除；Unknown 不判定孤儿。
+- 新增合成数据上的 Windows 窗口回归程序，覆盖实际会话/附件选择、备份、确认、删除及未选文件/根外哨兵保护。
+- 本轮实测命令、结果及限制见 `artifacts/evidence/2026-10-20/T-30.txt`；不代表完整 DPI/运行中删除验收。
+
+## 2026-10-20 早期修复记录（当时尚未 Windows 功能验收）
+
+- Default to a framework-dependent win-x64 single-file EXE; clients must install .NET 10 Windows Desktop Runtime x64 separately.
 
 - Add prioritized repair checklist in `docs/2026-10-20-修复任务清单.md`.
 - Guard null/invalid session grid row during preview and deletion; suppress selection callback during rebinding.
@@ -11,7 +29,8 @@
 - Add session title to confirmation list, improve scrollability and long warning wrapping.
 - Bound preview file reads and per-message rendered text; propagate cancellation to transcript projection.
 - Keep the conservative process-based deletion guard; no unverified live-session deletion.
-- Build and WinForms smoke tests have not been executed in this environment.
+- Fix three nullable WinForms column accesses that blocked compilation (CS8602).
+- Release solution build and win-x64 framework-dependent single-file publish passed on Windows 10 with SDK 10.0.402; unit tests, functional tests and WinForms smoke tests were not run for this build.
 
 # CHANGELOG
 

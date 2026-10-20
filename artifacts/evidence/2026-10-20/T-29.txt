@@ -1,0 +1,97 @@
+Task: 2026-10-20 repair-list T-29 (local schema / metadata / preview regression)
+Status: ACCEPTED for this bounded repair; earlier task acceptance is not changed.
+FinishedAt: 2026-10-20 11:12 +08:00
+Baseline: 5b7c8bcf46836becf175a1f9b01733a7a04f6604 plus preexisting local modifications.
+Authorization: user explicitly requested comparison, local read-only diagnosis and repair.
+Prerequisites: previous repair sources/records inspected; project-local SDK 10.0.402 available.
+GitCommit: NOT_COMMITTED; no push.
+
+Root causes / comparison:
+- fc4a3aa / 9fdb62e implemented synthetic header/sessionId/formatVersion/string-createdAt and message/role/text.
+  Local headers use session/id/version (0 or 4)/numeric Unix milliseconds; native messages use user/message
+  data.content[] and assistant/message data.message.content[]. Upstream docs corroborate inspected fields;
+  current master is not installed-version proof.
+- Previous title reader found 67 titles in 91 logs independently, but UiScanSource skipped it after header failure.
+- Missing parsed ID was compared to directory ID, incorrectly turning parse failure into identity conflict.
+- Four compressed logs expand beyond 8 MiB; old preview discarded them entirely. Plain prefix could split JSON.
+- Previous SelectionChanged guard sees the old checked column before CurrentCell changes to id, suppressing preview.
+
+Changed files:
+src/DeepSeekHarnessCleaner.Infrastructure/SessionHeaderReader.cs
+src/DeepSeekHarnessCleaner.Infrastructure/Compression/ZstdFrameDecoder.cs
+src/DeepSeekHarnessCleaner.Application/TranscriptProjector.cs
+src/DeepSeekHarnessCleaner.Application/LegacyPreview.cs
+src/DeepSeekHarnessCleaner.UI/InventoryPresenter.cs
+src/DeepSeekHarnessCleaner.UI/PreviewPresenter.cs
+src/DeepSeekHarnessCleaner.UI/MainForm.cs (preexisting nullable fixes preserved)
+tests/DeepSeekHarnessCleaner.Tests/NativeSessionTests.cs
+tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj
+Repair task list, this evidence, and checkpoint.
+
+Implementation / safety:
+- Native v0/v4 header metadata validated for read-only display, retaining Unsupported cleanup status.
+  Invalid types, dates, unverified versions rejected; missing header identity is unknown, actual mismatch blocked.
+- Native user/assistant text blocks and millisecond event time projected. Reasoning/tool arguments omitted;
+  nontext/unknown blocks marked incomplete; streaming duplicates skipped. Event-order view is explicitly
+  distinguished from Harness surface replacement replay.
+- Preview-only zstd prefix opt-in preserves complete lines with 8 MiB warning. Full validation callers retain
+  default empty-content limit refusal. No path/process/backup gates relaxed; native cleanup targets remain zero.
+- Real session data only read; no real content copied into fixtures/logs/evidence. Diagnostic output schemas/counts only.
+- Pre-task backup: .artifacts/schema-fix-backup-20261020/ (src/tests/task list/checkpoint/preexisting.patch).
+  Restore/publish lockfile side effects restored from that backup; no lockfile diff remains.
+
+Commands / real results (repository root, after scripts/enter-env.ps1):
+1. dotnet run --project .artifacts/schema-probe/Probe.csproj -c Release
+   Before EXIT=1: FILES=91 DECODED=91 readable matched headers=0; projected messages=0;
+   SESSIONS=90 AMBIGUOUS=90 IDS=0 DATES=0 TITLES=0. Log: .artifacts/schema-probe/before.log.
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests -c Release --no-restore
+   --filter FullyQualifiedName~NativeSessionTests --logger "trx;LogFileName=native-red.trx"
+   --results-directory .artifacts/schema-probe
+   Before schema fix EXIT=1: 9 failed / 7 passed. Logs: test-red.log, native-red.trx.
+3. Same test command, filter FullyQualifiedName~LargeNativePreview:
+   Before prefix fix EXIT=1: 2 failed. Logs: large-red.log, large-red.trx.
+4. NativeSessionTests after fixes EXIT=0: 18 passed, 0 failed. Logs: native-final.log, native-final.trx.
+5. dotnet test tests/DeepSeekHarnessCleaner.Tests -c Release --no-build --no-restore
+   --logger "trx;LogFileName=regression-final.trx" --results-directory .artifacts/schema-probe
+   EXIT=0: 290 passed / 0 failed / 0 skipped. Logs: regression-final.log, regression-final.trx.
+6. dotnet run --project .artifacts/schema-probe/Probe.csproj -c Release --no-restore
+   EXIT=0. Log: .artifacts/schema-probe/final-live.log.
+   FILES=91 DECODED=91 matched readable headers=91 TITLES=67 projected message items=1898.
+   SESSIONS=90 AMBIGUOUS=0 IDS=90 DATES=90 TITLES=66.
+   PREVIEWS=90 WITH_TEXT=83 RAW_SESSIONS_WITH_TEXT=83 WARNED=4 OVER_8MIB=4.
+   SOURCE_HASH_CHANGED=0 CLEANUP_TARGETS=0 TITLE_MISMATCH=0 METADATA_MISMATCH=0.
+   Independent raw JSON checks compare highest-generation metadata/latest durable titles to inventory.
+   Seven sessions have no user/assistant text blocks; no substitute title/content invented.
+7. dotnet run --project .artifacts/schema-ui-probe/Probe.csproj -c Release --no-restore
+   Red EXIT=-532462766 (test timeout), 90 fields correct, INITIAL_COLUMN=checked,
+   SELECTED_ROWS=1 CURRENT_COLUMN=id PREVIEW_TIMER=False. Log: instrumented.log.
+   Green EXIT=0: 90 fields correct, PREVIEW_TIMER=True, UI_PREVIEW_CORRECT_SESSION=True,
+   TEXT_PRESENT=True, UI_CLEAR_PREVIEW=True. Log: .artifacts/schema-ui-probe/final.log.
+   Uses actual MainForm/RichTextBox/DataGridView; no delete buttons invoked.
+   Transient MSB3026 retries while prior probe released its DLL resolved; final solution build has no warnings.
+8. dotnet build DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   EXIT=0: 0 warnings/errors after final UI fix. Log: .artifacts/schema-probe/build-final.log.
+9. scripts/publish.ps1 -Version 0.2.1
+   EXIT=0 after final UI fix. Log: .artifacts/schema-probe/publish-final.log.
+   EXE: dist/v0.2.1/win-x64/DeepSeekHarnessCleaner.UI.exe (framework-dependent single file, unsigned).
+   SHA256=3b241dd94466939c60215c854bd2372a8542424999cc09ad70c27622bd5e38a6
+10. Published EXE --smoke D:\Code\DeepSeek-Harness-Cleaner\.artifacts\schema-probe\package-smoke.txt
+    EXIT=0: 30 PASS / 0 FAIL. No scan root supplied; no deletion checks invoked.
+    Windows 10 Pro 22H2 19045.6466, DeviceDpi=96, plus 125%/150% font-scale simulation.
+    All SHA256SUMS.txt entries independently checked with Get-FileHash: PASS.
+11. dotnet format whitespace DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes
+    --include src/DeepSeekHarnessCleaner.Application/LegacyPreview.cs src/DeepSeekHarnessCleaner.Application/TranscriptProjector.cs src/DeepSeekHarnessCleaner.Infrastructure/SessionHeaderReader.cs src/DeepSeekHarnessCleaner.Infrastructure/Compression/ZstdFrameDecoder.cs src/DeepSeekHarnessCleaner.UI/InventoryPresenter.cs src/DeepSeekHarnessCleaner.UI/PreviewPresenter.cs src/DeepSeekHarnessCleaner.UI/MainForm.cs tests/DeepSeekHarnessCleaner.Tests/NativeSessionTests.cs
+    EXIT=0. Log: .artifacts/schema-probe/format-final.log.
+12. git diff --check: EXIT=0. CRLF working-copy notices are Git notices, not whitespace errors.
+
+Limits / NOT RUN:
+- No complete 100%-200% real-DPI matrix, clean machine runtime install, full live deletion lifecycle,
+  performance acceptance or full historical Harness event migration/replay claimed.
+- Native formats remain read-only for cleanup. Earlier repair-list T-01..T-28 remain unchecked.
+- Old v0.2.0 package preserved. No global release acceptance inferred.
+
+Primary sources inspected (no private data transmitted):
+https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/persistence.md
+https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/persistence-catalog.md
+https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/llm/llm/src/message.ts
+

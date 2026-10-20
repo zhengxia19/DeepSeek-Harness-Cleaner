@@ -12,6 +12,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../../src/DeepSeekHarnessCleaner.UI/InventoryPresenter.cs" Link="Presenters/InventoryPresenter.cs" />
+    <Compile Include="../../src/DeepSeekHarnessCleaner.UI/PreviewPresenter.cs" Link="Presenters/PreviewPresenter.cs" />
+    <Compile Include="../../src/DeepSeekHarnessCleaner.UI/ActionsPresenter.cs" Link="Presenters/ActionsPresenter.cs" />
     <ProjectReference Include="..\..\src\DeepSeekHarnessCleaner.Domain\DeepSeekHarnessCleaner.Domain.csproj" />
     <ProjectReference Include="..\..\src\DeepSeekHarnessCleaner.Application\DeepSeekHarnessCleaner.Application.csproj" />
     <ProjectReference Include="..\..\src\DeepSeekHarnessCleaner.Infrastructure\DeepSeekHarnessCleaner.Infrastructure.csproj" />

@@ -26,7 +26,7 @@ public sealed record BackupUiState(
 /// <summary>
 /// 备份/删除操作的演示逻辑（T-30）：把 Application/Infrastructure 契约
 /// （CleanupPlanner、BackupManifestBuilder、BackupService、CleanupExecutor）包装成
-/// 对话框可用的异步操作；删除只在用户确认后调用 executor，且备份先行。
+/// 对话框可用的异步操作；删除只在用户确认后调用 executor，备份可选。
 /// </summary>
 public sealed class ActionsPresenter
 {
@@ -41,10 +41,11 @@ public sealed class ActionsPresenter
     }
 
     public CleanupPlanResult BuildSessionPlan(string root, IReadOnlyList<SessionSummary> selected) =>
-        new CleanupPlanner().Build(root, selected, []);
+        new SessionCleanupPreparation().Build(root, selected);
 
-    public ManifestBuildResult BuildSessionManifest(string root, IReadOnlyList<SessionSummary> selected) =>
-        new BackupManifestBuilder().Build(root, selected);
+    public ManifestBuildResult BuildSessionManifest(string root, IReadOnlyList<SessionSummary> selected,
+        IReadOnlyList<string>? attachmentPaths = null) =>
+        new BackupManifestBuilder().Build(root, selected, attachmentPaths);
 
     public HarnessProcessProbeResult ProbeProcesses() => _probe.Probe();
 
@@ -62,8 +63,8 @@ public sealed class ActionsPresenter
     /// ct 只传给 Execute（逐项 CANCELED 跳过），不传给 Task.Run，避免任务尚未启动即整体取消丢失逐项结果。</summary>
     public Task<CleanupExecutionResult> RunCleanupAsync(
         CleanupPlan plan,
-        BackupManifest manifest,
-        VerifiedBackup backup,
+        BackupManifest? manifest,
+        VerifiedBackup? backup,
         string root,
         bool userConfirmed,
         CancellationToken ct) =>
@@ -96,7 +97,7 @@ public sealed class ActionsPresenter
         return new OutcomeReport(new OutcomeReportInput(
             result.Aborted,
             result.AbortCode,
-            backup?.ZipPath ?? zipPath,
+            backup?.ZipPath,
             backup?.ManifestSignature,
             backup?.FileEntryCount ?? 0,
             backup?.TotalBytes ?? 0,

@@ -39,7 +39,7 @@ public sealed record CleanupExecutionResult(
 
 /// <summary>
 /// T-26 备份门禁与逐文件删除执行器（TC-11,TC-15,TC-16）。
-/// 全局门禁（任一失败即中止、零删除）：用户确认 → 备份存在且 ZIP 重校验通过 →
+/// 全局门禁（任一失败即中止、零删除）：用户确认 → 如选择备份则 ZIP 重校验通过 →
 /// Harness 进程探测仅 Inactive 放行 → 根指纹与计划一致。
 /// 逐项复验（design.md §7.5）：PathGuard 包含/reparse → 普通文件 → 长度/mtime/SHA-256 与计划比对，
 /// 变化即跳过该项；删除失败（权限/IO）如实记录，不中断其余项。
@@ -61,8 +61,8 @@ public sealed class CleanupExecutor
 
     /// <summary>
     /// 执行计划。<paramref name="manifest"/> 与 <paramref name="backup"/> 来自 T-21/T-22；
-    /// 会话计划（RequiresBackup=true）必须两者齐备且 ZIP 重校验通过（损坏/缺失/签名不符即中止）；
-    /// 缓存计划（RequiresBackup=false，T-27）不要求会话 ZIP，但若调用方仍提供备份则同样校验。
+    /// 选择备份（RequiresBackup=true）时两者必须齐备且 ZIP 重校验通过；
+    /// 不备份（RequiresBackup=false）时可均为空，但若调用方仍提供备份则同样校验。
     /// </summary>
     public CleanupExecutionResult Execute(
         CleanupPlan plan,

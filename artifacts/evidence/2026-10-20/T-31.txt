@@ -1,0 +1,104 @@
+FinishedAt: 2026-10-20 13:50:11 +08:00
+Task: repair-list T-31 (2026-10-20), five user-confirmed deletion/list/window fixes
+Status: ACCEPTED for this bounded task
+Authorization: user confirmed documentation changes, Git push, task list, then implementation.
+Prerequisites: repair-list T-29/T-30 checked against their evidence and actual source files.
+Baseline: 40e971aaae155672cdf7cabef67b0c1aa702e8a4 plus preexisting uncommitted T-29/T-30 sources.
+Documentation delivery: commit 40e971aaae155672cdf7cabef67b0c1aa702e8a4 pushed to origin/main;
+  git ls-remote origin refs/heads/main matched that commit before implementation began.
+Implementation Git commit: the commit containing this evidence; exact delivery hash is recorded in AGENT_CHECKPOINT.md.
+Backup: .artifacts/feedback-fix-backup-20261020-133700/ preserves the initial dirty tracked/untracked files.
+
+Scope / implemented behavior:
+1. Session and attachment plans default to RequiresBackup=false. CleanupDialog permits explicit confirmation
+   without ZIP; no ZIP is created implicitly. Selecting backup sets RequiresBackup=true; absent, failed,
+   canceled or corrupt ZIP cannot satisfy it. Explicitly unchecking backup allows direct deletion.
+   Backend still checks user confirmation, process Inactive, root fingerprint, containment/reparse,
+   regular file, length, mtime and SHA-256. Selected/unselected files remain separate.
+   Outcome report uses actual selected verified backup only, never the proposed ZIP filename as a fact.
+   Backup window close requests cancel before/during work and preserve the completion callback.
+2. Actual modeless Shown positions the session delete, attachment manager and attachment delete windows
+   at their immediate owner's center, clamped to the owner's monitor working area.
+3. Attachment columns: verified display names, reference-declared type, related session titles/IDs,
+   size, reference evidence, storage path, attachment ID. Unsafe/path-bearing names are not displayed.
+   Digest-matching v1/objects, v1/file-objects and v1/files layouts map references; explicit selection
+   still selects individual physical files only. Unknown names/types remain explicit, not invented.
+4. Archive membership flows through UiScanSource -> ScannedSessionDirectory -> InventoryService ->
+   SessionSummary.IsArchived -> independent grid column. Reads guarded storages/workspace.json
+   workspace domain v2 initialized global.archivedSessionIds. Missing, invalid, future-version,
+   duplicate-field, uninitialized, pinned-conflict or reparse metadata remains unknown.
+5. Parse status now explicitly displays normal/partial/unsupported/corrupt/unreadable/ambiguous in Chinese;
+   it does not claim runtime activity or automatic deletion eligibility.
+
+Primary-source schema provenance (public source code only; no real session contents transmitted):
+Pinned upstream revision: 687f282e8625c6b8d11ff58211a90524be2e4317
+https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/workspace/workspace/src/spec.ts
+https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/attachment/attachment/src/types.ts
+https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/attachment/attachment-local/src/file-store.ts
+Retrieved source copies: .artifacts/feedback-upstream/ (not shipped).
+Current upstream is schema provenance, not a claim about an arbitrary installed Harness version.
+
+Actual commands / outcomes:
+Environment: Windows 10 Pro 10.0.19045 x64; project-local SDK 10.0.402.
+All dotnet commands used . ./scripts/enter-env.ps1; TEMP/TMP set to project .artifacts/tmp.
+1. dotnet build DeepSeekHarnessCleaner.sln -c Release -warnaserror -m:1 --no-restore
+   EXIT=0; 0 warnings / 0 errors. Log: .artifacts/feedback-fix/build-final.log
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests -c Release --no-build --no-restore
+   --logger 'trx;LogFileName=core-final.trx' --results-directory .artifacts/feedback-fix
+   EXIT=0; 324 passed, 0 failed, 0 skipped. Logs: core-final.log and core-final.trx.
+   Added coverage: verified/empty/missing/invalid/conflicting archive state; unsafe/unknown attachment
+   metadata; image/file object/alias mapping; session and attachment direct deletion with confirmation,
+   cancellation, Active/Unknown, length/mtime/hash changes, wrong root, required backup and reparse blocks;
+   protected unselected and outside sentinel hashes.
+3. dotnet build tests/DeepSeekHarnessCleaner.WindowsTests -c Release -warnaserror --no-restore
+   EXIT=0; 0 warnings / 0 errors. Log: windows-build.log.
+   dotnet tests/DeepSeekHarnessCleaner.WindowsTests/bin/Release/net10.0-windows/DeepSeekHarnessCleaner.WindowsTests.dll
+   EXIT=0; 38 PASS / 0 FAIL, WINDOWS_REGRESSION=PASS. Log: windows-final.log.
+   Actual WinForms message loop and cross-thread checks enabled. Synthetic fixture only.
+   Covers grid archive/parse values, name/type/related title, three owner centering paths plus edge clamp,
+   session AND attachment direct deletion, optional verified attachment ZIP, failed backup explicit opt out,
+   backup cancellation before worker starts, process becomes Active between opening and confirmation,
+   cancel preserving targets and untouched unselected/outside/registry hashes.
+4. dotnet format whitespace DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include
+   [explicit changed/new .cs paths excluding WindowsTests]
+   EXIT=0. Log: format-verify.log.
+   dotnet format whitespace tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj
+   --no-restore --verify-no-changes
+   EXIT=0. Log: format-windows-verify.log.
+5. scripts/publish.ps1 -Version 0.2.3
+   EXIT=0. Log: .artifacts/feedback-fix/publish.log. New output directory verified before invoking.
+   Framework-dependent win-x64 single file, unsigned; requires .NET 10 Desktop Runtime x64.
+   EXE: dist/v0.2.3/win-x64/DeepSeekHarnessCleaner.UI.exe
+   Length: 945163
+   SHA256: 8a9db0a9553a0b3d59e5d48239b1373b6bb1e7bf259ad4bf80144c0b6f23c545
+   Independent Get-FileHash comparison of all 4 SHA256SUMS.txt entries: PASS.
+   Existing v0.2.0/0.2.1/0.2.2 packages preserved. Publish lockfiles compared with prepublish copies;
+   no lockfile content change required restoration.
+6. Existing .artifacts/functional-fix/prepare-legacy-smoke.ps1 created a NEW isolated 305-header fixture:
+   .artifacts/functional-legacy-smoke-v022-f02a67406ebd40d797b1634f814cebab/sessions
+   dist/v0.2.3/win-x64/DeepSeekHarnessCleaner.UI.exe --smoke
+   D:\Code\DeepSeek-Harness-Cleaner\.artifacts\feedback-fix\package-smoke.txt --scan-root
+   D:\Code\DeepSeek-Harness-Cleaner\.artifacts\functional-legacy-smoke-v022-f02a67406ebd40d797b1634f814cebab\sessions
+   --log-dir D:\Code\DeepSeek-Harness-Cleaner\.artifacts\functional-legacy-smoke-v022-f02a67406ebd40d797b1634f814cebab\logs
+   EXIT=0; 72 PASS, SMOKE_RESULT=PASS. Log: package-smoke.txt.
+7. git diff --check: EXIT=0. Focused credential-marker scan of source/tests/docs/evidence: no matches.
+
+Failures investigated (not counted as passes):
+- Initial added direct-session test fixture contained an extra empty JSONL line and was correctly rejected
+  by the complete-log precheck. Fixed the synthetic fixture; final 324/324 run passed.
+- Initial centering test inspected Visible before queued WinForms Shown. Pumped the actual Shown event
+  before measuring actual screen coordinates; final window tests matched coordinates within 1 pixel.
+- First package smoke omitted required --log-dir and failed its log-directory assertion with empty path
+  after 53 PASS. Preserved package-smoke-missing-logdir.txt; reran with full arguments on a new fixture.
+
+Limits / recovery:
+- No write, move or delete on real .dsh or real dsh-desktop data; all deletions used new synthetic roots.
+- No live runtime deletion support; no full real DPI matrix, clean-machine runtime install, global orphan
+  proof or full historical replay claimed. Font-scale simulation in legacy smoke is not real DPI coverage.
+- Original T-01..T-34 history and repair-list T-01..T-28 acceptance are not rewritten.
+- New commit includes preexisting T-29/T-30 source prerequisites, their existing tests/evidence and related
+  framework-dependent publication documentation, all included in the fresh final verification.
+- Roll back the program using retained old packages or source commits; program rollback does not restore
+  files deleted without a backup. Initial dirty tree backup remains in the project ignored artifacts.Staging verification: exact source/tests/docs/evidence allowlist only; no SDK/cache/dist/bin/obj staged.
+Full staged whitespace check reported only the preexisting T-29.txt extra blank EOF line; that historical
+raw evidence was preserved byte-for-byte. Recheck excluding that one historical file exited 0.

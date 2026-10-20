@@ -12,7 +12,10 @@ public sealed record SessionHeaderInfo(
     string SessionId,
     int FormatVersion,
     DateTimeOffset CreatedAt,
-    string? Cwd);
+    string? Cwd)
+{
+    public bool IsNative { get; init; }
+}
 
 /// <summary>单文件头部读取结果；仅 Valid 且身份不冲突才进入可删白名单。</summary>
 public sealed record SessionHeaderReadResult(
@@ -32,6 +35,7 @@ public sealed record SessionHeaderReadResult(
 /// <summary>
 /// T-09 受限日志头部读取（design.md §2/§3）：只读取每个物理文件的首条 header 行，
 /// 验证 sessionId、formatVersion、createdAt（可选 cwd）；不解析其余事件行。
+/// 原生 v0/v4 的身份和毫秒时间经本机样本核对；清理仍须精确路径、全代际备份及退出门禁。
 /// 明文按首行切分；.zstd 经 ZstdFrameDecoder 多帧解码。全程只读，源字节不变。
 /// </summary>
 public sealed class SessionHeaderReader
@@ -90,7 +94,8 @@ public sealed class SessionHeaderReader
 
         var text = Encoding.UTF8.GetString(firstLine);
         var parsed = ParseHeaderLine(text);
-        return WithIdentity(parsed, expectedSessionId, expectedSessionId is null ? null : string.Equals(parsed.Header?.SessionId, expectedSessionId, StringComparison.Ordinal));
+        return WithIdentity(parsed, expectedSessionId, expectedSessionId is null || parsed.Header is null
+            ? null : string.Equals(parsed.Header.SessionId, expectedSessionId, StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -205,31 +210,32 @@ public sealed class SessionHeaderReader
             if (root.ValueKind != JsonValueKind.Object
                 || !root.TryGetProperty("type", out var type)
                 || type.ValueKind != JsonValueKind.String
-                || type.GetString() != "header")
+                || type.GetString() is not ("header" or "session"))
             {
                 return new SessionHeaderReadResult(ParseStatus.Corrupt, null, HeaderMissingErrorCode);
             }
 
-            if (!root.TryGetProperty("sessionId", out var id)
+            var native = type.GetString() == "session";
+            if (!root.TryGetProperty(native ? "id" : "sessionId", out var id)
                 || id.ValueKind != JsonValueKind.String
-                || string.IsNullOrEmpty(id.GetString()))
+                || string.IsNullOrWhiteSpace(id.GetString()))
             {
                 return new SessionHeaderReadResult(ParseStatus.Corrupt, null, HeaderIdMissingErrorCode);
             }
 
-            if (!root.TryGetProperty("formatVersion", out var version)
+            if (!root.TryGetProperty(native ? "version" : "formatVersion", out var version)
+                || version.ValueKind != JsonValueKind.Number
                 || !version.TryGetInt32(out var formatVersion)
                 || formatVersion < 0)
             {
                 return new SessionHeaderReadResult(ParseStatus.Corrupt, null, HeaderVersionInvalidErrorCode);
             }
 
-            if (formatVersion > MaxSupportedFormatVersion)
+            if (formatVersion > MaxSupportedFormatVersion || (native && formatVersion is not (0 or 4)))
                 return new SessionHeaderReadResult(ParseStatus.Unsupported, null, HeaderVersionUnsupportedErrorCode);
 
             if (!root.TryGetProperty("createdAt", out var createdAt)
-                || createdAt.ValueKind != JsonValueKind.String
-                || !DateTimeOffset.TryParse(createdAt.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var created))
+                || !TryCreatedAt(createdAt, native, out var created))
             {
                 return new SessionHeaderReadResult(ParseStatus.Corrupt, null, HeaderDateInvalidErrorCode);
             }
@@ -242,8 +248,21 @@ public sealed class SessionHeaderReader
                 cwd = cwdElement.GetString();
             }
 
-            var header = new SessionHeaderInfo(id.GetString()!, formatVersion, created, cwd);
+            var header = new SessionHeaderInfo(id.GetString()!, formatVersion, created, cwd) { IsNative = native };
             return new SessionHeaderReadResult(ParseStatus.Valid, header);
         }
+    }
+
+    private static bool TryCreatedAt(JsonElement value, bool native, out DateTimeOffset created)
+    {
+        created = default;
+        if (!native)
+            return value.ValueKind == JsonValueKind.String
+                && DateTimeOffset.TryParse(value.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out created);
+        if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt64(out var milliseconds)
+            || milliseconds < 0 || milliseconds > DateTimeOffset.MaxValue.ToUnixTimeMilliseconds())
+            return false;
+        created = DateTimeOffset.FromUnixTimeMilliseconds(milliseconds);
+        return true;
     }
 }

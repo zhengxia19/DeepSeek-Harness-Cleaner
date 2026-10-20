@@ -1,6 +1,6 @@
 # DeepSeek Harness Cleaner（设计与实施文档）
 
-> 当前修复版：0.2.2，Windows 10 x64，C# / .NET 10 / WinForms。已适配本机 Harness 0.2.1-rc.2 的原生 v0/v4 会话身份与整会话离线删除；未知版本仍禁止清理。原 T-01～T-34 的历史记录保留，本次范围与证据见 `artifacts/evidence/2026-10-20/T-30.txt`。
+> 当前修复版：0.2.3，Windows 10 x64，C# / .NET 10 / WinForms。会话及附件备份可选，窗口按父窗体居中，附件信息、会话归档及解析状态明确展示。原 T-01～T-34 的历史记录保留，本次范围与证据见 `artifacts/evidence/2026-10-20/T-31.txt`。
 
 ## 项目目标
 
@@ -9,19 +9,20 @@
 ## 当前发布方式
 
 - Windows 10 x64，Release 单文件 EXE，不捆绑 .NET 运行时；客户端须自行安装 **.NET 10 Windows Desktop Runtime x64**（不是 .NET Framework 4.x）。
-- 使用 `scripts/publish.ps1 -Version 0.2.2`，产物为 `dist/v0.2.2/win-x64/DeepSeekHarnessCleaner.UI.exe`；默认参数为 `--self-contained false -p:PublishSingleFile=true`。
+- 使用 `scripts/publish.ps1 -Version 0.2.3`，产物为 `dist/v0.2.3/win-x64/DeepSeekHarnessCleaner.UI.exe`；默认参数为 `--self-contained false -p:PublishSingleFile=true`。
 - 本次有独立的自动回归及 Windows 窗口测试；以本次证据记录为准，不沿用 0.1.0 的验收结论。详见 [发布说明](docs/release.md)。
 
 ## 本次功能修复
 
-- 会话扫描后可选择原生 v0/v4 会话进入删除确认；重新核对身份、代际集合、JSONL 完整性和文件哈希，再备份全部代际。Harness 必须完全退出后才能执行删除。
+- 会话扫描后可选择原生 v0/v4 会话进入删除确认；重新核对身份、代际集合、JSONL 完整性和文件哈希，可选备份全部代际。Harness 必须完全退出后才能执行删除。
 - 预览跳过请求配置、待办等内部状态，展示工具调用名称与工具结果文本；尚未支持的扩展单独提示“未支持”，不再等同于原始数据损坏。预览仍按日志顺序展示，不声称重放完整历史替换。
-- 扫描完成后，通过顶部“附件”打开附件管理，查看大小及引用状态，勾选文件后独立备份、确认删除。已确认的原生图片引用显示引用会话数；其他引用统一保留 Unknown，不判断孤儿，不随会话自动删除附件。
+- 扫描完成后，通过顶部“附件”查看名称、类型、关联会话、大小、引用状态及存储路径，勾选文件后独立确认删除，备份可选。无验证引用时保留 Unknown，不判断孤儿，不随会话自动删除附件。
+- 会话“归档”列显示已归档/未归档/未知；“解析状态”列明确显示正常或具体异常。归档缺少可信元数据时保持未知，解析状态不代表运行状态。
 
 ## 安全默认值
 
 - 启动与扫描不修改 Harness 目录；所有写入仅发生在用户明确启动的备份/清理操作中。
-- 会话和附件删除可选择原始 ZIP 备份，也可不备份直接确认删除；进程退出、路径及文件复验仍为必要条件（2026-10-20 用户确认的新契约，实施状态见修复清单 T-31）。
+- 会话和附件删除可选择原始 ZIP 备份，也可不备份直接确认删除；进程退出、路径及文件复验仍为必要条件。不备份删除的文件无法由本工具恢复。
 - Harness 未完全退出、运行状态不明、路径越界或文件扫描后已变化时，禁止清理。
 - 保留 `.credentials.yaml`、`profiles/`、`dsh-runtimes/`、`workspace.json`、`Local Storage/`、`Session Storage/`、`Network/` 及匿名身份标识；这些均不属于默认可删除目标。
 - 不调用模型 API、DeepSeek 云端、浏览器或联网遥测；不处理服务器端已上报历史。

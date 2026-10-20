@@ -190,7 +190,7 @@ public sealed class CleanupPlanner
             DateTimeOffset.UtcNow,
             ComputeRootFingerprint(rootFull),
             targets,
-            RequiresBackup: targets.Count > 0);
+            RequiresBackup: false);
         return new CleanupPlanResult(null, plan, exclusions);
     }
 

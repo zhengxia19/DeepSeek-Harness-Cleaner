@@ -1,0 +1,117 @@
+Task: repair-list T-30 (2026-10-20), user-requested session deletion / preview classification / attachment UI repair
+Status: ACCEPTED for this bounded task
+FinishedAt: 2026-10-20 12:19:09 +08:00
+Prerequisite: repair-list T-29, artifacts/evidence/2026-10-20/T-29.txt; actual sources and prior local changes inspected.
+Baseline: HEAD 5b7c8bcf46836becf175a1f9b01733a7a04f6604 plus all preexisting uncommitted changes.
+GitCommit: NOT_COMMITTED; no push.
+
+Scope and implementation:
+1. Session deletion:
+   - Native session/id/version/numeric-createdAt v0/v4 metadata can enter a whole-session plan.
+   - Physical generation >4, native version/file-generation mismatch, identity conflict, malformed/truncated/
+     over-limit JSONL, changed generation set and unrecognized adjacent files are refused.
+   - SessionCleanupPreparation re-discovers selected directories, validates headers and complete physical JSONL,
+     checks scan length/mtime and freezes SHA-256. New selection preparation runs off the UI thread.
+   - Backup remains mandatory; existing executor still rechecks ZIP, process, root fingerprint, paths and bytes.
+     Active/Unknown process never permits execution. No running-session deletion capability is introduced.
+2. Preview:
+   - Normal request/context, request/header, todo/write, workspace/changes and observed/verified internal state
+     events do not become bogus corruption markers. Tool names and verified tool text are displayed.
+   - V4 role=tool and verified V0 role=user/tool-result wrapper are supported without exposing arguments/reasoning.
+   - Truly unknown events/blocks are labeled unsupported separately from malformed data. Image/file blocks show
+     attachment placeholders. Preview stays bounded and event-ordered, without claiming full Harness replay.
+3. Attachments:
+   - Main menu opens AttachmentsForm after scan. Read-only recursive inventory rejects reparse paths.
+   - Native v1/objects/prefix/digest maps to sha256: ID only when path and content hash match.
+   - Verified image/file refs, including shared refs, show referencing-session counts. Missing coverage stays Unknown;
+     no global orphan conclusions, no automatic attachment selection, no directory deletion.
+   - User explicitly checks regular files, reviews warning/list, chooses a ZIP folder, backs up and verifies, then
+     confirms independent deletion. Reuses CleanupDialog/BackupDialog/executor/results. Session deletion does not
+     add attachments; attachment deletion does not add session logs. Finished notification completes before RunFinished.
+
+Changed code/tests:
+- Infrastructure: SessionHeaderReader.cs, SessionCleanupPreparation.cs (new), AttachmentInventoryService.cs (new).
+- Application: NativeEventKinds.cs (new), TranscriptProjector.cs, LegacyPreview.cs, AttachmentIndex.cs.
+- UI: InventoryPresenter.cs, ActionsPresenter.cs, MainForm.cs, MainForm.Smoke.cs, PreviewPresenter.cs,
+  CleanupDialog.cs, AttachmentsForm.cs (new).
+- Tests: NativeSessionTests.cs assertions updated from read-only-only baseline; NativeRepairTests.cs and
+  AttachmentInventoryTests.cs new; AttachmentIndexTests.cs and ReadableExportTests.cs reflect stricter uncertainty
+  and unsupported-vs-corrupt distinction; linked ActionsPresenter; new standalone WindowsTests project.
+- README/CHANGELOG/design/requirements/testing/release/publish summary, task list, this evidence, checkpoint.
+Preexisting unrelated changes preserved. No changes to real Harness data or configuration performed.
+Backup: .artifacts/functional-fix-backup-20261020/ (src/tests/prior task/checkpoint and preexisting.patch).
+Publish/restore lockfile side effects restored from that backup; no tracked source lockfile diff remains.
+
+Actual commands and results (repo root, scripts/enter-env.ps1 process-local environment):
+1. dotnet test tests/DeepSeekHarnessCleaner.Tests -c Release --no-restore
+   --filter "FullyQualifiedName~NativeRepairTests|FullyQualifiedName~NativeSessionTests"
+   --logger "trx;LogFileName=red.trx" --results-directory .artifacts/functional-fix
+   EXIT=1 before fixes: 7 failed, 14 passed. Logs: red.log / red.trx.
+   Same focused loop after core fix: EXIT=0, 21 passed (core-green.log/core-green.trx).
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests -c Release --no-restore
+   --logger "trx;LogFileName=regression-final.trx" --results-directory .artifacts/functional-fix
+   FINAL EXIT=0: 305 passed, 0 failed, 0 skipped. Logs: regression-final.log / regression-final.trx.
+   Intermediate export test expected old misleading wording and failed; its assertion now requires unsupported
+   wording while retaining exportIncomplete=true. Intermediate compile scope error fixed before final verification.
+3. dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests -c Release --no-restore
+   FINAL EXIT=0: 15 PASS, WINDOWS_REGRESSION=PASS. Log: windows-ui-final.log.
+   Actual WinForms message loop with CheckForIllegalCrossThreadCalls=true, isolated fresh .artifacts/functional-ui-*.
+   Covers menu entry, shared ref count, Unknown label, only checked attachment, no delete before backup,
+   ZIP-verified confirm, actual attachment and native session deletion, unselected files and outside sentinel hashes.
+   Initial repeat exposed test-message-loop/owner-disposal timing; harness now uses Application.Run and production
+   RunFinished is set after completion notification. No real paths are accepted by this test program.
+4. dotnet run --project .artifacts/functional-live/Probe.csproj -c Release --no-restore
+   FINAL EXIT=0. Log: live-final.log (only schemas/enums/counts, no real text/IDs/credentials).
+   FILES=92 DECODED=92 VALID_HEADERS=92; SESSIONS=91 AMBIGUOUS=0 IDS=91 DATES=91 TITLES=67.
+   PREVIEWS=91 WITH_TEXT=84 RAW_SESSIONS_WITH_TEXT=84 WARNED=4 OVER_8MIB=4.
+   PREVIEW_UNSUPPORTED=0 PREVIEW_MALFORMED=0 TITLE_MISMATCH=0 METADATA_MISMATCH=0.
+   ATTACHMENTS=2 REFERENCED=2 UNKNOWN=0 ATTACHMENT_HASH_CHANGED=0.
+   STABLE_SOURCE_FILES=92 SESSION_HASH_CHANGED_AFTER_ALL=0 CLEANUP_TARGETS=92 PLAN_EXCLUSIONS=0.
+   PROCESS=Active WRITE_GATE_ALLOWED=False. Only plans built, never executed against real data.
+   Earlier live intervals observed one changing log and one preparation exclusion while Harness was active;
+   those are not recorded as source-hash-stable evidence. Final counts above describe the final bounded interval only.
+5. dotnet build DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror -m:1
+   FINAL EXIT=0: 0 warnings / 0 errors. Log: build-final.log.
+6. scripts/publish.ps1 -Version 0.2.2
+   FINAL EXIT=0. Log: publish-final.log. Framework-dependent win-x64 single file, unsigned; .NET 10 Desktop Runtime required.
+   EXE=dist/v0.2.2/win-x64/DeepSeekHarnessCleaner.UI.exe, 937995 bytes.
+   SHA256=1edd6aa76a1ccbd10840ea5b91d30e785b911716fcab0e450897a10cfb31e7af
+   All four SHA256SUMS.txt entries independently checked with Get-FileHash: PASS. Old 0.2.0/0.2.1 retained.
+7. Published EXE --smoke .artifacts/functional-fix/package-legacy-smoke.txt
+   --scan-root .artifacts/functional-legacy-smoke-v022/sessions --log-dir .artifacts/functional-fix/legacy-smoke-logs
+   EXIT=0: 72 PASS / 0 FAIL, SMOKE_RESULT=PASS. Raw result: package-legacy-smoke.txt.
+   Repeated with a fresh synthetic root produced by .artifacts/functional-fix/prepare-legacy-smoke.ps1:
+   --smoke .artifacts/functional-fix/package-repeat-smoke.txt
+   --scan-root .artifacts/functional-legacy-smoke-v022-2b5ff913b45d48169492c506cd59a515/sessions
+   --log-dir .artifacts/functional-fix/repeat-smoke-logs
+   EXIT=0: 72 PASS / 0 FAIL. Raw result: package-repeat-smoke.txt.
+   Original temporary fixture was inconsistent: native version=4 in session.jsonl/session.v1.jsonl. Initial smoke
+   refused it and failed (package-full-smoke.txt); it was NOT used to relax production checks. A new historical
+   SYNTHETIC header fixture was rebuilt separately; future v7 container keeps readable v4 metadata and is still
+   Unsupported via the independent generation gate. Original fixture source was not overwritten.
+8. $sources = @(git ls-files --modified --others --exclude-standard | Where-Object { $_ -like '*.cs' })
+   dotnet format whitespace DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include $sources
+   EXIT=0. Log: format-final.log.
+   dotnet format whitespace tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj
+   --no-restore --verify-no-changes: EXIT=0 (format-windows-final.log).
+9. git diff --check: EXIT=0; only Git CRLF working-copy notices.
+
+Safety negatives / meaningful regressions:
+- New generation/unknown adjacent file/source mutation/malformed JSON/version mismatch/future generation:
+  whole-session plan excluded, source preserved.
+- Multi-generation original ZIP covers every selected log; unchanged logs delete only after backup/confirmation.
+  Same-length same-mtime mutation after backup is skipped by SHA-256 check.
+- Missing backup, absent confirmation, Active/Unknown process, invalid ZIP, path/fingerprint changes retain prior tests.
+- Attachment digest mismatch never creates a verified reference; junction is not traversed, outside sentinel unchanged.
+- Malformed/unknown attachment records cannot produce ConfirmedUnreferenced, even if caller claimed Valid.
+- Explicit attachment deletion leaves session logs and unselected attachment hashes unchanged.
+
+Limits:
+- No real deletion or real configuration mutation; actual deletion tested only on synthetic roots.
+- No full real-DPI matrix, clean-machine runtime installation, global orphan proof, or complete historical replay claimed.
+- Earlier repair-list T-01..T-28 are not collectively accepted; historical T-01..T-34 evidence remains unchanged.
+
+Primary sources cross-checked with observed local schemas (no real content transmitted):
+https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/persistence-catalog.md
+https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/persistence-changes/historical-formats/v0.md
+https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/attachment/attachment-local/README.md

@@ -70,7 +70,7 @@ public sealed class CleanupExecutorTests
         var sessionSummary = new SessionSummary(
             SessionId, Project, null, null, DateOrigin.FileMtime, [Log(session, 0), Log(v4, 4)], ParseStatus.Valid);
 
-        var plan = new CleanupPlanner().Build(fx.DshHome, [sessionSummary], []).Plan!;
+        var plan = new CleanupPlanner().Build(fx.DshHome, [sessionSummary], []).Plan! with { RequiresBackup = true };
         var manifest = new BackupManifestBuilder().Build(fx.DshHome, [sessionSummary]).Manifest!;
 
         var backupDir = Path.Combine(fx.Root, "backups");

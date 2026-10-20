@@ -42,11 +42,13 @@ public sealed partial class MainForm : Form
     private readonly ActionsPresenter _actionsPresenter;
     private CleanupDialog? _lastCleanupDialog;
     private ResultsDialog? _lastResultsDialog;
+    private AttachmentsForm? _attachmentsWindow;
     private readonly string? _scanRootOverride;
     private readonly string? _logDirOverride;
     private string? _effectiveScanRoot;
     private CancellationTokenSource? _previewCts;
     private bool _scanning;
+    private bool _preparingDelete;
     private bool _bindingSessions;
     private readonly HashSet<SessionSummary> _checkedSessions = new();
     private readonly System.Windows.Forms.Timer _previewDebounce = new() { Interval = 140 };
@@ -89,12 +91,12 @@ public sealed partial class MainForm : Form
         _sessionGrid.SelectionChanged += OnSessionGridSelectionChanged;
         _sessionGrid.CurrentCellDirtyStateChanged += (_, _) =>
         {
-            if (_sessionGrid.IsCurrentCellDirty && _sessionGrid.CurrentCell?.OwningColumn.Name == "checked")
+            if (_sessionGrid.IsCurrentCellDirty && _sessionGrid.CurrentCell?.OwningColumn?.Name == "checked")
                 _sessionGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
         };
         _sessionGrid.CellValueChanged += (_, e) =>
         {
-            if (_bindingSessions || e.RowIndex < 0 || e.ColumnIndex != _sessionGrid.Columns["checked"].Index) return;
+            if (_bindingSessions || e.RowIndex < 0 || _sessionGrid.Columns["checked"] is not { } checkedColumn || e.ColumnIndex != checkedColumn.Index) return;
             var row = _sessionGrid.Rows[e.RowIndex];
             if (row.Tag is not SessionSummary session) return;
             if (row.Cells["checked"].Value is true) _checkedSessions.Add(session);
@@ -119,7 +121,22 @@ public sealed partial class MainForm : Form
         var helpMenu = new ToolStripMenuItem("帮助(&H)");
         helpMenu.DropDownItems.Add(new ToolStripMenuItem("关于(&A)", null, OnAboutClick));
 
-        _menu.Items.AddRange(new ToolStripItem[] { fileMenu, helpMenu });
+        var attachmentsMenu = new ToolStripMenuItem("附件(&A)", null, OnAttachmentsClick);
+        _menu.Items.AddRange(new ToolStripItem[] { fileMenu, attachmentsMenu, helpMenu });
+    }
+
+    private void OnAttachmentsClick(object? sender, EventArgs e)
+    {
+        if (_effectiveScanRoot is null || _scanning)
+        {
+            _statusLabel.Text = "请先完成会话扫描，再打开附件管理。";
+            return;
+        }
+        if (_attachmentsWindow is { IsDisposed: false }) { _attachmentsWindow.Activate(); return; }
+        var dataHome = Path.GetDirectoryName(_effectiveScanRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (dataHome is null) return;
+        _attachmentsWindow = new AttachmentsForm(dataHome, _presenter.Sessions, _actionsPresenter);
+        _attachmentsWindow.Show(this);
     }
 
     private void BuildListRegion()
@@ -152,7 +169,8 @@ public sealed partial class MainForm : Form
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "origin", HeaderText = "日期来源", Width = 110, Visible = false });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "size", HeaderText = "大小", Width = 110 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "format", HeaderText = "格式（代际）", Width = 140, Visible = false });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "status", HeaderText = "状态", Width = 110 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "archive", HeaderText = "归档", Width = 85 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "status", HeaderText = "解析状态", Width = 110 });
         _sessionGrid.Columns["title"]!.DisplayIndex = 1;
         _sessionGrid.Columns["project"]!.DisplayIndex = 2;
         _sessionGrid.Columns["created"]!.DisplayIndex = 3;
@@ -307,8 +325,8 @@ public sealed partial class MainForm : Form
     {
         if (_bindingSessions) return;
         _deleteButton.Enabled = _checkedSessions.Count > 0 || _sessionGrid.SelectedRows.Count > 0;
-        // Ticking the batch checkbox must not trigger an expensive transcript preview.
-        if (_sessionGrid.CurrentCell?.OwningColumn.Name == "checked") return;
+        // SelectionChanged can run before CurrentCell moves off the checkbox column.
+        // Debounce the final selection; a stale cell must not suppress its preview or clearing.
         _previewDebounce.Stop();
         _previewDebounce.Start();
     }
@@ -510,6 +528,7 @@ public sealed partial class MainForm : Form
                 DateOriginText(session.DateOrigin),
                 InventoryPresenter.FormatBytes(session.TotalBytes),
                 FormatsText(session),
+                session.IsArchived switch { true => "已归档", false => "未归档", _ => "未知" },
                 StatusText(session));
             _sessionGrid.Rows[index].Tag = session;
         }
@@ -536,10 +555,20 @@ public sealed partial class MainForm : Form
         string.Join("，", session.Generations.Select(static g => $"v{g.Generation}{(g.Compressed ? " zstd" : " 明文")}"));
 
     private static string StatusText(SessionSummary session) =>
-        session.IsAmbiguous ? "身份歧义" : session.Status == ParseStatus.Valid ? string.Empty : session.Status.ToString();
+        session.IsAmbiguous ? "身份歧义" : session.Status switch
+        {
+            ParseStatus.Valid => "正常",
+            ParseStatus.Partial => "部分解析",
+            ParseStatus.Unsupported => "格式未支持",
+            ParseStatus.Corrupt => "损坏",
+            ParseStatus.Unreadable => "无法读取",
+            _ => "未知",
+        };
 
-    private void OnDeleteClick(object? sender, EventArgs e)
+    private async void OnDeleteClick(object? sender, EventArgs e)
     {
+        if (_preparingDelete) return;
+        if (_lastCleanupDialog is { IsDisposed: false, Visible: true, RunFinished: false }) { _lastCleanupDialog.Activate(); return; }
         if (_effectiveScanRoot is null)
         {
             _statusLabel.Text = "请先扫描，再删除会话。";
@@ -558,7 +587,26 @@ public sealed partial class MainForm : Form
             return;
         }
 
-        var planResult = _actionsPresenter.BuildSessionPlan(_effectiveScanRoot, sessions);
+        var sessionRoot = _effectiveScanRoot;
+        CleanupPlanResult planResult;
+        try
+        {
+            _preparingDelete = true;
+            _deleteButton.Enabled = false;
+            _statusLabel.Text = "正在复验会话文件和身份…";
+            planResult = await Task.Run(() => _actionsPresenter.BuildSessionPlan(sessionRoot, sessions));
+        }
+        catch (Exception ex)
+        {
+            if (!IsDisposed) _statusLabel.Text = "删除清单复验失败：" + ex.Message;
+            return;
+        }
+        finally
+        {
+            _preparingDelete = false;
+            if (!IsDisposed) _deleteButton.Enabled = _checkedSessions.Count > 0 || _sessionGrid.SelectedRows.Count > 0;
+        }
+        if (IsDisposed) return;
         if (planResult.Plan is null || planResult.Plan.Targets.Count == 0)
         {
             _statusLabel.Text = "无可删除目标：" + (planResult.RootErrorCode
@@ -569,13 +617,13 @@ public sealed partial class MainForm : Form
         var zipPath = Path.Combine(
             Path.GetTempPath(), "dshcleaner-backups", $"cleanup-{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.zip");
         // 备份清单以数据根（sessions 的父目录，即 .dsh 主目录）为根。
-        var dataHome = Path.GetDirectoryName(_effectiveScanRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-            ?? _effectiveScanRoot;
-        var dialog = new CleanupDialog(planResult, _effectiveScanRoot, dataHome, sessions, _actionsPresenter, zipPath);
+        var dataHome = Path.GetDirectoryName(sessionRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            ?? sessionRoot;
+        var dialog = new CleanupDialog(planResult, sessionRoot, dataHome, sessions, _actionsPresenter, zipPath);
         dialog.CleanupFinished += OnCleanupFinished;
         _lastCleanupDialog = dialog;
         dialog.Show(this);
-        _statusLabel.Text = "删除确认对话框已打开：先创建备份，再确认删除。";
+        _statusLabel.Text = "删除确认对话框已打开：核对文件后确认删除，备份可选。";
     }
 
     private async void OnCleanupFinished(object? sender, CleanupExecutionResult result)

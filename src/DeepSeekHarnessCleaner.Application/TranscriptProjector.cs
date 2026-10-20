@@ -7,12 +7,16 @@ namespace DeepSeekHarnessCleaner.Application;
 /// 预览条目（design.md §1 草案 PreviewItem）：Text 为纯文本，UI 侧禁止渲染 Markdown/HTML。
 /// IsPartial=true 表示该事件不完整（缺字段、非文本、未知 schema、无效 JSON），Text 为摘要而非正文。
 /// </summary>
-public sealed record PreviewItem(string Role, string Text, DateTimeOffset? At, bool IsPartial);
+public sealed record PreviewItem(string Role, string Text, DateTimeOffset? At, bool IsPartial)
+{
+    public bool IsUnsupported { get; init; }
+}
 
 /// <summary>投影结果：单次预览 ≤2000 条（design.md §34），超限置 Truncated，不假装解析完整。</summary>
 public sealed record TranscriptProjection(IReadOnlyList<PreviewItem> Items, bool Truncated, int IncompleteCount)
 {
     public bool IsProjectionComplete => !Truncated && IncompleteCount == 0;
+    public int UnsupportedCount => Items.Count(x => x.IsUnsupported);
 }
 
 /// <summary>
@@ -29,7 +33,8 @@ public sealed class TranscriptProjector
     private static readonly string[] ConfirmedMessageRoles = ["user", "assistant"];
 
     /// <summary>确证的已知非消息事件：预览中跳过，不作为不完整。</summary>
-    private static readonly string[] SkippedKnownTypes = ["header", "attachment_ref"];
+    private static readonly string[] SkippedKnownTypes = ["header", "session", "attachment_ref", "session/title",
+        "assistant/chunk", "assistant/attempt", "text-chunks", "reasoning-chunks", "tool-call-chunks"];
 
     public TranscriptProjection Project(
         string transcriptText,
@@ -60,6 +65,12 @@ public sealed class TranscriptProjector
             }
 
             ProjectLine(line, lineNumber, items);
+            if (items.Count > maxItems)
+            {
+                items.RemoveRange(maxItems, items.Count - maxItems);
+                truncated = true;
+                break;
+            }
             if (nl < 0)
             {
                 break;
@@ -106,8 +117,27 @@ public sealed class TranscriptProjector
             return;
         }
 
-        if (SkippedKnownTypes.Contains(type, StringComparer.Ordinal))
+        if (SkippedKnownTypes.Contains(type, StringComparer.Ordinal) || NativeEventKinds.Metadata.Contains(type))
         {
+            return;
+        }
+
+        if (type is "user/message" or "assistant/message" or "tool/result")
+        {
+            ProjectNativeMessage(root, type, lineNumber, items);
+            return;
+        }
+
+        if (type == "tool/call")
+        {
+            if (root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object && GetString(data, "name") is { } name)
+                items.Add(new PreviewItem("tool", $"调用工具：{name}（参数未展开）", null, false));
+            else items.Add(Incomplete(lineNumber, "工具调用缺少名称"));
+            return;
+        }
+        if (type is "system/message" or "developer/message")
+        {
+            items.Add(new PreviewItem("system", "系统或开发者消息（内部正文未展开）", null, false));
             return;
         }
 
@@ -138,7 +168,65 @@ public sealed class TranscriptProjector
             return;
         }
 
-        items.Add(Incomplete(lineNumber, $"未知事件类型 {type}"));
+        items.Add(new PreviewItem(UnknownRole, $"未支持事件：第 {lineNumber} 行（未知事件类型 {type}；不表示原始数据损坏）", null, true) { IsUnsupported = true });
+    }
+
+    private static void ProjectNativeMessage(JsonElement root, string type, int lineNumber, List<PreviewItem> items)
+    {
+        var role = type == "user/message" ? "user" : type == "tool/result" ? "tool" : "assistant";
+        if (!root.TryGetProperty("data", out var message) || message.ValueKind != JsonValueKind.Object
+            || (role != "user" && (!message.TryGetProperty("message", out message) || message.ValueKind != JsonValueKind.Object))
+            || (GetString(message, "role") != role && !(role == "tool" && GetString(message, "role") == "user"))
+            || !message.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array)
+        {
+            items.Add(Incomplete(lineNumber, "消息缺字段、非文本或角色不匹配"));
+            return;
+        }
+
+        // V0 stores a tool result as role=user with one tool-result wrapper. V4 uses role=tool.
+        // Both structures are corroborated by local physical logs and the historical catalog.
+        if (role == "tool" && GetString(message, "role") == "user")
+        {
+            if (content.GetArrayLength() != 1 || content[0].ValueKind != JsonValueKind.Object
+                || GetString(content[0], "type") != "tool-result" || GetString(content[0], "toolCallId") is null
+                || !content[0].TryGetProperty("content", out var nested) || nested.ValueKind != JsonValueKind.Array)
+            {
+                items.Add(Incomplete(lineNumber, "旧版工具结果缺少必要字段"));
+                return;
+            }
+            content = nested;
+        }
+
+        DateTimeOffset? at = null;
+        if (root.TryGetProperty("time", out var time) && time.ValueKind == JsonValueKind.Number
+            && time.TryGetInt64(out var milliseconds) && milliseconds >= 0
+            && milliseconds <= DateTimeOffset.MaxValue.ToUnixTimeMilliseconds())
+            at = DateTimeOffset.FromUnixTimeMilliseconds(milliseconds);
+
+        var text = new List<string>();
+        var partial = false;
+        var unsupported = false;
+        foreach (var block in content.EnumerateArray())
+        {
+            if (block.ValueKind != JsonValueKind.Object) { partial = true; continue; }
+            var blockType = GetString(block, "type");
+            if (blockType == "text" && GetString(block, "text") is { } value)
+                text.Add(value);
+            else if (blockType is "image" or "file" && block.TryGetProperty("attachment", out var attachment)
+                && attachment.ValueKind == JsonValueKind.Object && GetString(attachment, "attachmentId") is not null)
+                text.Add(blockType == "image" ? "[图片附件，见附件页]" : "[文件附件，见附件页]");
+            else if (blockType is "text" or "image" or "file" || blockType is null)
+                partial = true;
+            else if (blockType is not ("reasoning" or "tool-call"))
+                unsupported = true;
+        }
+
+        if (text.Count > 0)
+            items.Add(new PreviewItem(role, string.Join("\n", text), at, IsPartial: false));
+        if (partial)
+            items.Add(Incomplete(lineNumber, "内容块缺少必要字段或类型错误"));
+        if (unsupported)
+            items.Add(new PreviewItem(UnknownRole, $"未支持内容块：第 {lineNumber} 行（未展示，不表示数据损坏）", at, true) { IsUnsupported = true });
     }
 
     private static PreviewItem Incomplete(int lineNumber, string reason) =>

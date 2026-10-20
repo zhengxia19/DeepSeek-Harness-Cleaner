@@ -323,8 +323,8 @@ public sealed partial class MainForm
         var untouched = scan.Sessions.First(static s => s.SessionId == "smoke-v4-0004");
         var expectedPlan = new CleanupPlanner().Build(fixtureRoot, [sessionA, sessionB], []).Plan!;
 
-        Check("删除计划：两会话全部代际文件、要求备份",
-            expectedPlan.Targets.Count >= 2 && expectedPlan.RequiresBackup);
+        Check("删除计划：两会话全部代际文件、备份可选",
+            expectedPlan.Targets.Count >= 2 && !expectedPlan.RequiresBackup);
         Check("删除前目标文件全部存在", expectedPlan.Targets.All(static t => File.Exists(t.AbsolutePath)));
 
         _sessionGrid.ClearSelection();
@@ -333,10 +333,10 @@ public sealed partial class MainForm
             .First(static r => r.Tag is SessionSummary s && s.SessionId == "smoke-b-0002");
         rowB.Selected = true;
         _deleteButton.PerformClick();
-        System.Windows.Forms.Application.DoEvents();
+        PumpUntil(() => _lastCleanupDialog is { Visible: true }, 10_000);
         var dialog = _lastCleanupDialog!;
         Check("删除确认对话框打开", dialog.Visible);
-        Check("未备份时确认删除按钮禁用", !dialog.ConfirmButtonEnabled);
+        Check("未选择备份时可确认删除", dialog.ConfirmButtonEnabled);
 
         dialog.RequestCancel();
         PumpUntil(() => !dialog.Visible, 5_000);
@@ -344,7 +344,7 @@ public sealed partial class MainForm
             !dialog.Visible && expectedPlan.Targets.All(static t => File.Exists(t.AbsolutePath)));
 
         _deleteButton.PerformClick();
-        System.Windows.Forms.Application.DoEvents();
+        PumpUntil(() => _lastCleanupDialog is { Visible: true } opened && !ReferenceEquals(opened, dialog), 10_000);
         var dialog2 = _lastCleanupDialog!;
         Check("重新打开为新的对话框实例", dialog2.Visible && !ReferenceEquals(dialog2, dialog));
         dialog2.RequestBackup();
@@ -380,7 +380,7 @@ public sealed partial class MainForm
         }
 
         _deleteButton.PerformClick();
-        System.Windows.Forms.Application.DoEvents();
+        PumpUntil(() => _lastCleanupDialog is { Visible: true } opened && !ReferenceEquals(opened, dialog2), 10_000);
         var dialog3 = _lastCleanupDialog!;
         var prevResultsDialog = _lastResultsDialog; // dialog2 全成功报告（若有）；dialog3 终态后应替换为新实例。
         dialog3.RequestBackup();

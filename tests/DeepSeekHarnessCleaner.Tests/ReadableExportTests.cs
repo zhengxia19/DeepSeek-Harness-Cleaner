@@ -63,7 +63,8 @@ public sealed class ReadableExportTests
 
         Assert.True(result.ExportIncomplete);
         Assert.Contains(result.IncompleteReasons, r => r.Contains("不完整/未知事件"));
-        Assert.Contains("> 不完整事件：第 3 行", result.Markdown);
+        Assert.Contains("> 未支持事件：第 3 行", result.Markdown);
+        Assert.DoesNotContain("> 不完整事件：第 3 行", result.Markdown);
 
         using var doc = JsonDocument.Parse(result.Json);
         Assert.True(doc.RootElement.GetProperty("exportIncomplete").GetBoolean());

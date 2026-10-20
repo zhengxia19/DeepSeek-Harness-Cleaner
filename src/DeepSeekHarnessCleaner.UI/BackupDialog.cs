@@ -20,6 +20,7 @@ public sealed class BackupDialog : Form
     private readonly BackupManifest _manifest;
     private readonly string _zipPath;
     private CancellationTokenSource? _cts;
+    private bool _closeRequested;
 
     public BackupDialog(BackupManifest manifest, string zipPath, ActionsPresenter presenter)
     {
@@ -74,6 +75,13 @@ public sealed class BackupDialog : Form
         };
         Controls.AddRange(new Control[] { _summaryLabel, _statusLabel, _openFolderButton, _cancelButton, _closeButton });
         Shown += (_, _) => _ = RunAsync();
+        FormClosing += (_, e) =>
+        {
+            if (State.Stage is not (BackupStage.None or BackupStage.Building)) return;
+            e.Cancel = true;
+            _closeRequested = true;
+            _cts?.Cancel();
+        };
     }
 
     public BackupUiState State { get; private set; } = new(BackupStage.None, 0, 0, null, null, null);
@@ -87,6 +95,7 @@ public sealed class BackupDialog : Form
         _statusLabel.Text = "正在创建并校验 ZIP 备份…";
         var cts = new CancellationTokenSource();
         _cts = cts;
+        if (_closeRequested) cts.Cancel();
         try
         {
             var result = await _presenter.RunBackupAsync(_manifest, _zipPath, cts.Token);

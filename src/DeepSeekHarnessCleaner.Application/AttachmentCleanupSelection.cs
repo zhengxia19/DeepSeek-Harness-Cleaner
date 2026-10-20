@@ -21,7 +21,7 @@ public sealed record AttachmentExclusion(string FullPath, string Reason, string?
 /// <summary>范围内附件的引用证据状态标注（Unknown 必须明确标出，不得当作孤儿）。</summary>
 public sealed record AttachmentStatusNote(string FullPath, AttachmentEvidenceStatus Status);
 
-/// <summary>附件清理计划结果（RequiresBackup=true：强制源文件 ZIP 备份及确认）。</summary>
+/// <summary>附件清理计划结果（默认备份可选；仍需独立确认）。</summary>
 public sealed record AttachmentCleanupPlanResult(
     string? RootErrorCode,
     CleanupPlan? Plan,
@@ -36,7 +36,7 @@ public sealed record AttachmentCleanupPlanResult(
 /// 仅数据根 attachments/ 下的普通文件、且必须出现在人工选择集合中才进入计划；
 /// 不随会话自动删除——无任何自动加入机制，共享/被引用附件同样只有显式选择才进入；
 /// 引用证据状态（含 Unknown）对范围内候选逐一标注；非普通文件（目录/软链等）拒绝；
-/// 计划 RequiresBackup=true，执行走 T-26 executor 的强制备份门禁通道。纯内存零 IO。
+/// 默认 RequiresBackup=false；UI 选择备份时改为 true 并通过 executor 校验。纯内存零 IO。
 /// </summary>
 public sealed class AttachmentCleanupSelection
 {
@@ -131,7 +131,7 @@ public sealed class AttachmentCleanupSelection
             DateTimeOffset.UtcNow,
             ComputeRootFingerprint(rootFull),
             staged,
-            RequiresBackup: true);
+            RequiresBackup: false);
 
         return new AttachmentCleanupPlanResult(null, plan, exclusions, statuses);
     }

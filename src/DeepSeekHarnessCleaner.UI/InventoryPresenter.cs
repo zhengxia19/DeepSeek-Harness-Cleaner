@@ -27,6 +27,7 @@ public sealed class UiScanSource : ISessionScanSource
             return new SessionScanData(discovered.RootErrorCode, [], []);
 
         var sessions = new List<ScannedSessionDirectory>();
+        var archiveIds = new WorkspaceArchiveReader().Read(Path.GetDirectoryName(Path.GetFullPath(sessionRoot))!);
         foreach (var candidate in discovered.Candidates)
         {
             var dirIdentity = Path.GetFileName(candidate.RelativeDirectory);
@@ -34,6 +35,9 @@ public sealed class UiScanSource : ISessionScanSource
             foreach (var file in candidate.Files)
             {
                 var header = _reader.Read(file.FullPath, dirIdentity);
+                if (file.Generation > SessionHeaderReader.MaxSupportedFormatVersion
+                    || (header.Header is { IsNative: true } native && native.FormatVersion != file.Generation))
+                    header = header with { Status = ParseStatus.Unsupported, ErrorCode = "HEADER_GENERATION_MISMATCH" };
                 var log = new PhysicalLog(
                     file.FullPath,
                     file.Generation,
@@ -48,14 +52,17 @@ public sealed class UiScanSource : ISessionScanSource
                     header.Header?.CreatedAt,
                     header.IdentityMatches == false)
                 {
-                    Title = header.HasValidHeader ? _titles.Read(file.FullPath, file.Encoding == SessionFileEncoding.Zstd) : null,
+                    Title = header.Header is not null ? _titles.Read(file.FullPath, file.Encoding == SessionFileEncoding.Zstd) : null,
                 });
             }
 
             sessions.Add(new ScannedSessionDirectory(
                 candidate.RelativeDirectory,
                 files,
-                candidate.ConflictingGenerations));
+                candidate.ConflictingGenerations)
+            {
+                IsArchived = archiveIds?.Contains(dirIdentity),
+            });
         }
 
         var anomalies = new List<AnomalousFile>();

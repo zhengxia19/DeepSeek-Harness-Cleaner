@@ -41,7 +41,7 @@ public sealed class AttachmentCleanupTests
         var plan = result.Plan!;
         Assert.Equal(2, plan.Targets.Count);
         Assert.All(plan.Targets, t => Assert.Equal(CleanupCategory.Attachment, t.Category));
-        Assert.True(plan.RequiresBackup);
+        Assert.False(plan.RequiresBackup);
         Assert.Equal(AttachmentCleanupSelection.NotSelectedReason, Assert.Single(result.Exclusions).Reason);
     }
 
@@ -151,7 +151,7 @@ public sealed class AttachmentCleanupTests
 
         var plan = a1.Plan!;
         Assert.Matches("^[0-9a-f]{64}$", plan.RootFingerprint);
-        Assert.True(plan.RequiresBackup);
+        Assert.False(plan.RequiresBackup);
         Assert.Equal(a1.Plan!.RootFingerprint, a2.Plan!.RootFingerprint);
         Assert.NotEqual(a1.Plan!.RootFingerprint, b.Plan!.RootFingerprint);
         Assert.Equal([P("attachments", "a.png"), P("attachments", "z.png")], plan.Targets.Select(t => t.AbsolutePath));
@@ -213,14 +213,14 @@ public sealed class AttachmentCleanupTests
     }
 
     [Fact]
-    public void Executor_WithoutBackup_NotDeleted()
+    public void Executor_SelectedBackupWithoutZip_NotDeleted()
     {
         var (fx, plan, target, _) = SetupAttachments();
         using (fx)
         {
             var probe = new HarnessProcessProbe(() => []);
 
-            var result = new CleanupExecutor(probe).Execute(plan, null, null, fx.DshHome, userConfirmed: true);
+            var result = new CleanupExecutor(probe).Execute(plan with { RequiresBackup = true }, null, null, fx.DshHome, userConfirmed: true);
 
             Assert.True(result.Aborted);
             Assert.Equal(CleanupExecutor.GateBackupRequiredCode, result.AbortCode);

@@ -50,6 +50,9 @@ public sealed record SessionSummary(
 
     /// <summary>Latest verified durable session/title event, if available.</summary>
     public string? Title { get; init; }
+
+    /// <summary>Verified workspace archive membership; null when metadata cannot be verified.</summary>
+    public bool? IsArchived { get; init; }
 }
 
 /// <summary>不属于任何会话目录的异常文件（非白名单/位置异常/访问受阻）。</summary>
@@ -69,7 +72,10 @@ public sealed record ScannedLogFile(
 public sealed record ScannedSessionDirectory(
     string RelativeDirectory,
     IReadOnlyList<ScannedLogFile> Files,
-    IReadOnlyList<int> ConflictingGenerations);
+    IReadOnlyList<int> ConflictingGenerations)
+{
+    public bool? IsArchived { get; init; }
+}
 
 /// <summary>扫描源整体输出；RootErrorCode 非空表示根不可用。</summary>
 public sealed record SessionScanData(

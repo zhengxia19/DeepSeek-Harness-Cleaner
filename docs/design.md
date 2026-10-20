@@ -29,6 +29,8 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 - “解析状态”列明确展示正常、部分解析、格式未支持、损坏、无法读取及身份歧义。该状态不代表运行中/空闲，也不代表具备删除资格。
 - 附件列表优先展示已验证引用元数据中的原始名称、类型及关联会话标题/ID，同时保留存储路径、附件 ID、大小和引用状态；没有证据时显示名称未知、类型未知，普通命名文件可显示存储文件名并注明来源。
 - 删除窗体和附件窗体在首次显示时按直接父窗体的实际屏幕边界居中，适用于现有非模态打开方式；位置约束在可用工作区内。
+- 归档来源：`storages/workspace.json` 的 `unit.name=workspace`、`unit.version=2`、`global.initialized=true` 及 `global.archivedSessionIds`。缺失字段、重复字段、非法 ID、未初始化和归档/置顶冲突返回未知；只读该文件，不修改 registry。
+- 上游依据固定于 `687f282e8625c6b8d11ff58211a90524be2e4317`：[workspace schema](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/workspace/workspace/src/spec.ts)、[attachment types](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/attachment/attachment/src/types.ts)、[file object layout](https://github.com/deepseek-ai/deepseek-harness/blob/687f282e8625c6b8d11ff58211a90524be2e4317/packages/attachment/attachment-local/src/file-store.ts)。附件元数据只沿已验证消息角色和 image/file 内容块读取；图片类型明确标为会话标注，不能冒称已检查文件魔数。摘要匹配的 v1/objects、v1/file-objects 与 v1/files 文件可关联同一附件 ID；仍逐文件显式选择，不自动扩大删除范围。
 
 ## 2. 会话发现与物理格式
 

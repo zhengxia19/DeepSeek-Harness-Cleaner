@@ -64,7 +64,7 @@ public sealed class PreviewPresenter
             using var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             if (compressed)
             {
-                var decoded = ZstdFrameDecoder.Decode(stream, MaxPreviewReadBytes);
+                var decoded = ZstdFrameDecoder.Decode(stream, MaxPreviewReadBytes, retainPrefixOnLimit: true, cancellationToken: ct);
                 switch (decoded.Status)
                 {
                     case ZstdDecodeStatus.Success:
@@ -76,8 +76,8 @@ public sealed class PreviewPresenter
                         warnings.Add("zstd 尾帧截断，预览基于可读部分（不完整）。");
                         return Encoding.UTF8.GetString(decoded.Content);
                     case ZstdDecodeStatus.DecompressedLimitExceeded:
-                        warnings.Add("解压总量超限，不提供预览正文。");
-                        return null;
+                        warnings.Add("预览解压超过 8 MiB，仅显示开头完整行（不完整，后续帧未校验）。");
+                        return DecodeCompletePrefix(decoded.Content, decoded.Content.Length);
                     default:
                         warnings.Add("zstd 解压失败：" + (decoded.Error ?? decoded.Status.ToString()));
                         return null;
@@ -98,7 +98,7 @@ public sealed class PreviewPresenter
             if (total > limit)
             {
                 warnings.Add("预览正文超过 8 MiB，仅显示文件开头的可读部分（不完整）。");
-                return Encoding.UTF8.GetString(buffer, 0, checked((int)limit));
+                return DecodeCompletePrefix(buffer, limit);
             }
 
             return Encoding.UTF8.GetString(buffer, 0, total);
@@ -113,6 +113,12 @@ public sealed class PreviewPresenter
             warnings.Add("预览文件不可读（权限）。");
             return null;
         }
+    }
+
+    private static string DecodeCompletePrefix(byte[] buffer, int length)
+    {
+        var newline = Array.LastIndexOf(buffer, (byte)'\n', length - 1, length);
+        return newline < 0 ? string.Empty : Encoding.UTF8.GetString(buffer, 0, newline + 1);
     }
 
     /// <summary>渲染为纯文本预览（design.md §4：UI 不渲染 Markdown/HTML；不完整事件显式标记）。</summary>
@@ -159,7 +165,7 @@ public sealed class PreviewPresenter
 
             if (projection.IncompleteCount > 0)
             {
-                sb.AppendLine($"（含 {projection.IncompleteCount} 个不完整事件标记）");
+                sb.AppendLine($"（{projection.IncompleteCount - projection.UnsupportedCount} 个格式不完整标记；{projection.UnsupportedCount} 个未支持事件，未支持不表示原始数据损坏）");
             }
         }
         else

@@ -58,10 +58,12 @@ $env:PATH = "$install;$env:PATH"  # 仅当前进程，不使用 setx
 .\.dotnet\dotnet.exe build .\DeepSeekHarnessCleaner.sln -c Release --no-restore -warnaserror
 .\.dotnet\dotnet.exe test .\DeepSeekHarnessCleaner.sln -c Release --no-build
 .\.dotnet\dotnet.exe publish .\src\DeepSeekHarnessCleaner.UI\DeepSeekHarnessCleaner.UI.csproj `
-    -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
+    -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
 ```
 
 NuGet 锁文件应由 `RestorePackagesWithLockFile=true` 生成并纳入版本控制；`--locked-mode` 只在已生成锁文件后启用，初次创建锁文件时使用正常 `restore`。`Directory.Build.props` 应避免 WinForms 项目输出路径与测试项目冲突。
+
+发布默认使用 `scripts/publish.ps1`，生成依赖客户端运行时的单文件 EXE，不捆绑 .NET。客户端须安装 .NET 10 Windows Desktop Runtime x64；仅安装 .NET Framework 4.x 不满足要求。开发机 SDK 与 NuGet 缓存继续保持项目本地隔离。
 
 ## 4. 推荐项目拆分
 

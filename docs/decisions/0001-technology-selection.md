@@ -22,3 +22,9 @@ A：Python/Tkinter（实现快、GUI 复杂表格成本较高）；C：Python/Py
 - 不在此 ADR 擅自降级目标框架；若兼容验收失败，新增 ADR 评估更改 TFM 后重新运行完整回归，并由用户决定路线。
 
 参考：<https://learn.microsoft.com/en-us/dotnet/core/install/windows>。
+
+## 2026-10-20 发布方式修订（用户明确指定）
+
+本节替代原决策中“应用自包含发布”的部分，其余技术栈与隔离要求不变。默认发布为 `win-x64` Release 单文件 EXE，使用 `--self-contained false -p:PublishSingleFile=true`，不捆绑 .NET 运行时；客户端自行安装 .NET 10 Windows Desktop Runtime x64。
+
+目的为减少发布包体积，运行时安装由客户端负责。缺少运行时的客户端无法直接启动；当前仅验证编译、发布配置与产物哈希，客户端启动及功能验收仍待执行。原 0.1.0 自包含包的验收记录保留为历史证据。
