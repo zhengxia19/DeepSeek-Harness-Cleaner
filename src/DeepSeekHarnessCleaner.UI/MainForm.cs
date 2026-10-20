@@ -46,6 +46,7 @@ public sealed partial class MainForm : Form
     private CancellationTokenSource? _previewCts;
     private bool _scanning;
     private bool _bindingSessions;
+    private readonly System.Windows.Forms.Timer _previewDebounce = new() { Interval = 140 };
 
     public MainForm(string? smokeResultPath = null, string? scanRootPath = null, string? logDirPath = null)
     {
@@ -77,6 +78,11 @@ public sealed partial class MainForm : Form
         Controls.Add(_menu);
         MainMenuStrip = _menu;
 
+        _previewDebounce.Tick += (_, _) =>
+        {
+            _previewDebounce.Stop();
+            if (!_bindingSessions && !IsDisposed) _ = RequestPreviewAsync();
+        };
         _sessionGrid.SelectionChanged += OnSessionGridSelectionChanged;
         _deleteButton.Enabled = false; // UX-01：未选择会话时禁用删除。
 
@@ -251,7 +257,8 @@ public sealed partial class MainForm : Form
     {
         if (_bindingSessions) return;
         _deleteButton.Enabled = _sessionGrid.SelectedRows.Cast<DataGridViewRow>().Any(static row => row.Tag is SessionSummary);
-        _ = RequestPreviewAsync();
+        _previewDebounce.Stop();
+        _previewDebounce.Start();
     }
 
     /// <summary>
@@ -305,7 +312,11 @@ public sealed partial class MainForm : Form
                 return; // 当前选中会话已变化，丢弃旧结果（不串会话）。
             }
 
-            _preview.Text = PreviewPresenter.Render(outcome);
+            var rendered = PreviewPresenter.Render(outcome);
+            const int maxVisibleCharacters = 250_000;
+            _preview.Text = rendered.Length <= maxVisibleCharacters
+                ? rendered
+                : rendered[..maxVisibleCharacters] + Environment.NewLine + "（显示已限制在 250,000 字符；原始日志未修改）";
         }
         catch (OperationCanceledException)
         {
@@ -424,6 +435,7 @@ public sealed partial class MainForm : Form
     private void BindSessions(IReadOnlyList<SessionSummary> sessions)
     {
         _bindingSessions = true;
+        _previewDebounce.Stop();
         _previewCts?.Cancel();
         _sessionGrid.SuspendLayout();
         _sessionGrid.Rows.Clear();
