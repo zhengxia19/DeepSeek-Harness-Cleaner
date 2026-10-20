@@ -490,7 +490,7 @@ public sealed partial class MainForm : Form
         var projectInput = _projectBox.Text;
         _projectBox.BeginUpdate();
         _projectBox.Items.Clear();
-        _projectBox.Items.AddRange(_presenter.Sessions.Select(static s => s.Project).Where(static p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(static p => p).Cast<object>().ToArray());
+        _projectBox.Items.AddRange(_presenter.Sessions.Select(static s => s.Project).OfType<string>().Where(static p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(static p => p, StringComparer.OrdinalIgnoreCase).Cast<object>().ToArray());
         _projectBox.Text = projectInput;
         _projectBox.EndUpdate();
         _previewDebounce.Stop();
