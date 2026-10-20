@@ -14,6 +14,7 @@ public sealed class UiScanSource : ISessionScanSource
 {
     private readonly SessionLogDiscovery _discovery = new(new PathGuard());
     private readonly SessionHeaderReader _reader = new();
+    private readonly SessionTitleReader _titles = new();
 
     /// <summary>最近一次 Scan 实际运行的托管线程 id（冒烟自检据此证明扫描不在 UI 线程执行）。</summary>
     public int LastScanThreadId { get; private set; } = -1;
@@ -45,7 +46,10 @@ public sealed class UiScanSource : ISessionScanSource
                     log,
                     header.Header?.SessionId,
                     header.Header?.CreatedAt,
-                    header.IdentityMatches == false));
+                    header.IdentityMatches == false)
+                {
+                    Title = header.HasValidHeader ? _titles.Read(file.FullPath, file.Encoding == SessionFileEncoding.Zstd) : null,
+                });
             }
 
             sessions.Add(new ScannedSessionDirectory(
