@@ -45,6 +45,7 @@ public sealed partial class MainForm : Form
     private string? _effectiveScanRoot;
     private CancellationTokenSource? _previewCts;
     private bool _scanning;
+    private bool _bindingSessions;
 
     public MainForm(string? smokeResultPath = null, string? scanRootPath = null, string? logDirPath = null)
     {
@@ -248,7 +249,8 @@ public sealed partial class MainForm : Form
 
     private void OnSessionGridSelectionChanged(object? sender, EventArgs e)
     {
-        _deleteButton.Enabled = _sessionGrid.SelectedRows.Count > 0;
+        if (_bindingSessions) return;
+        _deleteButton.Enabled = _sessionGrid.SelectedRows.Cast<DataGridViewRow>().Any(static row => row.Tag is SessionSummary);
         _ = RequestPreviewAsync();
     }
 
@@ -281,7 +283,11 @@ public sealed partial class MainForm : Form
             return;
         }
 
-        var session = (SessionSummary)rows[0].Tag!;
+        if (rows[0].Tag is not SessionSummary session)
+        {
+            _preview.Clear();
+            return;
+        }
         _preview.Text = "预览加载中…";
         try
         {
@@ -417,6 +423,8 @@ public sealed partial class MainForm : Form
     /// <summary>绑定列表：每行 Tag 持有对应 SessionSummary，排序/筛选后选中项仍指向原会话。</summary>
     private void BindSessions(IReadOnlyList<SessionSummary> sessions)
     {
+        _bindingSessions = true;
+        _previewCts?.Cancel();
         _sessionGrid.SuspendLayout();
         _sessionGrid.Rows.Clear();
         foreach (var session in sessions)
@@ -432,7 +440,11 @@ public sealed partial class MainForm : Form
             _sessionGrid.Rows[index].Tag = session;
         }
 
+        _sessionGrid.ClearSelection();
         _sessionGrid.ResumeLayout();
+        _bindingSessions = false;
+        _deleteButton.Enabled = false;
+        _preview.Clear();
     }
 
     private static string FormatDate(DateTimeOffset? value) =>
@@ -461,7 +473,9 @@ public sealed partial class MainForm : Form
         }
 
         var sessions = _sessionGrid.SelectedRows.Cast<DataGridViewRow>()
-            .Select(static row => (SessionSummary)row.Tag!)
+            .Select(static row => row.Tag as SessionSummary)
+            .Where(static session => session is not null)
+            .Select(static session => session!)
             .ToList();
         if (sessions.Count == 0)
         {
