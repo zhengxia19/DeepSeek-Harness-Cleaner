@@ -15,6 +15,7 @@ public sealed class BackupDialog : Form
     private readonly Label _statusLabel = new();
     private readonly Button _cancelButton = new();
     private readonly Button _closeButton = new();
+    private readonly Button _openFolderButton = new();
     private readonly ActionsPresenter _presenter;
     private readonly BackupManifest _manifest;
     private readonly string _zipPath;
@@ -31,30 +32,47 @@ public sealed class BackupDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         MaximizeBox = false;
-        ClientSize = new Size(520, 170);
+        ClientSize = new Size(640, 205);
 
-        _summaryLabel.AutoSize = true;
+        _summaryLabel.AutoSize = false;
+        _summaryLabel.Size = new Size(616, 75);
         _summaryLabel.Location = new Point(12, 12);
         _summaryLabel.Text = $"清单条目：{_manifest.Entries.Count} 个文件；" +
             $"合计 {InventoryPresenter.FormatBytes(_manifest.Entries.Sum(static e => e.Length))}；" +
             $"目标 ZIP：{_zipPath}";
 
-        _statusLabel.AutoSize = true;
-        _statusLabel.Location = new Point(12, 52);
+        _statusLabel.AutoSize = false;
+        _statusLabel.Size = new Size(616, 48);
+        _statusLabel.Location = new Point(12, 98);
         _statusLabel.Text = "准备中…";
 
         _cancelButton.Text = "取消(&C)";
         _cancelButton.AutoSize = true;
-        _cancelButton.Location = new Point(300, 110);
+        _cancelButton.Location = new Point(390, 160);
         _cancelButton.Click += OnCancelClick;
 
         _closeButton.Text = "关闭(&L)";
         _closeButton.AutoSize = true;
-        _closeButton.Location = new Point(410, 110);
+        _closeButton.Location = new Point(520, 160);
         _closeButton.Enabled = false;
         _closeButton.Click += (_, _) => Close();
 
-        Controls.AddRange(new Control[] { _summaryLabel, _statusLabel, _cancelButton, _closeButton });
+        _openFolderButton.Text = "打开备份目录(&O)";
+        _openFolderButton.AutoSize = true;
+        _openFolderButton.Location = new Point(12, 160);
+        _openFolderButton.Click += (_, _) =>
+        {
+            var directory = Path.GetDirectoryName(_zipPath);
+            if (directory is not null && Directory.Exists(directory))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe")
+                {
+                    UseShellExecute = true,
+                    ArgumentList = { directory },
+                });
+            }
+        };
+        Controls.AddRange(new Control[] { _summaryLabel, _statusLabel, _openFolderButton, _cancelButton, _closeButton });
         Shown += (_, _) => _ = RunAsync();
     }
 
