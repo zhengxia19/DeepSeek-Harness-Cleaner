@@ -53,39 +53,49 @@ public sealed class CleanupDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         MaximizeBox = false;
-        ClientSize = new Size(640, 420);
+        ClientSize = new Size(820, 510);
+        MinimumSize = new Size(620, 420);
 
-        _planLabel.AutoSize = true;
-        _planLabel.Location = new Point(12, 10);
+        _planLabel.AutoSize = false;
+        _planLabel.SetBounds(12, 10, 796, 24);
+        _planLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _planLabel.Text = $"会话 {sessions.Count} 个；待删除文件 {_plan.Targets.Count} 个" +
             $"（合计 {InventoryPresenter.FormatBytes(_plan.Targets.Sum(static t => t.ExpectedLength))}）" +
             (_exclusions.Count > 0 ? $"；排除项 {_exclusions.Count} 个" : string.Empty);
 
         var probe = presenter.ProbeProcesses();
-        _warningLabel.AutoSize = true;
-        _warningLabel.Location = new Point(12, 34);
+        _warningLabel.AutoSize = false;
+        _warningLabel.SetBounds(12, 38, 796, 56);
+        _warningLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _warningLabel.ForeColor = probe.AllowsWrite ? Color.FromKnownColor(KnownColor.ControlText) : Color.Firebrick;
         _warningLabel.Text = probe.AllowsWrite
             ? "进程状态：Harness 未运行，可执行删除。"
             : $"警告：进程状态 {probe.State}（{(probe.ErrorCode ?? string.Join("；", probe.RiskNotes))}），删除将被阻断。";
 
-        _backupLabel.AutoSize = true;
-        _backupLabel.Location = new Point(12, 58);
+        _backupLabel.AutoSize = false;
+        _backupLabel.SetBounds(12, 98, 796, 36);
+        _backupLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _backupLabel.Text = "备份状态：未备份（删除前必须先完成原始文件 ZIP 备份）。";
 
-        _targetList.Location = new Point(12, 84);
-        _targetList.Size = new Size(616, 250);
+        _targetList.Location = new Point(12, 140);
+        _targetList.Size = new Size(796, 270);
+        _targetList.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        _targetList.Scrollable = true;
         _targetList.View = View.Details;
         _targetList.FullRowSelect = true;
         _targetList.HideSelection = true;
-        _targetList.Columns.Add("文件（相对数据根）", 470);
+        _targetList.Columns.Add("会话标题", 210);
+        _targetList.Columns.Add("文件（相对数据根）", 450);
         _targetList.Columns.Add("大小", 80, HorizontalAlignment.Right);
-        _targetList.Columns.Add("类别", 60);
+        _targetList.Columns.Add("类别", 90);
         foreach (var target in _plan.Targets)
         {
             var relative = Path.GetRelativePath(_root, target.AbsolutePath);
+            var owner = _sessions.FirstOrDefault(session => session.Generations.Any(log =>
+                string.Equals(log.FullPath, target.AbsolutePath, StringComparison.OrdinalIgnoreCase)));
             _targetList.Items.Add(new ListViewItem(new[]
             {
+                owner?.Title ?? "（未命名）",
                 relative,
                 InventoryPresenter.FormatBytes(target.ExpectedLength),
                 target.Category.ToString(),
@@ -94,25 +104,29 @@ public sealed class CleanupDialog : Form
 
         _backupButton.Text = "选择目录并备份(&B)";
         _backupButton.AutoSize = true;
-        _backupButton.Location = new Point(12, 344);
+        _backupButton.Location = new Point(12, 424);
+        _backupButton.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
         _backupButton.TabIndex = 20;
         _backupButton.Click += OnBackupClick;
 
         _confirmButton.Text = "确认删除(&D)";
         _confirmButton.AutoSize = true;
-        _confirmButton.Location = new Point(240, 344);
+        _confirmButton.Location = new Point(360, 424);
+        _confirmButton.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
         _confirmButton.TabIndex = 21;
         _confirmButton.Enabled = false; // 未备份不得删除。
         _confirmButton.Click += OnConfirmClick;
 
         _cancelButton.Text = "取消(&C)";
         _cancelButton.AutoSize = true;
-        _cancelButton.Location = new Point(480, 344);
+        _cancelButton.Location = new Point(680, 424);
+        _cancelButton.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
         _cancelButton.TabIndex = 22;
         _cancelButton.Click += OnCancelClick;
 
-        _resultLabel.AutoSize = true;
-        _resultLabel.Location = new Point(12, 384);
+        _resultLabel.AutoSize = false;
+        _resultLabel.SetBounds(12, 467, 796, 28);
+        _resultLabel.Anchor = AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right;
         _resultLabel.Text = string.Empty;
 
         Controls.AddRange(new Control[]
@@ -180,9 +194,10 @@ public sealed class CleanupDialog : Form
             if (dialog.State.Stage == BackupStage.Ready)
             {
                 _backup = dialog.State.ZipPath is null ? null : ReopenVerifiedBackup();
-                _backupLabel.Text = $"备份状态：已备份并校验（{dialog.State.EntryCount} 个文件，" +
-                    $"{InventoryPresenter.FormatBytes(dialog.State.TotalBytes)}）。可确认删除。";
-                _confirmButton.Enabled = true;
+                _backupLabel.Text = _backup is null
+                    ? "备份复验失败，禁止删除。"
+                    : $"备份状态：已备份并校验（{dialog.State.EntryCount} 个文件，{InventoryPresenter.FormatBytes(dialog.State.TotalBytes)}）。可确认删除。";
+                _confirmButton.Enabled = _backup is not null;
             }
             else
             {
