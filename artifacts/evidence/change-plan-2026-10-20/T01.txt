@@ -1,0 +1,10 @@
+T01 — 官方 Workspace 格式契约核查
+日期：2026-10-20
+上游固定提交：deepseek-ai/deepseek-harness@687f282e8625c6b8d11ff58211a90524be2e4317
+当前仓库：main；工作分支 feat/workspace-compatibility-t01-20261020
+查阅：packages/workspace/workspace/src/spec.ts、entity.ts、index.ts；packages/storage/storage-json/src/{format,single-unit,index,atomic}.ts；src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceArchiveReader.cs。
+核验：v2 全局字段、成员表、pendingMutation、initialized、JSON single/per-record 及存储路由存在性。
+成果：docs/workspace-compatibility.md；写入允许清单为空。
+执行命令：无构建/测试命令（T01 仅文档核查）；工具：GitHub 连接器、公开上游源码读取。
+测试：未执行；Windows 实机：未执行；真实脱敏数据：未取得。
+验收范围：仅 T01 文档契约；不得据此宣称元数据写入已安全。
