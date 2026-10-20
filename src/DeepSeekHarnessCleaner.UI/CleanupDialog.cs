@@ -88,14 +88,18 @@ public sealed class CleanupDialog : Form
         _targetList.Columns.Add("文件（相对数据根）", 450);
         _targetList.Columns.Add("大小", 80, HorizontalAlignment.Right);
         _targetList.Columns.Add("类别", 90);
+        // Build a path index once rather than searching all sessions for each file.
+        var titleByPath = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var session in _sessions)
+            foreach (var log in session.Generations)
+                titleByPath.TryAdd(log.FullPath, session.Title ?? "（未命名）");
         foreach (var target in _plan.Targets)
         {
             var relative = Path.GetRelativePath(_root, target.AbsolutePath);
-            var owner = _sessions.FirstOrDefault(session => session.Generations.Any(log =>
-                string.Equals(log.FullPath, target.AbsolutePath, StringComparison.OrdinalIgnoreCase)));
+            var title = titleByPath.TryGetValue(target.AbsolutePath, out var found) ? found : "（未命名）";
             _targetList.Items.Add(new ListViewItem(new[]
             {
-                owner?.Title ?? "（未命名）",
+                title,
                 relative,
                 InventoryPresenter.FormatBytes(target.ExpectedLength),
                 target.Category.ToString(),
