@@ -297,6 +297,8 @@ public sealed partial class MainForm : Form
     {
         if (_bindingSessions) return;
         _deleteButton.Enabled = _checkedSessions.Count > 0 || _sessionGrid.SelectedRows.Count > 0;
+        // Ticking the batch checkbox must not trigger an expensive transcript preview.
+        if (_sessionGrid.CurrentCell?.OwningColumn.Name == "checked") return;
         _previewDebounce.Stop();
         _previewDebounce.Start();
     }
