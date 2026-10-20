@@ -15,7 +15,7 @@ public sealed class CleanupDialog : Form
 {
     private readonly ListView _targetList = new();
     private readonly Label _planLabel = new();
-    private readonly Label _warningLabel = new();
+    private readonly TextBox _warningLabel = new() { Multiline = true, ReadOnly = true, WordWrap = true, ScrollBars = ScrollBars.Vertical, BorderStyle = BorderStyle.None };
     private readonly Label _backupLabel = new();
     private readonly Label _resultLabel = new();
     private readonly Button _backupButton = new();
