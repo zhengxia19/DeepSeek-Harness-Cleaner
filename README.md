@@ -83,4 +83,12 @@ DeepSeek-Harness-Cleaner/
 
 ## 2026-10-20 修复任务与实施状态
 
-本轮扫描、筛选、选择、预览、删除和备份功能的 28 项修复任务记录在 [修复任务清单](docs/2026-10-20-修复任务清单.md)。已提交部分空值防护、筛选包含匹配、选择预览防抖、备份目录选择和打开目录功能，但尚未通过 Windows/.NET 编译与 UI 回归测试。会话标题、独立批量勾选、删除确认窗口重构和运行中会话安全删除尚未实现。**在未确认会话生命周期及安全接口前，DSH 进程运行时仍禁止执行文件删除。**
+详细追踪：[28 项修复清单](docs/2026-10-20-修复任务清单.md)。
+
+本次迭代已提交源码：从已验证的 `session/title` 事件读取会话标题（明文及有界 zstd）、标题列表与筛选、可输入项目候选、对齐筛选面板、行与批量复选分离、预览防抖/大小限制/取消传递、删除确认标题及双向滚动、备份目录选择及资源管理器打开目录，以及长警告换行。
+
+**验证状态：已完成静态检查（关键文件括号数量与冲突标记检查），未进行 `dotnet build`、`dotnet test` 或 Windows 10 界面/性能实测；因此不是已验收发布版本。** 仓库单元测试新增或更新了标题提取和筛选场景，尚未运行。
+
+**安全边界：** 当前官方 DSH SessionPersistence 与 Workspace 公开接口没有可证实的、覆盖 live Agent/内存状态/注册表/磁盘一致性的通用安全删除 RPC；停止进程以外的会话删除仍按现有机制阻断。社区 fork 中的 `workspace.deleteSession` 方案不能当成官方已发布能力。运行中已空闲或未加载的会话也不能仅根据文件时间判断安全可删。
+
+相关上游：[持久化接口](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/persistence.md) · [标题事件](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/session-title.md) · [社区删除能力讨论](https://github.com/deepseek-ai/deepseek-harness/discussions/3075)。
