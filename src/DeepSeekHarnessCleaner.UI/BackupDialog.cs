@@ -11,8 +11,8 @@ namespace DeepSeekHarnessCleaner.UI;
 /// </summary>
 public sealed class BackupDialog : Form
 {
-    private readonly Label _summaryLabel = new();
-    private readonly Label _statusLabel = new();
+    private readonly TextBox _summaryLabel = new() { Multiline = true, ReadOnly = true, WordWrap = true, ScrollBars = ScrollBars.Vertical, BorderStyle = BorderStyle.None };
+    private readonly TextBox _statusLabel = new() { Multiline = true, ReadOnly = true, WordWrap = true, ScrollBars = ScrollBars.Vertical, BorderStyle = BorderStyle.None };
     private readonly Button _cancelButton = new();
     private readonly Button _closeButton = new();
     private readonly Button _openFolderButton = new();
