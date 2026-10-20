@@ -57,9 +57,9 @@ public static class SessionFilter
         {
             if (request.Date is { } dateRange && !MatchesDate(session, dateRange, timeZone))
                 continue;
-            if (project is not null && !string.Equals(session.Project, project, StringComparison.OrdinalIgnoreCase))
+            if (project is not null && !(session.Project?.Contains(project, StringComparison.OrdinalIgnoreCase) ?? false))
                 continue;
-            if (sessionId is not null && !string.Equals(session.SessionId, sessionId, StringComparison.OrdinalIgnoreCase))
+            if (sessionId is not null && !(session.SessionId?.Contains(sessionId, StringComparison.OrdinalIgnoreCase) ?? false))
                 continue;
             if (keyword is not null && !MatchesKeyword(session, keyword))
                 continue;
