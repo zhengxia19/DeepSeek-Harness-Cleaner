@@ -27,7 +27,7 @@ public sealed class SessionTitleReader
             if (input.Length > MaxInspectBytes) return null;
             return Parse(input);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or JsonException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or JsonException or DecoderFallbackException)
         {
             return null;
         }
