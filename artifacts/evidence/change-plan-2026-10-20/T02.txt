@@ -1,0 +1,9 @@
+T02 — Workspace v2 synthetic fixture implementation
+2026-10-20
+Branch: feat/workspace-fixtures-t02-20261020
+Code: tests/DeepSeekHarnessCleaner.Tests/WorkspaceV2FixtureTests.cs
+Added synthetic JSON single-unit v2 workspaces, archive/pin, two ordered workspaces, missing log, duplicate IDs, duplicate global JSON key, malformed JSON, unknown version, pending mutation, uninitialized state, file mutation and temporary symlink exercise.
+Static review: original fixture root uses Path.GetTempPath(); test data does not embed real session text, secrets or user root.
+Validation unavailable: no .NET SDK in execution container; GitHub repository has no .github/workflows CI directory. No dotnet build/test executed and no Windows runner observed. Symbolic-link coverage may be bypassed if runner lacks privileges.
+Status: BLOCKED (unverified). T02 remains unchecked; do not begin T03 as a completed predecessor.
+Next: run dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --configuration Release on compatible .NET 10 Windows runner; capture exit code and test counts, resolve failures, verify symlink scenario; then mark T02 only after actual pass.
