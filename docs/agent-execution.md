@@ -1,8 +1,8 @@
 # 开发 Agent 执行规程（64K 上下文版）
 
-**项目**：DeepSeek Harness Cleaner  
-**目标模型**：Qwen3.8-Flash-Next IQ3_S，64K tokens  
-**适用范围**：项目现有 T-01～T-34 原子实施任务  
+**项目**：DeepSeek Harness Cleaner
+**目标模型**：Qwen3.8-Flash-Next IQ3_S，64K tokens
+**适用范围**：当前任务入口所指定的原子实施任务；历史任务按归档查询
 **定位**：本文件定义“如何执行”；`docs/implementation-tasks.md` 定义“做什么、验收什么”。不得在此维护任务完成状态。
 
 > 每轮应先遵守根目录 `AGENTS.md`，再**按需**阅读本文件与当前任务相关的章节。文件中的命令和路径是操作约定；是否存在、能否运行，以工作区实测为准。此前的设计复审不是代码验收。
@@ -17,11 +17,13 @@
 | `docs/requirements.md`、`architecture.md`、`design.md`、`interfaces.md` | 功能/架构/算法/接口契约 | 当前任务涉及相关契约时 |
 | `docs/development.md`、`dependencies.md`、`coding-standard.md` | 环境、依赖、编码约束 | 环境和编码任务按需 |
 | `docs/testing.md`、`release.md` | 测试用例、发布门槛 | 读取本任务关联 TC/SEC/PERF/WIN10 条目 |
-| `docs/decisions/*.md`、`review-report.md` | 已接受的设计决策及未解决验证风险 | 技术冲突、PoC 或发布复审时 |
+| `docs/decisions/*.md`、`archive/2026-10-20/tree/docs/review-report.md` | 已接受的设计决策及未解决验证风险 | 技术冲突、PoC 或发布复审时 |
 | `artifacts/evidence/T-XX.txt` | **本任务真实验收证据** | 复核依赖、验收、恢复时 |
 | `artifacts/evidence/AGENT_CHECKPOINT.md` | 最近一轮恢复摘要；不是任务状态源 | 每轮开始及结束 |
 
 判定次序：用户已确认的需求与安全边界 → 对应的正式需求/设计/ADR → 当前任务边界与验收 → 实际代码及测试证据。若源文件间出现影响正确性或安全性的实质冲突，记录文件与具体条目，**阻断并报告**，不要私自放宽验收、改写需求或另建第二套规格。
+
+归档约定：历史任务与证据位于 archive/2026-10-20/tree/，按原路径查询；当前无开发待办时不从历史清单重新领取任务。当前用户验收确认见 docs/acceptance.md。
 
 ## 2. 64K 上下文预算与读取方式
 
@@ -49,7 +51,7 @@
 
 1. 确认当前工作目录为仓库根目录；运行 `git status --short`，列出未知改动。不能覆盖来源不明的未提交文件。
 2. 若存在 `artifacts/evidence/AGENT_CHECKPOINT.md`，读取其摘要；不存在属于首次启动，不得因此报错。
-3. 精确查询 `docs/implementation-tasks.md` 的任务勾选和前置条目；**不要仅凭检查点的“下一任务”字段**选择工作。
+3. 先查询 `docs/implementation-tasks.md` 的当前状态，再按其链接查询活动任务勾选和前置条目；**不要仅凭检查点的“下一任务”字段**选择工作。
 4. 若检查点指向未验收的在途任务，先核对其变更和证据、继续它；否则选择**编号最小、尚未完成且全部前置任务已验收**的 T-XX。前置任务同时须满足 `[x]` 与真实证据文件可核验。
 5. 读取当前任务的完整定义（目标、前置、修改范围、边界、验收、TC），然后定向读取相关代码和专项文档。
 6. 如果已有相同功能和可信验收结果，先核对它们；不要重复开发或重复执行未受影响的 PoC。若任务被错误勾选但缺乏证据，必须重新验证，不能直接视为完成。
@@ -60,7 +62,7 @@
 ```powershell
 # 在项目根目录执行；仅用于定位，不是项目必备脚本
 git status --short
-Select-String -Path .\docs\implementation-tasks.md -Pattern '^### T-','\*\*T-.*：' 
+Select-String -Path .\docs\implementation-tasks.md -Pattern '^### T-','\*\*T-.*：'
 Select-String -Path .\docs\implementation-tasks.md -Pattern '^### T-13','^### T-14' -Context 0,18
 Get-ChildItem .\artifacts\evidence -ErrorAction SilentlyContinue
 ```
@@ -207,7 +209,7 @@ Next Candidate: T-YY（待下轮核验）
 Blocker: ...
 ```
 
-**不能把“已写代码”当成“已经验收”**。发布完成还必须同时满足：T-01～T-34 均有 `[x]` 与对应有效证据；T-32 自动与安全回归通过；T-33 真实 Win10 版本/性能及运行时联网检查通过；T-34 自包含 EXE 的发布、校验值和干净目标环境冒烟通过。若任一环节未验证，明确写为待验证，不宣布项目完成。
+**不能把“已写代码”当成“已经验收”**。新版本发布须按当前任务、`docs/testing.md` 与 `docs/release.md` 的要求留下实际结果。历史自包含 EXE 的验收条件保留在归档；当前发布为不捆绑运行时的单文件包，所需运行时与当前用户确认见 `docs/acceptance.md`。用户确认与自动执行证据分别记载，不据此补写未执行的完整兼容矩阵。
 
 ---
 

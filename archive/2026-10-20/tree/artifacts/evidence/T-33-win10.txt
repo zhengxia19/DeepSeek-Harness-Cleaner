@@ -1,0 +1,28 @@
+WIN10-01/TC-18/COMPAT-01（T-33） 2026-10-18T16:03:30Z
+OS=Windows Windows 10 Pro Edition=Professional Version=22H2 Build=19045.UBR6466
+HARNESS_VERSION=0.2.1-rc.2
+PUBLISH_EXIT=0 EXE=D:\Code\DeepSeek-Harness-Cleaner\.artifacts\publish\t33-win10\DeepSeekHarnessCleaner.UI.exe sizeMB=102.8
+SMOKE_EXIT=0 PASS=72 FAIL=0 (fixture=D:\Code\DeepSeek-Harness-Cleaner\.artifacts\tmp\dsh-t33-fixture\sessions)
+TC18_NETWORK_CONNECTIONS=0
+COMPAT sessions=44 totalBytes=16949043 anomalies=0 ambiguous=44
+COMPAT status={"Corrupt":44}
+COMPAT generations={"gen0":2,"gen4":43} encodings={"zstd":45}
+COMPAT semantic sampled=0 complete=0 partial=0 fail=0
+COMPAT snapshot files=45 changed=0 deleted=0 added=0（added 为实时 Harness 会话写入，非本扫描）
+PASS : WIN10-01 发布退出码 0
+PASS : WIN10-01 单文件 EXE 存在
+PASS : WIN10-01 自包含冒烟退出码 0
+PASS : WIN10-01 冒烟 72 PASS / 0 FAIL
+PASS : TC-18 运行期零新增 TCP 连接
+PASS : COMPAT-01 真实根存在且完成只读扫描
+PASS : COMPAT-01 真实根既有文件零变更零删除（新增允许）
+WIN10_RESULT=PASS
+
+== COMPAT-01 诊断补充（只读，仅结构事实，不含正文/私人路径）==
+样本版本：HARNESS_VERSION=0.2.1-rc.2（规格目标 0.2.0.0 样本在本机不可得，诚实标注版本差异）
+物理层：真实文件 session.v4.jsonl.zstd，magic 28 b5 2f fd，ZstdFrameDecoder.Decode=Success（56717 字节明文）→ 物理解码兼容。
+头部层：真实首行 JSON keys = type,version,id,createdAt,cwd,isSeeded,delegationDepth,agentPreset（type=session）；
+fixture 确证的 0.2.0.0 V4 头部 schema = type=header,sessionId,formatVersion,createdAt → 模式不一致，判 MissingHeader/Corrupt。
+结论（分开）：物理解码=兼容；语义预览=不支持（0 个 Valid 会话可预览，0.2.1-rc.2 事件 schema 未经确证样本确认）。
+安全行为：44/44 会话 SessionId=null → ambiguous → 删除阻断（NFR-07 新格式只读识别/阻断删除，符合发布条件 §4.3）。
+能力缺口记为整改项 R-02：0.2.1-rc.2 头部/事件 schema 适配未实现，归 T-34 已知限制文档；不得对 0.2.1-rc.2 数据执行清理。

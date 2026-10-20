@@ -1,0 +1,2 @@
+# Preserve historical bytes and original whitespace without normalization.
+tree/** -text -whitespace

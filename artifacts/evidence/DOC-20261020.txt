@@ -1,0 +1,12 @@
+Task: DOC-20261020
+Status: ACCEPTED (documentation/archive validation)
+Scope: User-authorized documentation acceptance update, historical archive, Git push.
+UserAcceptance: 2026-10-20 user reports real-machine acceptance completed. No additional OS/DPI matrix invented.
+BaselineCommit: 299966b84ad35b17117c48984f0b9922f2430bcd
+Archive: archive/2026-10-20/manifest.csv; 70 original byte-preserving files, 53 Move and 17 Snapshot.
+ArchiveVerification: All 70 target SHA-256 values verified after copy/move; source and target absolute paths constrained to repository/archive tree; reparse files rejected.
+Retained: Ignored local raw logs/screenshots/fixtures/backups and dist historical packages retained in place. Real Harness data untouched.
+Changes: Current acceptance/readme/release/changelog/task index; archive pointers; optional-backup ADR synchronized to previously authorized and implemented T-31.
+BuildTests: NOT RUN (documentation-only; prior test counts explicitly attributed to archived T-38).
+FinalValidation: PASS 70 archive SHA-256 values; all active Markdown link targets exist; release EXE hash/size unchanged. PASS git diff --cached --check; all 70 staged archive blobs match raw file bytes; no src/tests/scripts changes. Historical archive whitespace is preserved using archive-local attributes.
+Git: Commit identity is the commit containing this record (git log -1 -- artifacts/evidence/DOC-20261020.txt). Push verification is performed after commit by comparing local HEAD and origin main.
