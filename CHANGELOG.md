@@ -1,3 +1,13 @@
+## Unreleased (2026-10-20, not yet Windows-validated)
+
+- Add prioritized repair checklist in `docs/2026-10-20-修复任务清单.md`.
+- Guard null/invalid session grid row during preview and deletion; suppress selection callback during rebinding.
+- Make project/session ID filters match substrings (case-insensitive).
+- Debounce preview dispatch and cap UI-visible preview text; this is not a streaming preview implementation.
+- Allow interactive backup folder selection and add open-folder action; generated ZIP names have unique suffixes.
+- No changes to process-based deletion guard; title extraction and many UI changes remain open.
+- Build and WinForms smoke tests have not been executed in this environment.
+
 # CHANGELOG
 
 ## [0.1.0] — 2026-10-18（首个发布，win-x64 自包含单文件，未签名）
