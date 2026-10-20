@@ -47,6 +47,7 @@ public sealed partial class MainForm : Form
     private CancellationTokenSource? _previewCts;
     private bool _scanning;
     private bool _bindingSessions;
+    private readonly HashSet<SessionSummary> _checkedSessions = new();
     private readonly System.Windows.Forms.Timer _previewDebounce = new() { Interval = 140 };
 
     public MainForm(string? smokeResultPath = null, string? scanRootPath = null, string? logDirPath = null)
@@ -85,6 +86,20 @@ public sealed partial class MainForm : Form
             if (!_bindingSessions && !IsDisposed) _ = RequestPreviewAsync();
         };
         _sessionGrid.SelectionChanged += OnSessionGridSelectionChanged;
+        _sessionGrid.CurrentCellDirtyStateChanged += (_, _) =>
+        {
+            if (_sessionGrid.IsCurrentCellDirty && _sessionGrid.CurrentCell?.OwningColumn.Name == "checked")
+                _sessionGrid.CommitEdit(DataGridViewDataErrorContexts.Commit);
+        };
+        _sessionGrid.CellValueChanged += (_, e) =>
+        {
+            if (_bindingSessions || e.RowIndex < 0 || e.ColumnIndex != _sessionGrid.Columns["checked"].Index) return;
+            var row = _sessionGrid.Rows[e.RowIndex];
+            if (row.Tag is not SessionSummary session) return;
+            if (row.Cells["checked"].Value is true) _checkedSessions.Add(session);
+            else _checkedSessions.Remove(session);
+            _deleteButton.Enabled = _checkedSessions.Count > 0 || _sessionGrid.SelectedRows.Count > 0;
+        };
         _deleteButton.Enabled = false; // UX-01：未选择会话时禁用删除。
 
         if (_smokeResultPath is not null)
@@ -128,6 +143,7 @@ public sealed partial class MainForm : Form
         _sessionGrid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
         _sessionGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
         _sessionGrid.TabIndex = 9;
+        _sessionGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "checked", HeaderText = "选择", Width = 55, ReadOnly = false, SortMode = DataGridViewColumnSortMode.NotSortable });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "id", HeaderText = "会话 ID", Width = 190 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "title", HeaderText = "会话标题", Width = 220 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "project", HeaderText = "项目", Width = 130 });
@@ -265,7 +281,7 @@ public sealed partial class MainForm : Form
     private void OnSessionGridSelectionChanged(object? sender, EventArgs e)
     {
         if (_bindingSessions) return;
-        _deleteButton.Enabled = _sessionGrid.SelectedRows.Cast<DataGridViewRow>().Any(static row => row.Tag is SessionSummary);
+        _deleteButton.Enabled = _checkedSessions.Count > 0 || _sessionGrid.SelectedRows.Cast<DataGridViewRow>().Any(static row => row.Tag is SessionSummary);
         _previewDebounce.Stop();
         _previewDebounce.Start();
     }
@@ -454,9 +470,12 @@ public sealed partial class MainForm : Form
         _previewCts?.Cancel();
         _sessionGrid.SuspendLayout();
         _sessionGrid.Rows.Clear();
+        var validSessions = _presenter.Sessions.ToHashSet();
+        _checkedSessions.RemoveWhere(session => !validSessions.Contains(session));
         foreach (var session in sessions)
         {
             var index = _sessionGrid.Rows.Add(
+                _checkedSessions.Contains(session),
                 session.SessionId ?? "（未知）",
                 session.Title ?? "（未命名）",
                 session.Project ?? "（未知）",
@@ -471,7 +490,7 @@ public sealed partial class MainForm : Form
         _sessionGrid.ClearSelection();
         _sessionGrid.ResumeLayout();
         _bindingSessions = false;
-        _deleteButton.Enabled = false;
+        _deleteButton.Enabled = _checkedSessions.Count > 0;
         _preview.Clear();
     }
 
@@ -500,11 +519,12 @@ public sealed partial class MainForm : Form
             return;
         }
 
-        var sessions = _sessionGrid.SelectedRows.Cast<DataGridViewRow>()
-            .Select(static row => row.Tag as SessionSummary)
-            .Where(static session => session is not null)
-            .Select(static session => session!)
-            .ToList();
+        var sessions = _checkedSessions.Count > 0
+            ? _checkedSessions.ToList()
+            : _sessionGrid.SelectedRows.Cast<DataGridViewRow>()
+                .Select(static row => row.Tag as SessionSummary)
+                .OfType<SessionSummary>()
+                .ToList();
         if (sessions.Count == 0)
         {
             _statusLabel.Text = "未选择会话。";
