@@ -30,6 +30,17 @@ public sealed class SessionTitleTests
     }
 
     [Fact]
+    public void CompressedLog_ReadsLatestDurableTitle()
+    {
+        using var fx = FixtureRoot.Create();
+        var path = fx.Factory.WriteSessionFile("proj-title", "title-zstd", "session.v4.jsonl.zstd",
+            FixtureFactory.ZstdFrames(
+                "{\\"type\\":\\"header\\",\\"sessionId\\":\\"title-zstd\\",\\"formatVersion\\":4,\\"createdAt\\":\\"2026-01-01T00:00:00Z\\"}\\n" +
+                "{\\"type\\":\\"session/title\\",\\"data\\":{\\"title\\":\\"Compressed title\\"}}\\n"));
+        Assert.Equal("Compressed title", new SessionTitleReader().Read(path, compressed: true));
+    }
+
+    [Fact]
     public void MissingFileReturnsNull()
     {
         Assert.Null(new SessionTitleReader().Read(Path.Combine(Path.GetTempPath(),
