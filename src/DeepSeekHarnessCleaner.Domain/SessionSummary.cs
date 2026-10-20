@@ -47,6 +47,9 @@ public sealed record SessionSummary(
     public long TotalBytes { get; init; }
 
     public bool IsAmbiguous { get; init; }
+
+    /// <summary>Latest verified durable session/title event, if available.</summary>
+    public string? Title { get; init; }
 }
 
 /// <summary>不属于任何会话目录的异常文件（非白名单/位置异常/访问受阻）。</summary>
@@ -57,7 +60,10 @@ public sealed record ScannedLogFile(
     PhysicalLog Log,
     string? HeaderSessionId,
     DateTimeOffset? HeaderCreatedAt,
-    bool IdentityMismatch);
+    bool IdentityMismatch)
+{
+    public string? Title { get; init; }
+}
 
 /// <summary>扫描源返回的单个会话目录（同一目录 = 同一候选会话，含多代际）。</summary>
 public sealed record ScannedSessionDirectory(
