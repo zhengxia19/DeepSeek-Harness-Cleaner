@@ -79,3 +79,8 @@ DeepSeek-Harness-Cleaner/
 - 用户提供的 2026-10-16 本机只读核查文字：安装结构、数量、路径和风险边界。
 - [官方会话持久化](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-persistence-jsonl/README.md)，[官方 Session 事件模型](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/core/session/README.md)，[官方投影缓存](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-projection-cache/README.md)。
 - [Microsoft Windows 上安装 .NET](https://learn.microsoft.com/en-us/dotnet/core/install/windows)。
+
+
+## 2026-10-20 修复任务与实施状态
+
+本轮扫描、筛选、选择、预览、删除和备份功能的 28 项修复任务记录在 [修复任务清单](docs/2026-10-20-修复任务清单.md)。已提交部分空值防护、筛选包含匹配、选择预览防抖、备份目录选择和打开目录功能，但尚未通过 Windows/.NET 编译与 UI 回归测试。会话标题、独立批量勾选、删除确认窗口重构和运行中会话安全删除尚未实现。**在未确认会话生命周期及安全接口前，DSH 进程运行时仍禁止执行文件删除。**
