@@ -108,25 +108,25 @@ public sealed class FilterTests
     }
 
     [Fact]
-    public void ProjectFilter_IsCaseInsensitiveExactMatch()
+    public void ProjectFilter_IsCaseInsensitiveContains()
     {
         var sessions = new[] { Make("s1", "proj-alpha", null, null), Make("s2", "proj-beta", null, null) };
 
         var result = Apply(sessions, new FilterRequest(null, "PROJ-Alpha", null, null), TimeZoneInfo.Utc);
 
         Assert.Equal(["s1"], result.Select(s => s.SessionId));
-        Assert.Empty(Apply(sessions, new FilterRequest(null, "alpha", null, null), TimeZoneInfo.Utc));
+        Assert.Equal(["s1"], Apply(sessions, new FilterRequest(null, "alpha", null, null), TimeZoneInfo.Utc).Select(s => s.SessionId));
     }
 
     [Fact]
-    public void SessionIdFilter_IsCaseInsensitiveExactMatch()
+    public void SessionIdFilter_IsCaseInsensitiveContains()
     {
         var sessions = new[] { Make("synth-v4-001", "p", null, null), Make("synth-v4-0011", "p", null, null) };
 
         var result = Apply(sessions, new FilterRequest(null, null, "SYNTH-V4-001", null), TimeZoneInfo.Utc);
 
-        Assert.Single(result);
-        Assert.Equal("synth-v4-001", result[0].SessionId);
+        Assert.Equal(2, result.Count);
+        Assert.Equal(["synth-v4-001", "synth-v4-0011"], result.Select(s => s.SessionId));
     }
 
     [Fact]
@@ -144,6 +144,17 @@ public sealed class FilterTests
 
         result = Apply(sessions, new FilterRequest(null, null, null, "gamma"), TimeZoneInfo.Utc);
         Assert.Equal(["s-1"], result.Select(s => s.SessionId));
+    }
+
+    [Fact]
+    public void TitleFilter_AndKeywordMatchPersistedTitle()
+    {
+        var named = Make("session-1", "proj-a", null, null) with { Title = "My important discussion" };
+        var unnamed = Make("session-2", "proj-a", null, null);
+        Assert.Same(named, Assert.Single(Apply([named, unnamed],
+            new FilterRequest(null, null, null, null, "important"), TimeZoneInfo.Utc)));
+        Assert.Same(named, Assert.Single(Apply([named, unnamed],
+            new FilterRequest(null, null, null, "DISCUSSION"), TimeZoneInfo.Utc)));
     }
 
     [Fact]
