@@ -201,7 +201,9 @@ public sealed class CleanupDialog : Form
                 _backupLabel.Text = _backup is null
                     ? "备份复验失败，禁止删除。"
                     : $"备份状态：已备份并校验（{dialog.State.EntryCount} 个文件，{InventoryPresenter.FormatBytes(dialog.State.TotalBytes)}）。可确认删除。";
-                _confirmButton.Enabled = _backup is not null;
+                _confirmButton.Enabled = _backup is not null && _presenter.ProbeProcesses().AllowsWrite;
+                if (!_confirmButton.Enabled && _backup is not null)
+                    _backupLabel.Text += " 当前检测到 Harness 运行或状态未知；请完全退出后重新打开删除窗口。";
             }
             else
             {
