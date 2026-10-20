@@ -27,6 +27,7 @@ public sealed partial class MainForm : Form
     private readonly DateTimePicker _dateStartPicker = new();
     private readonly DateTimePicker _dateEndPicker = new();
     private readonly Button _applyFilterButton = new();
+    private readonly Button _resetFilterButton = new();
     private readonly DataGridView _sessionGrid = new();
     private readonly RichTextBox _preview = new();
     private readonly FlowLayoutPanel _actionPanel = new();
@@ -200,6 +201,17 @@ public sealed partial class MainForm : Form
         _applyFilterButton.Padding = new Padding(10, 4, 10, 4);
         _applyFilterButton.Margin = new Padding(4, 3, 0, 3);
         _applyFilterButton.Click += (_, _) => ApplyFilterFromUi();
+        _resetFilterButton.Text = "清空筛选";
+        _resetFilterButton.AutoSize = true;
+        _resetFilterButton.Click += (_, _) =>
+        {
+            _keywordBox.Clear();
+            _titleBox.Clear();
+            _projectBox.Text = string.Empty;
+            _sessionIdBox.Clear();
+            _dateEnabledCheck.Checked = false;
+            ApplyFilterFromUi();
+        };
 
         _keywordBox.TabIndex = 1;
         _titleBox.TabIndex = 14;
@@ -229,12 +241,15 @@ public sealed partial class MainForm : Form
             new Label { Text = "止", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
             _dateEndPicker,
             _applyFilterButton,
+            _resetFilterButton,
         });
     }
 
     private void BuildPreviewRegion()
     {
         _preview.Dock = DockStyle.Fill;
+        _preview.WordWrap = false;
+        _preview.ScrollBars = RichTextBoxScrollBars.Both;
         _preview.ReadOnly = true;
         _preview.BorderStyle = BorderStyle.None;
         _preview.TabIndex = 10;
@@ -281,7 +296,7 @@ public sealed partial class MainForm : Form
     private void OnSessionGridSelectionChanged(object? sender, EventArgs e)
     {
         if (_bindingSessions) return;
-        _deleteButton.Enabled = _checkedSessions.Count > 0 || _sessionGrid.SelectedRows.Cast<DataGridViewRow>().Any(static row => row.Tag is SessionSummary);
+        _deleteButton.Enabled = _checkedSessions.Count > 0 || _sessionGrid.SelectedRows.Count > 0;
         _previewDebounce.Stop();
         _previewDebounce.Start();
     }
