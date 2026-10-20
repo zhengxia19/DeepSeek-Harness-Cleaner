@@ -131,3 +131,15 @@ BackupValidated → Recheck → AwaitConfirm → Deleting → Completed/PartialF
 - Windows 10 具体 SKU/Build、WinForms 自包含运行、长路径/reparse point 处理和中文 DPI。
 
 依赖研究来源：<https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-persistence-jsonl/README.md>、<https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-projection-cache/README.md>、<https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/persistence-changes/2026-09-16-session-format-v4.md>、<https://github.com/deepseek-ai/deepseek-harness/blob/master/.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md>。
+
+
+## 2026-10-20 UI 修复迭代补充（待运行验收）
+
+- 标题来源：扫描已知会话代际中官方持久化的 `session/title` 事件，后发生的有效事件覆盖先前标题；没有确证标题时显示“未命名”，不通过消息正文猜测。为限制单次扫描资源，读取器检查至多 32 MiB 的文件/解码内容，不保证超长记录均能提供标题。
+- 筛选：关键字搜索标题、项目和会话 ID；项目/标题/ID 独立包含匹配，按 AND 组合；项目候选来自扫描结果，WinForms 表格布局对齐，提供清空筛选。
+- 选择：当前 `SelectedRows` 与 `checked` 列独立。存在勾选时删除使用勾选集合，否则使用选中的行；批量勾选不发起预览。筛选重绑维持同一次扫描的勾选身份，重新扫描失效对象会移除。
+- 预览：选择变化延迟 140ms 后发起读取，旧请求取消；单次预览最多读取 8 MiB、每消息展示至多 16,000 字符、总显示约 240,000 字符；超过限制明确标记。压缩解码器在同步 `Decode` 阶段不具备真正可中断的 token 参数，因此不能声称所有 CPU 工作能即时取消。
+- 删除确认：文件清单包含其逻辑会话标题；标题/路径/大小/类别均可随横向、纵向滚动查看；长进程警告使用只读多行可滚动文本框。
+- 备份：手动选择 ZIP 目录，唯一 ZIP 名称、备份状态多行展示与资源管理器跳转；原始文件验证、备份复验、删除前文件属性与进程状态门禁保留。
+- 运行中删除：根据当前上游 `SessionPersistence`、Workspace 注册表接口和官方讨论，不存在已验证可直接使用的会话级持久安全删除 API。不能仅依赖文件锁、mtime、前台选中状态证明会话可删；当前版本仍在进程 Active/Unknown 时拒绝写入，不能绕过运行保护。
+- 变更清单及待验收内容见 `docs/2026-10-20-修复任务清单.md`。本节描述源码设计状态，不表示 Windows 编译/测试通过。
