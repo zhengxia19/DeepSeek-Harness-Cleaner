@@ -64,7 +64,7 @@ public sealed class LegacyPreview
     /// <see cref="SelectPreviewGeneration"/> 选定代际的已解码文本；不可读时传 null。
     /// 绝不使用更低代际的文本替代（不隐式回退）。
     /// </summary>
-    public LegacyPreviewResult Build(SessionSummary summary, string? previewGenerationTranscript)
+    public LegacyPreviewResult Build(SessionSummary summary, string? previewGenerationTranscript, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(summary);
 
@@ -94,7 +94,7 @@ public sealed class LegacyPreview
                 $"代际 {selected.Value} 的事件 schema 未经脱敏 fixture 确证；仅提供元数据摘要（不完整），不猜测事件正文。");
         }
 
-        var projection = Projector.Project(previewGenerationTranscript);
+        var projection = Projector.Project(previewGenerationTranscript, cancellationToken: cancellationToken);
         return new LegacyPreviewResult(
             LegacyPreviewMode.Projected, selected, metadata, projection,
             SupportsRawBackup: true,
