@@ -129,6 +129,7 @@ public sealed partial class MainForm : Form
         _sessionGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
         _sessionGrid.TabIndex = 9;
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "id", HeaderText = "会话 ID", Width = 190 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "title", HeaderText = "会话标题", Width = 220 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "project", HeaderText = "项目", Width = 130 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "created", HeaderText = "创建时间", Width = 140 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "origin", HeaderText = "日期来源", Width = 110, Visible = false });
@@ -457,6 +458,7 @@ public sealed partial class MainForm : Form
         {
             var index = _sessionGrid.Rows.Add(
                 session.SessionId ?? "（未知）",
+                session.Title ?? "（未命名）",
                 session.Project ?? "（未知）",
                 FormatDate(session.CreatedAt),
                 DateOriginText(session.DateOrigin),
