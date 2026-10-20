@@ -17,7 +17,7 @@ public sealed partial class MainForm : Form
 {
     private readonly MenuStrip _menu = new();
     private readonly SplitContainer _split = new();
-    private readonly FlowLayoutPanel _filterPanel = new();
+    private readonly TableLayoutPanel _filterPanel = new();
     private readonly TextBox _keywordBox = new();
     private readonly ComboBox _projectBox = new();
     private readonly TextBox _titleBox = new();
@@ -169,42 +169,40 @@ public sealed partial class MainForm : Form
         _filterPanel.Dock = DockStyle.Top;
         _filterPanel.AutoSize = true;
         _filterPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        _filterPanel.WrapContents = true;
+        _filterPanel.ColumnCount = 4;
+        _filterPanel.RowCount = 5;
         _filterPanel.Padding = new Padding(6, 4, 6, 4);
+        _filterPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78));
+        _filterPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        _filterPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
+        _filterPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        for (var row = 0; row < 5; row++)
+            _filterPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        _keywordBox.Width = 140;
-        _titleBox.Width = 170;
         _projectBox.DropDownStyle = ComboBoxStyle.DropDown;
         _projectBox.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
         _projectBox.AutoCompleteSource = AutoCompleteSource.ListItems;
-        _projectBox.Width = 120;
-        _sessionIdBox.Width = 140;
-        foreach (var box in new[] { _keywordBox, _titleBox, _sessionIdBox })
-        {
-            box.Margin = new Padding(4, 4, 10, 4);
-            box.AutoSize = false;
-        }
-
         _dateFieldCombo.DropDownStyle = ComboBoxStyle.DropDownList;
         _dateFieldCombo.Items.AddRange(new object[] { "创建时间", "文件修改时间（非会话活动）" });
         _dateFieldCombo.SelectedIndex = 0;
-        _dateFieldCombo.Width = 190;
-        _dateFieldCombo.Margin = new Padding(4, 4, 10, 4);
+        _dateFieldCombo.DropDownWidth = 220;
+
+        foreach (var box in new Control[] { _keywordBox, _titleBox, _projectBox, _sessionIdBox, _dateFieldCombo })
+        {
+            box.Dock = DockStyle.Fill;
+            box.Margin = new Padding(2, 3, 6, 3);
+            box.MinimumSize = new Size(70, 25);
+        }
 
         _dateEnabledCheck.Text = "启用日期(&E)";
         _dateEnabledCheck.AutoSize = true;
-        _dateEnabledCheck.Margin = new Padding(4, 6, 6, 4);
-
         _dateStartPicker.Format = DateTimePickerFormat.Short;
         _dateEndPicker.Format = DateTimePickerFormat.Short;
-        _dateStartPicker.Margin = new Padding(0, 4, 4, 4);
-        _dateEndPicker.Margin = new Padding(0, 4, 10, 4);
+        _dateStartPicker.Dock = DockStyle.Fill;
+        _dateEndPicker.Dock = DockStyle.Fill;
 
         _applyFilterButton.Text = "应用筛选(&L)";
         _applyFilterButton.AutoSize = true;
-        _applyFilterButton.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        _applyFilterButton.Padding = new Padding(10, 4, 10, 4);
-        _applyFilterButton.Margin = new Padding(4, 3, 0, 3);
         _applyFilterButton.Click += (_, _) => ApplyFilterFromUi();
         _resetFilterButton.Text = "清空筛选";
         _resetFilterButton.AutoSize = true;
@@ -219,35 +217,42 @@ public sealed partial class MainForm : Form
         };
 
         _keywordBox.TabIndex = 1;
-        _titleBox.TabIndex = 14;
         _projectBox.TabIndex = 2;
-        _sessionIdBox.TabIndex = 3;
-        _dateFieldCombo.TabIndex = 4;
-        _dateEnabledCheck.TabIndex = 5;
-        _dateStartPicker.TabIndex = 6;
-        _dateEndPicker.TabIndex = 7;
-        _applyFilterButton.TabIndex = 8;
+        _titleBox.TabIndex = 3;
+        _sessionIdBox.TabIndex = 4;
+        _dateFieldCombo.TabIndex = 5;
+        _dateEnabledCheck.TabIndex = 6;
+        _dateStartPicker.TabIndex = 7;
+        _dateEndPicker.TabIndex = 8;
+        _applyFilterButton.TabIndex = 9;
+        _resetFilterButton.TabIndex = 10;
 
-        _filterPanel.Controls.AddRange(new Control[]
+        static Label Caption(string text) => new()
         {
-            new Label { Text = "关键字(&K)", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
-            _keywordBox,
-            new Label { Text = "会话标题", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
-            _titleBox,
-            new Label { Text = "项目(&J)", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
-            _projectBox,
-            new Label { Text = "会话 ID(&I)", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
-            _sessionIdBox,
-            new Label { Text = "日期字段(&T)", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
-            _dateFieldCombo,
-            _dateEnabledCheck,
-            new Label { Text = "起", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
-            _dateStartPicker,
-            new Label { Text = "止", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
-            _dateEndPicker,
-            _applyFilterButton,
-            _resetFilterButton,
-        });
+            Text = text,
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(3, 4, 0, 4),
+        };
+
+        _filterPanel.Controls.Add(Caption("关键字"), 0, 0);
+        _filterPanel.Controls.Add(_keywordBox, 1, 0);
+        _filterPanel.Controls.Add(Caption("项目"), 2, 0);
+        _filterPanel.Controls.Add(_projectBox, 3, 0);
+        _filterPanel.Controls.Add(Caption("会话标题"), 0, 1);
+        _filterPanel.Controls.Add(_titleBox, 1, 1);
+        _filterPanel.Controls.Add(Caption("会话 ID"), 2, 1);
+        _filterPanel.Controls.Add(_sessionIdBox, 3, 1);
+        _filterPanel.Controls.Add(Caption("日期字段"), 0, 2);
+        _filterPanel.Controls.Add(_dateFieldCombo, 1, 2);
+        _filterPanel.Controls.Add(_dateEnabledCheck, 2, 2);
+        _filterPanel.SetColumnSpan(_dateEnabledCheck, 2);
+        _filterPanel.Controls.Add(Caption("开始"), 0, 3);
+        _filterPanel.Controls.Add(_dateStartPicker, 1, 3);
+        _filterPanel.Controls.Add(Caption("结束"), 2, 3);
+        _filterPanel.Controls.Add(_dateEndPicker, 3, 3);
+        _filterPanel.Controls.Add(_applyFilterButton, 1, 4);
+        _filterPanel.Controls.Add(_resetFilterButton, 3, 4);
     }
 
     private void BuildPreviewRegion()
