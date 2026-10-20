@@ -146,13 +146,18 @@ public sealed partial class MainForm : Form
         _sessionGrid.TabIndex = 9;
         _sessionGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "checked", HeaderText = "选择", Width = 55, ReadOnly = false, SortMode = DataGridViewColumnSortMode.NotSortable });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "id", HeaderText = "会话 ID", Width = 190 });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "title", HeaderText = "会话标题", Width = 220 });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "project", HeaderText = "项目", Width = 130 });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "created", HeaderText = "创建时间", Width = 140 });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "origin", HeaderText = "日期来源", Width = 110, Visible = false });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "size", HeaderText = "大小", Width = 110 });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "format", HeaderText = "格式（代际）", Width = 140, Visible = false });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = "状态", Width = 110 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "title", HeaderText = "会话标题", Width = 220 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "project", HeaderText = "项目", Width = 130 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "created", HeaderText = "创建时间", Width = 140 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "origin", HeaderText = "日期来源", Width = 110, Visible = false });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "size", HeaderText = "大小", Width = 110 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "format", HeaderText = "格式（代际）", Width = 140, Visible = false });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "status", HeaderText = "状态", Width = 110 });
+        _sessionGrid.Columns["title"]!.DisplayIndex = 1;
+        _sessionGrid.Columns["project"]!.DisplayIndex = 2;
+        _sessionGrid.Columns["created"]!.DisplayIndex = 3;
+        _sessionGrid.Columns["size"]!.DisplayIndex = 4;
+        _sessionGrid.Columns["id"]!.DisplayIndex = 5;
         _split.Panel1.Controls.Add(_sessionGrid);
 
         BuildFilterPanel();
