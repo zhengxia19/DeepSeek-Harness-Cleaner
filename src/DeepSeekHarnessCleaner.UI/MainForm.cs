@@ -504,7 +504,7 @@ public sealed partial class MainForm : Form
         }
 
         var zipPath = Path.Combine(
-            Path.GetTempPath(), "dshcleaner-backups", $"cleanup-{DateTime.Now:yyyyMMdd-HHmmss}-{Environment.ProcessId}.zip");
+            Path.GetTempPath(), "dshcleaner-backups", $"cleanup-{DateTime.Now:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}.zip");
         // 备份清单以数据根（sessions 的父目录，即 .dsh 主目录）为根。
         var dataHome = Path.GetDirectoryName(_effectiveScanRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
             ?? _effectiveScanRoot;
