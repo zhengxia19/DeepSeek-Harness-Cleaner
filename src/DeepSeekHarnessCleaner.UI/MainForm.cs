@@ -19,7 +19,8 @@ public sealed partial class MainForm : Form
     private readonly SplitContainer _split = new();
     private readonly FlowLayoutPanel _filterPanel = new();
     private readonly TextBox _keywordBox = new();
-    private readonly TextBox _projectBox = new();
+    private readonly ComboBox _projectBox = new();
+    private readonly TextBox _titleBox = new();
     private readonly TextBox _sessionIdBox = new();
     private readonly ComboBox _dateFieldCombo = new();
     private readonly CheckBox _dateEnabledCheck = new();
@@ -130,9 +131,9 @@ public sealed partial class MainForm : Form
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "id", HeaderText = "会话 ID", Width = 190 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "project", HeaderText = "项目", Width = 130 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "created", HeaderText = "创建时间", Width = 140 });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "origin", HeaderText = "日期来源", Width = 110 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "origin", HeaderText = "日期来源", Width = 110, Visible = false });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "size", HeaderText = "大小", Width = 110 });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "format", HeaderText = "格式（代际）", Width = 140 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "format", HeaderText = "格式（代际）", Width = 140, Visible = false });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = "状态", Width = 110 });
         _split.Panel1.Controls.Add(_sessionGrid);
 
@@ -149,9 +150,13 @@ public sealed partial class MainForm : Form
         _filterPanel.Padding = new Padding(6, 4, 6, 4);
 
         _keywordBox.Width = 140;
+        _titleBox.Width = 170;
+        _projectBox.DropDownStyle = ComboBoxStyle.DropDown;
+        _projectBox.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+        _projectBox.AutoCompleteSource = AutoCompleteSource.ListItems;
         _projectBox.Width = 120;
         _sessionIdBox.Width = 140;
-        foreach (var box in new[] { _keywordBox, _projectBox, _sessionIdBox })
+        foreach (var box in new[] { _keywordBox, _titleBox, _sessionIdBox })
         {
             box.Margin = new Padding(4, 4, 10, 4);
             box.AutoSize = false;
@@ -180,6 +185,7 @@ public sealed partial class MainForm : Form
         _applyFilterButton.Click += (_, _) => ApplyFilterFromUi();
 
         _keywordBox.TabIndex = 1;
+        _titleBox.TabIndex = 14;
         _projectBox.TabIndex = 2;
         _sessionIdBox.TabIndex = 3;
         _dateFieldCombo.TabIndex = 4;
@@ -192,6 +198,8 @@ public sealed partial class MainForm : Form
         {
             new Label { Text = "关键字(&K)", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
             _keywordBox,
+            new Label { Text = "会话标题", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
+            _titleBox,
             new Label { Text = "项目(&J)", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
             _projectBox,
             new Label { Text = "会话 ID(&I)", AutoSize = true, Margin = new Padding(4, 7, 0, 4) },
@@ -415,7 +423,7 @@ public sealed partial class MainForm : Form
                 DateOnly.FromDateTime(_dateEndPicker.Value.Date));
         }
 
-        var request = new FilterRequest(date, _projectBox.Text, _sessionIdBox.Text, _keywordBox.Text);
+        var request = new FilterRequest(date, _projectBox.Text, _sessionIdBox.Text, _keywordBox.Text, _titleBox.Text);
         IReadOnlyList<SessionSummary> filtered;
         try
         {
@@ -435,6 +443,12 @@ public sealed partial class MainForm : Form
     private void BindSessions(IReadOnlyList<SessionSummary> sessions)
     {
         _bindingSessions = true;
+        var projectInput = _projectBox.Text;
+        _projectBox.BeginUpdate();
+        _projectBox.Items.Clear();
+        _projectBox.Items.AddRange(_presenter.Sessions.Select(static s => s.Project).Where(static p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(static p => p).Cast<object>().ToArray());
+        _projectBox.Text = projectInput;
+        _projectBox.EndUpdate();
         _previewDebounce.Stop();
         _previewCts?.Cancel();
         _sessionGrid.SuspendLayout();
