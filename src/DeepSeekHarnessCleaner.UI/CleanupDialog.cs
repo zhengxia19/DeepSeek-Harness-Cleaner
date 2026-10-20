@@ -27,7 +27,7 @@ public sealed class CleanupDialog : Form
     private readonly string _root;
     private readonly string _dataHome;
     private readonly IReadOnlyList<SessionSummary> _sessions;
-    private readonly string _zipPath;
+    private string _zipPath;
     private CancellationTokenSource? _cts;
     private BackupManifest? _manifest;
     private VerifiedBackup? _backup;
@@ -92,7 +92,7 @@ public sealed class CleanupDialog : Form
             }));
         }
 
-        _backupButton.Text = "创建备份(&B)";
+        _backupButton.Text = "选择目录并备份(&B)";
         _backupButton.AutoSize = true;
         _backupButton.Location = new Point(12, 344);
         _backupButton.TabIndex = 20;
@@ -151,6 +151,18 @@ public sealed class CleanupDialog : Form
 
     private void OnBackupClick(object? sender, EventArgs e)
     {
+        // UI 点击选择目标文件夹；冒烟入口 RequestBackup 保持无交互，避免破坏自动化。
+        if (ReferenceEquals(sender, _backupButton))
+        {
+            using var folderPicker = new FolderBrowserDialog
+            {
+                Description = "选择会话 ZIP 备份保存目录",
+                SelectedPath = Path.GetDirectoryName(_zipPath) ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                ShowNewFolderButton = true,
+            };
+            if (folderPicker.ShowDialog(this) != DialogResult.OK) return;
+            _zipPath = Path.Combine(folderPicker.SelectedPath, Path.GetFileName(_zipPath));
+        }
         // 清单/备份以数据根（.dsh 主目录）为根：条目名须为 sessions/… 类别前缀。
         var manifestResult = _presenter.BuildSessionManifest(_dataHome, _sessions);
         if (manifestResult.Manifest is null)
