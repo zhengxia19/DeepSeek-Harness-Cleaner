@@ -135,7 +135,7 @@ public sealed partial class MainForm : Form
         _sessionGrid.Dock = DockStyle.Fill;
         _sessionGrid.MultiSelect = true;
         _sessionGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _sessionGrid.ReadOnly = true;
+        _sessionGrid.ReadOnly = false;
         _sessionGrid.AllowUserToAddRows = false;
         _sessionGrid.AllowUserToDeleteRows = false;
         _sessionGrid.AllowUserToResizeRows = false;
@@ -144,7 +144,7 @@ public sealed partial class MainForm : Form
         _sessionGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
         _sessionGrid.TabIndex = 9;
         _sessionGrid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "checked", HeaderText = "选择", Width = 55, ReadOnly = false, SortMode = DataGridViewColumnSortMode.NotSortable });
-        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "id", HeaderText = "会话 ID", Width = 190 });
+        _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { ReadOnly = true, Name = "id", HeaderText = "会话 ID", Width = 190 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "title", HeaderText = "会话标题", Width = 220 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "project", HeaderText = "项目", Width = 130 });
         _sessionGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "created", HeaderText = "创建时间", Width = 140 });
