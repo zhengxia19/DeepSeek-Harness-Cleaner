@@ -1,28 +1,38 @@
-# AGENT 检查点（Round 4 结束 · 2026-10-19）
+# Agent Checkpoint
 
-## 状态：T-01～T-34 全部已验收勾选，项目任务清单完成
+LastTask: 2026-10-20 修复清单 T-31（用户确认的五项删除/窗口/列表修复）
+LastResult: ACCEPTED（仅本任务范围）
+NextCandidate: 无；本轮任务结束，不自动领取其他任务。
 
-- 本轮任务：T-34 制作发布包并最终复核 → 已验收，`docs/implementation-tasks.md` 已勾 [x]。
-- 证据：`artifacts/evidence/T-34.txt`（门禁、发布包、SHA、冒烟 4×72/72+安装模拟、TC-18、真实数据只读、干净 VM 诚实标注）。
+## Changes
+- 会话及附件均允许不备份直接确认删除；选择备份时须校验成功，失败/取消可明确取消选择。
+- 保留 Harness 退出、路径/reparse、根指纹及长度/mtime/SHA-256 复验；不开放运行中删除。
+- 会话删除、附件管理及附件删除窗口按直接父窗体居中，并限制在可用工作区。
+- 附件显示可核实名称、会话标注类型、关联标题/ID；保留路径、大小、引用及附件 ID。
+- 会话增加独立归档列，读取 workspace 域 v2 的 global.archivedSessionIds；不能核实则未知。
+- 解析状态明确显示正常或具体异常；不代表运行状态或删除资格。
 
-## Git
+## Verification
+OS: Windows 10 Pro 10.0.19045 x64；项目本地 SDK 10.0.402。
+Build: Release -warnaserror 0 警告/错误；自动测试 324/324。
+WindowsTests: 真实 WinForms 消息循环、跨线程检查，38/38。
+PackageSmoke: 发布 EXE 新合成夹具 72/72；包内 4 项哈希通过。
+Format: solution 指定变更源文件及独立 Windows 测试项目 whitespace verify 通过。
+Evidence: artifacts/evidence/2026-10-20/T-31.txt；详细本地日志 .artifacts/feedback-fix/。
+全部删除仅在隔离合成根执行；未对真实 .dsh 或 dsh-desktop 写入/移动/删除。
 
-- HEAD：`docs(T-34)` 提交（含 README/CHANGELOG/release.md/T-34.txt/勾选/本检查点）← `8af8f70 feat(T-34)`（publish.ps1 + BackupService R-01 格式修复）← `f746e2e build(T-33)`。
-- 永久不提交：`M AGENTS.md`、`?? docs/agent-execution.md`。
-- `dist/` 被 .gitignore 排除；发布哈希在 `dist/.../SHA256SUMS.txt` 与 T-34.txt 存档。
+## Git / Publication / Recovery
+DocsCommit: 40e971aaae155672cdf7cabef67b0c1aa702e8a4；实施前已推送并核对远端。
+ImplementationCommit: 3edc87e13eeebdb22444d9036d1c88a3d303053b；已推送 origin/main，ls-remote 核对一致。
+本检查点单独提交后推送；最终提交以 git log/远端核对为准。
+实现提交包含既有 T-29/T-30 源码前置及原始证据；不重写其历史验收。
+EXE: dist/v0.2.3/win-x64/DeepSeekHarnessCleaner.UI.exe；945163 字节，未签名。
+SHA256: 8a9db0a9553a0b3d59e5d48239b1373b6bb1e7bf259ad4bf80144c0b6f23c545
+Runtime: 客户端 .NET 10 Windows Desktop Runtime x64；发行包不捆绑运行时。
+旧 v0.2.0/0.2.1/0.2.2 包保留；回退程序不能恢复未备份删除的文件。
+本轮前工作树备份：.artifacts/feedback-fix-backup-20261020-133700/。
 
-## 发布产物（0.1.0）
-
-- `dist/v0.1.0/win-x64/`：DeepSeekHarnessCleaner.UI.exe（102.8 MB，SHA-256 c5464a2df7fc7b04d99520c790b0706dffcd51abc670089adf68a7cf91cf6eea）+ LICENSE.txt/README.md/THIRD-PARTY-NOTICES.txt/SHA256SUMS.txt；未签名。
-- 门禁：build -warnaserror 0；test 267/267；format verify 0；漏洞查询两工程均无易受攻击包。
-
-## 关键注意事项（若需返工）
-
-- 冒烟调用：exe `--smoke <out> --scan-root <fixture>\sessions --log-dir <dir>`；fixture 须把 dsh-t18-fixture 内容放入 `sessions` 子目录；冒烟含删除测试，每次须重建 fixture；文件在进程退出时才写。
-- 同步 `&` 启动可靠；Start-Process 分离实例会被沙箱作业对象级联 kill。TC-18 轮询用 tasklist+netstat（原生），勿用 Get-NetTCPConnection（CIM 挂起）。
-- publish.ps1 注入 -p:Version 会改写 packages.lock.json 为 [0.1.0,)，发布后须 `git checkout -- src/*/packages.lock.json`。
-- 已知限制（CHANGELOG/release.md §6）：0.2.1-rc.2 只读（R-02）；未签名；freshly-provisioned 干净 VM 未验证（Windows Sandbox 不可用），以等效证据通过并诚实标注。
-
-## 下一步
-
-- 任务清单无未完成任务。如继续，仅为用户新需求或外部复核反馈；不自动开启新任务。
+## Limits
+不代表完整真实 DPI 矩阵、干净机器安装、全局孤儿判定或完整历史重放通过。
+本轮未重新检查真实本机 Harness 数据；此前只读快照不能视为当前状态。
+历史原始 T-01～T-34 和修复清单 T-01～T-28 的验收状态不变。
