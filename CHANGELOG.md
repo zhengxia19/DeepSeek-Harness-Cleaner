@@ -5,7 +5,12 @@
 - Make project/session ID filters match substrings (case-insensitive).
 - Debounce preview dispatch and cap UI-visible preview text; this is not a streaming preview implementation.
 - Allow interactive backup folder selection and add open-folder action; generated ZIP names have unique suffixes.
-- No changes to process-based deletion guard; title extraction and many UI changes remain open.
+- Add bounded durable `session/title` extraction (plain/zstd) and session-title search/display; expand standalone regression tests.
+- Add checkboxes independent from selected rows; batch deletion uses checked sessions, otherwise selected rows.
+- Rebuild filter area with aligned table layout, project ComboBox suggestions and reset action.
+- Add session title to confirmation list, improve scrollability and long warning wrapping.
+- Bound preview file reads and per-message rendered text; propagate cancellation to transcript projection.
+- Keep the conservative process-based deletion guard; no unverified live-session deletion.
 - Build and WinForms smoke tests have not been executed in this environment.
 
 # CHANGELOG
