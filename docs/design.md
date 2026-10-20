@@ -23,6 +23,13 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 
 枚举：`ParseStatus={Valid, Partial, Unsupported, Corrupt, Unreadable}`；`DateOrigin={Header,Event,FileMtime,Unknown}`；`ReferenceStatus={VerifiedReferenced,VerifiedUnreferenced,Unknown}`；`ActionStatus={Succeeded,Failed,Skipped,Changed}`。上面是设计草案；具体 DTO 名称只在源码中维护。
 
+### 2026-10-20 列表及窗口补充契约（修复清单 T-31）
+
+- 会话列表增加独立“归档”列，展示已归档/未归档/未知；只从经上游 schema 核实且与会话 ID 对应的本地元数据读取，缺失、损坏、冲突或不支持时显示未知，不能将 ZIP、压缩代际或目录名当成归档标志。
+- “解析状态”列明确展示正常、部分解析、格式未支持、损坏、无法读取及身份歧义。该状态不代表运行中/空闲，也不代表具备删除资格。
+- 附件列表优先展示已验证引用元数据中的原始名称、类型及关联会话标题/ID，同时保留存储路径、附件 ID、大小和引用状态；没有证据时显示名称未知、类型未知，普通命名文件可显示存储文件名并注明来源。
+- 删除窗体和附件窗体在首次显示时按直接父窗体的实际屏幕边界居中，适用于现有非模态打开方式；位置约束在可用工作区内。
+
 ## 2. 会话发现与物理格式
 
 - 只进入由用户认可的 `SessionRoot` 下的普通目录，不跟随 NTFS junction / symbolic link / reparse point；禁止层级越界。
@@ -30,6 +37,7 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 - 文件名白名单：`session.jsonl`、`session.jsonl.zstd`、`session.vN.jsonl`、`session.vN.jsonl.zstd`（N 为正整数）；大写/临时/备份/不匹配项不自动删除。
 - 同一会话保留多个 format generation 是正常的；扫描归组，同一目录不应把多个代际计为多个会话。用于预览的代际为 numerically highest canonical generation；**最高代际无法读取时显示异常，不回退到旧代际假装当前内容**。
 - 同一个会话目录同时存在相同代际 `.jsonl` 与 `.jsonl.zstd` 或 header 身份冲突，标记 Ambiguous，阻止清理。
+- 2026-10-20 本机修复：原生头部为 `type=session/id/version/createdAt`（Unix 毫秒），仅确证 v0/v4。文件名代际须与原生 version 一致；删除准备重新核对完整代际集合、有效 JSONL、长度/mtime/SHA-256。未知正文事件可以随原始文件整体备份，但未知版本、损坏或超限日志不得进入精确删除。仅 Harness 退出后处理完整文件，不修改日志或索引。
 - 物理读取：以 Zstandard 串接帧解码，分割 UTF-8 JSONL，每行含一个可解析对象。解压库对 *concatenated frames* 和 *truncated tail* 的处理先由 T-04 的 fixture 验证；不能把最后一帧截断当成正常 EOF。
 - 限制：单行 ≤8MiB、单会话解压总量 ≤256MiB、单次预览 ≤2000 行；达到限制显示截断提示，不记录消息正文到日志。备份不限于能否完成语义解析，可按原始字节备份。
 - **历史格式**：对于 v0-v3，物理解码与安全只读元数据为最低保证；不在 v1 强制重新实现官方的完整多阶段迁移。仅对经 fixture 验证的事件提供文本预览；对不支持的事件显示其类型/行号与“不完整”。V4 的消息角色和内容也只基于验证的事件 schema。
@@ -46,14 +54,16 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 
 - 标准显示用户/助手/工具角色和文本块；工具参数、隐藏推理内容等默认不展开，避免 UI 混淆与过度显示。
 - 事件类型/角色映射由脱敏 fixture 的断言绑定，不以看到字段 `role` 为充分证明；对于删除无影响的未知事件输出简洁摘要。
+- 正常请求配置/待办/流式状态不作为损坏事件；工具调用只展示名称，工具结果展示已验证的文本块，内部参数/推理不展开。未知事件或内容块提示“未支持”，与无效 JSON/缺少必要字段分别统计。
 - 文本控件使用纯文本赋值，禁止 Markdown/HTML 脚本执行或自动加载远程内容；不渲染外部图片 URL。对大型会话可取消/分页。
 
 ## 5. 附件引用策略
 
 - 建立所有已成功解析会话中的显式附件 ID/路径引用证据；引用关系必须匹配本机附件布局，并经白名单验证。
 - 如有旧格式无法解析或缺少全局会话，**绝不可声明任何附件为全局孤儿**；显示 `Unknown`。
-- 会话删除不自动删除附件，无论是否被引用；用户可在附件页单独选择，先进行原始备份后再精确删除，且展示“引用不可判定”警告。
+- 会话删除不自动删除附件，无论是否被引用；用户可在附件页单独选择并确认精确删除，原始备份可选，且展示“引用不可判定”警告。
 - 对目录级附件、外部软链和未知类型禁止自动删除。附件删除不能扩大到其他 Harness 配置/缓存。
+- 附件页仅从受控 attachments 根枚举普通文件，不跟随 reparse；原生 `v1/objects/<prefix>/<sha256>` 映射须与内容摘要一致，按已验证 image/file 内容块的 attachmentId 确认正向引用。当前不能证明全局孤儿，未确认引用统一 Unknown；文件/别名等其他布局仍可查看并由用户逐文件显式选择，绝不自动合并目录或联动删除。
 
 ## 6. 缓存策略
 
@@ -74,7 +84,7 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 
 ## 8. 备份设计与状态机
 
-会话删除和附件删除必须强制先备份。ZIP 保存“原始文件”而不是只保存解析出的 Markdown，记录：
+会话删除和附件删除均允许不备份直接确认删除；备份为独立可选操作（2026-10-20 用户确认的新契约）。选择备份时须完成校验；失败、取消或变更不能被显示为已备份，用户可明确取消备份选择后直接确认删除。两种路径均保留进程、路径、根指纹及文件长度/mtime/SHA-256 复验。ZIP 保存“原始文件”而不是只保存解析出的 Markdown，记录：
 
 ```json
 {
@@ -92,14 +102,15 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 - `sourceRoots` 仅包含类别名，**不把用户完整绝对路径写到清单**；zip entry 必须是 POSIX 风格相对路径，禁止 `..`、绝对路径和重名。
 - ZIP 内路径：`sessions/<relative>`、`attachments/<relative>`、`manifest.json`；允许未来 schemaVersion 追加兼容字段。缓存不是会话备份必要组成，可单独选择备份缓存，不宣称完整可回导。
 - 校验：生成临时 ZIP → 遍历 ZIP entries 对比 manifest 的数量/长度/SHA-256 → 校验 manifest 自身结构 → 用户指定最终路径下无覆盖发布。失败绝不开始删除。
-- 备份完成与用户确认之间源文件若变化，**停止删除并要求重备份**；不能用陈旧备份覆盖变动的源文件。
+- 计划或备份完成与用户确认之间源文件若变化，停止或跳过删除，要求重新扫描并生成计划；选择备份时还需重备份。
 - 若附件引用不明，必须在导出摘要写入“附件未完整保全”，并阻断“保证附件完整”的承诺；会话原始文件备份仍可执行。
 
 ```text
-Idle → Scanning → Ready → Planning → BackupPending → BackupValidated
-                                         └→ Error/Cancelled
-BackupValidated → Recheck → AwaitConfirm → Deleting → Completed/PartialFailed
-                       └→ Aborted/Changed
+Idle → Scanning → Ready → Planning → AwaitConfirm（不备份）
+                             └→ BackupPending → BackupValidated → AwaitConfirm
+                                      └→ Error/Cancelled（可明确改选不备份）
+AwaitConfirm → Recheck → Deleting → Completed/PartialFailed
+                  └→ Aborted/Changed
 ```
 
 - 成功后显示真实释放字节数及 skipped/failed 明细，不声称所有删除原子完成；支持重新扫描核对残留。
@@ -128,7 +139,7 @@ BackupValidated → Recheck → AwaitConfirm → Deleting → Completed/PartialF
 
 - 在 Harness **0.2.0.0 本机**样本中验证旧版与 v4 header、时间字段、角色事件映射、同一会话多代路径和缓存命名规则。
 - 验证 ZstdSharp.Port 对连接帧 / 校验错误 / 截断尾帧的行为，必要时实现受控 frame iterator；不得仅凭库说明假定全部符合。
-- Windows 10 具体 SKU/Build、WinForms 自包含运行、长路径/reparse point 处理和中文 DPI。
+- Windows 10 具体 SKU/Build、安装 .NET 10 Windows Desktop Runtime x64 后的 WinForms 单文件运行、长路径/reparse point 处理和中文 DPI。
 
 依赖研究来源：<https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-persistence-jsonl/README.md>、<https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/session/session-projection-cache/README.md>、<https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/persistence-changes/2026-09-16-session-format-v4.md>、<https://github.com/deepseek-ai/deepseek-harness/blob/master/.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md>。
 

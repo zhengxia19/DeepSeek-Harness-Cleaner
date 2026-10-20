@@ -2,9 +2,15 @@
 
 ## 1. 测试隔离
 
-- Unit / Integration 全部使用 `Path.GetTempPath()` 下自动创建的模拟 `.dsh` 根和模拟桌面根，每个测试完成后验证不触及外部路径。
+- Unit / Integration 使用 `Path.GetTempPath()` 下自动创建的模拟 `.dsh` 根和模拟桌面根；Windows 窗口专项使用项目 `.artifacts/functional-ui-*` 下新建的合成根。均不对真实 Harness 数据执行删除。
 - 脱敏真实数据仅用于**显式授权的只读兼容性测试**；任何带 `File.Delete` 的真实数据测试必须另行独立审批且不得由自动测试执行。
 - 模拟文件可由项目内 fixtures 生成器写入，需覆盖有效 v0/v4、多个代际、多个 Zstd frame、截断尾帧、corrupt JSON、未知 event、附件引用、权限拒绝、reparse 点、并发变更。
+
+### 2026-10-20 窗口专项回归
+
+- 先执行 `. ./scripts/enter-env.ps1`，再执行 `dotnet test tests/DeepSeekHarnessCleaner.Tests -c Release` 与 `dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests -c Release`。后者是独立 Windows 程序，不由 `dotnet test` 自动启动。
+- 窗口专项使用真实 WinForms 消息循环并启用跨线程访问检查，覆盖主窗扫描/预览/删除确认、附件入口和共享引用、未备份拒绝、备份校验后确认删除、未选会话/附件及根外哨兵哈希。测试数据只含合成正文，夹具留在忽略目录供复核。
+- 安全负向覆盖新增代际/未知文件/头部代际不匹配/未知版本/损坏 JSON、同长度同 mtime 内容变化、附件摘要不匹配、reparse 越界、活动和未知进程阻断。原生字段样本只来自只读结构核对，不把真实内容放入 fixture。
 
 ## 2. 核心用例矩阵
 
@@ -26,7 +32,7 @@
 | TC-14 | 附件 | 未证明孤儿时标 Unknown；单文件经备份+确认方可删除 |
 | TC-15 | 强制阻断 | 运行进程/无法检查/软链/出根/指纹变化必拒绝删除 |
 | TC-16 | 结果 | 部分失败、取消、权限拒绝、容量统计与重扫状态准确 |
-| TC-17 | 环境发布 | 本地 SDK 包缓存独立，干净 Windows 10 VM 上启动/退出 |
+| TC-17 | 环境发布 | 本地 SDK 包缓存独立；确认单文件包不捆绑 .NET 运行时，在安装 .NET 10 Windows Desktop Runtime x64 的干净 Windows 10 VM 上验证启动/退出，并检查缺少运行时的提示 |
 | TC-18 | 离线 | 运行 EXE 期间网络请求检查零新增主动请求；无自动更新 |
 | TC-19 | 配置 | 默认/损坏/未知版本处理正确；记忆关闭时不写根路径 |
 | TC-20 | 安全失败 | 未知格式、权限、空数据、坏压缩、异常目录均无误删/卡死 |
@@ -37,9 +43,9 @@
 - UX-01：125%/150% DPI、中文目录/Emoji 文本、键盘 Tab、窗口缩放、长路径、未选择会话禁用删除，验证 UI。
 - SEC-01：从目录外的文件通过 reparse point 或 `..` 逃逸到可控根时禁止清理；测试文件内容 hash 仍然相同。
 - SEC-02：活动 Harness 进程、权限不可见的托管进程、占用文件、不一致清单均阻断清理。
-- SEC-03：人为破坏 ZIP 的单字节后，校验必须失败；删前文件变化时要求重新备份。
+- SEC-03：选择备份时，人为破坏 ZIP 的单字节后校验必须失败并阻断该备份路径；无备份路径须明确选择；删前文件变化仍须跳过并重新生成计划。
 - COMPAT-01：实测 DeepSeek Harness 0.2.0.0 V4 与旧版日志（允许脱敏只读样本）；报告物理解码/语义预览分开结论。
-- WIN10-01：记录 `winver` 的 Edition/Version/Build，在该版本下测试 WinForms 单文件自包含、中文 UI、操作完成和退出。官方支持范围无法覆盖的 Windows 10 SKU 必须诚实标注实测而非官方支持。
+- WIN10-01：记录 `winver` 的 Edition/Version/Build 及客户端安装的 .NET 10 Windows Desktop Runtime x64 版本；测试不捆绑运行时的 WinForms 单文件启动、中文 UI、操作完成和退出。缺少所需运行时时须检查依赖缺失提示，不得宣称无需安装 .NET。官方支持范围无法覆盖的 Windows 10 SKU 必须诚实标注实测而非官方支持。此处为验收要求，不代表当前包已通过测试。
 
 ## 4. 任务级与发布级检查
 
@@ -48,7 +54,7 @@
 - `dotnet build -warnaserror` 通过，`dotnet test` 全部通过，`dotnet format --verify-no-changes` 通过。
 - TC-01～TC-20 全部已执行且有证据，安全必选 TC-02/09/11/15/20 不允许豁免。
 - PERF-01、SEC-01～03、COMPAT-01、WIN10-01 完成；`dotnet package vulnerability` 同等查询结果存档。
-- 在离线、干净的 Windows 10 x64 VM 上通过 Smoke；发布 SHA-256 已记录；仅对测试 fixtures 执行删除。
+- 在预装 .NET 10 Windows Desktop Runtime x64 的离线、干净 Windows 10 x64 VM 上通过 Smoke；发布 SHA-256 已记录；仅对测试 fixtures 执行删除。
 
 ## 5. 测试证据格式
 
