@@ -1,0 +1,47 @@
+FinishedAt: 2026-10-20 14:37:17 +08:00
+Task: repair-list T-34, attachment right-click opening
+Prerequisites: T-32 and accepted T-31 attachment inventory; source/evidence verified.
+ChangedFiles: Infrastructure/AttachmentOpener.cs; UI/AttachmentsForm.cs; InteractionServicesTests;
+WindowsTests/AdvancedInteractionChecks.cs and DefaultOpenChecks.cs; related docs and this evidence.
+
+Implementation:
+- Context menu resolves the actual right-click hit row, clears stale context on whitespace and preserves checkboxes.
+- Opening runs off the UI thread; refresh/delete are disabled while opening to avoid conflicting operations.
+- Before Shell open: controlled attachments root, ordinary file, reparse, length/mtime/SHA-256 and cancellation checks.
+- No shell command strings or URL interpretation. ProcessStartInfo FileName is an absolute local path,
+  UseShellExecute=true and Verb=open. Failure is reported without changing the source or claiming success.
+- Extensionless PNG/JPEG/GIF/WebP/PDF signatures map to a unique tool-owned copy with a verified extension;
+  unknown signatures are rejected instead of guessing from display names. Bounded streaming copy, hash/length
+  verification, reparse-safe copy root and final copy-path recheck. Only newly created failed copies are cleaned;
+  successful copies remain available to external apps. No automatic deletion of old copies or source rename.
+
+Acceptance:
+- Both synthetic menu rows opened to their exact paths; empty area could not reuse the previous row; checks unchanged.
+- Injected launch tests cover whitespace/non-ASCII/& paths, changes, equal-size/hash changes, missing file,
+  unknown type, pre-cancellation, no association/launch errors, cross-root and source/copy reparse paths.
+- Verified extension mappings and repeated unique copies; failed launch removed only its new copy, preserving older files.
+- Real default text application and PNG application windows identified their exact unique synthetic filenames,
+  using the same background opening path as UI; source hashes unchanged. Only newly created matching windows
+  were closed by acceptance code; preexisting application windows were excluded from automatic close.
+- Real default-open fixture: .artifacts/default-open-9e849e0cb2024151b43e97bacbaeb0b6/.
+Status: ACCEPTED in the user-authorized scope
+Baseline: ca0cfe9a7a2f2e04f17c5e1ff34d4f085c08ad92 plus prior T-32 documentation and accepted T-33 source changes.
+Authorization: user explicitly requested continuous implementation through all remaining tasks and acceptance.
+Scope amendment: actual 150% DPI testing is assigned to the user by their explicit reply; not counted as passed here.
+Backup: .artifacts/continuous-backup-20261020-141529/; previous T-33 backup and evidence retained.
+Environment: Windows 10 Pro 10.0.19045 x64; project-local SDK 10.0.402; actual monitor DPI=96.
+Shared final commands (all via scripts/enter-env.ps1, TEMP/TMP=.artifacts/tmp):
+- dotnet build DeepSeekHarnessCleaner.sln -c Release -warnaserror -m:1 --no-restore: EXIT=0, zero warnings/errors.
+  Log: .artifacts/continuous/build-final.log.
+- dotnet test tests/DeepSeekHarnessCleaner.Tests -c Release --no-build --no-restore
+  --logger 'trx;LogFileName=all-final.trx' --results-directory .artifacts/continuous:
+  EXIT=0, 350 passed / 0 failed / 0 skipped, including 26 InteractionServicesTests.
+  Logs: all-final.log, all-final.trx.
+- dotnet build tests/DeepSeekHarnessCleaner.WindowsTests -c Release -warnaserror --no-restore:
+  EXIT=0, zero warnings/errors; windows-build-final.log.
+- dotnet tests/DeepSeekHarnessCleaner.WindowsTests/bin/Release/net10.0-windows/DeepSeekHarnessCleaner.WindowsTests.dll:
+  EXIT=0, 91 PASS / 0 FAIL; real message loop and cross-thread access checks enabled; windows-final.log.
+- Same Windows test executable with --default-open-only: EXIT=0, 5 PASS;
+  default-open-final.log. Real OS default applications and exact synthetic file window titles verified.
+No real Harness data was written/moved/deleted. Only fresh synthetic roots were used for deletion tests.
+Git: implementation commit containing this evidence; delivery revision and push result are recorded in the final checkpoint.

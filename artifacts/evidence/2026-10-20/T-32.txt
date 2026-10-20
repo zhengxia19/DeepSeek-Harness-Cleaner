@@ -1,0 +1,49 @@
+FinishedAt: 2026-10-20 14:08:12 +08:00
+Task: repair-list T-32, research and documentation only
+Status: ACCEPTED (documentation deliverable; no implementation acceptance)
+Baseline: ca0cfe9a7a2f2e04f17c5e1ff34d4f085c08ad92; initial git status --short was empty.
+Authorization: user requested research, a task list and necessary project-document updates for five UI items.
+Prerequisite: T-31 task state and artifacts/evidence/2026-10-20/T-31.txt cross-checked.
+
+Sources inspected:
+- ResultsDialog.cs: fixed coordinates, default anchors, nonselectable Label log path, Fill grid columns.
+- MainForm.cs / AttachmentsForm.cs: ResultsDialog opened with Show(this); existing owner centering helper
+  not reused by result window; attachment page has no open context menu; selection checkbox and HashSet
+  exist, no selection-header click handler or main-window automatic geometry lifecycle.
+- SettingsStore.cs / SettingsDialog.cs / Program.cs and original T-20 task definition: existing settings
+  DTO persistence is not main-window automatic location restoration.
+- MainForm and ResultsDialog DataGridViews; AttachmentsForm and CleanupDialog ListViews: all four
+  require header-specific styling, with no change to body fonts or checkbox behavior.
+- Requirements/design/interfaces/testing and latest repair task/checkpoint.
+- Microsoft official .NET/WinForms API pages. References and distinctions between facts and proposals
+  are recorded in docs/2026-10-20-交互修正调研.md. A research subagent was used as required by research skill.
+
+Deliverables:
+- Added official-source research note and repair-list section J.
+- T-33: owner-centered responsive result report, selectable log path, actual two-axis grid overflow.
+- T-34: right-click exact attachment record, system default application, guarded local file launching;
+  verified-type extensionless copies only, no guessing or mutation of original attachment; lifecycle,
+  copy digest, cancellation and failure handling specified.
+- T-35: main-window geometry persisted in EXE-directory window-state JSON, Bounds/RestoreBounds,
+  current monitors/DPI normalization, safe schema/write failure handling and isolated test injection.
+- T-36: selection-header click toggles displayed filtered set; existing hidden checks retained and counted
+  explicitly, no hidden additional selection, editing/HashSet synchronization and delete-scope checks.
+- T-37: four tables' headers bold and centered; DGV header styles and ListView first-column rendering.
+- T-38: final integrated build/tests/Windows/package evidence and necessary publication only after T-33..37.
+- Synced requirements/design/interfaces/testing. Portable window geometry is separate from original
+  LocalAppData general settings; legacy schema retained. Corrected stale NFR-07 mandatory ZIP wording
+  to the user-approved T-31 optional backup contract. No historical evidence rewritten.
+
+Verification actually performed:
+1. git status --short / git rev-parse HEAD: baseline above, initial clean state.
+2. Focused Get-Content and rg source/document checks: completed; no real Harness data read.
+3. git diff --check: EXIT=0 (line-ending conversion warnings only).
+4. PowerShell local .md link validation across six changed/new documents: 2 local links checked, PASS.
+5. PowerShell task-state assertions: T-33..T-38 are all unchecked, PASS.
+6. git diff --name-only -- src tests scripts: no output, PASS (no implementation changes).
+
+NOT RUN: .NET build, automatic tests, UI execution, actual attachment opening, deletion or publish.
+These are future task acceptance requirements; historical T-31 test counts are not current test proof.
+No SDK/dependency/runtime settings changed; no real user content, credentials or clipboard data logged.
+GitCommit: NOT_COMMITTED; no push in this documentation-only round.
+Next: T-33 when a new implementation round is requested; preserve all new pending task boundaries.

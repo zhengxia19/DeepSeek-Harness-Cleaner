@@ -7,16 +7,16 @@ using DeepSeekHarnessCleaner.Infrastructure;
 using DeepSeekHarnessCleaner.Infrastructure.Compression;
 using DeepSeekHarnessCleaner.UI;
 
-internal static class Program
+internal static partial class Program
 {
     [STAThread]
-    private static int Main()
+    private static int Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
         Control.CheckForIllegalCrossThreadCalls = true;
         var result = 1;
         using var dispatcher = new Form { ShowInTaskbar = false, WindowState = FormWindowState.Minimized };
-        dispatcher.Shown += (_, _) => { result = RunChecks(); dispatcher.Close(); };
+        dispatcher.Shown += (_, _) => { result = args.Contains("--default-open-only", StringComparer.Ordinal) ? RunDefaultOpenChecks() : RunChecks(); dispatcher.Close(); };
         Application.Run(dispatcher);
         return result;
     }
@@ -46,7 +46,7 @@ internal static class Program
         var workspace = Path.Combine(dataHome, "storages", "workspace.json");
         File.WriteAllText(workspace, """{"unit":{"name":"workspace","version":2},"global":{"initialized":true,"archivedSessionIds":["ui-a"]},"tables":{"workspaces":[]}}""");
         var keepHashes = new[] { keepAttachment, outside, b, workspace }.ToDictionary(x => x, Hash);
-        using var main = new MainForm(scanRootPath: sessionRoot, logDirPath: Path.Combine(fixture, "logs"));
+        using var main = new MainForm(scanRootPath: sessionRoot, logDirPath: Path.Combine(fixture, "logs"), persistWindowState: false);
         try
         {
             main.Show();
@@ -67,6 +67,8 @@ internal static class Program
             Pump(() => Field<CleanupDialog?>(main, "_lastCleanupDialog") is { Visible: true });
             var sessionDialog = Field<CleanupDialog>(main, "_lastCleanupDialog");
             CheckCentered("session delete centered on main", sessionDialog, main);
+            Check("cleanup header drawing preserves normal body font", Field<ListView>(sessionDialog, "_targetList").OwnerDraw && !Field<ListView>(sessionDialog, "_targetList").Font.Bold);
+            SaveScreenshot(sessionDialog, Path.Combine(fixture, "cleanup-headers.png"));
             Check("main delete opens a nonempty whole-session plan", sessionDialog.Plan.Targets.Count == 1);
             sessionDialog.RequestCancel();
             Check("cancel preserves selected session", File.Exists(a));
@@ -193,6 +195,9 @@ internal static class Program
             edge.Close();
             main.Bounds = originalBounds;
             CheckStatusLabels(chosen);
+            SaveScreenshot(main, Path.Combine(fixture, "main-headers.png"));
+            CheckResultReports(main, dataHome, sessions, actions, fixture);
+            RunAdvancedChecks(main, fixture);
             Check("unselected files and outside sentinel hashes unchanged", keepHashes.All(x => x.Value == Hash(x.Key)));
             Console.WriteLine("WINDOWS_REGRESSION=PASS");
             return 0;
@@ -220,6 +225,87 @@ internal static class Program
             + "{\"type\":\"tool/result\",\"data\":{\"message\":{\"role\":\"tool\",\"content\":[{\"type\":\"text\",\"text\":\"synthetic tool result\"}]}}}\n";
         File.WriteAllBytes(path, ZstdFrameDecoder.CompressFrame(Encoding.UTF8.GetBytes(text)));
         return path;
+    }
+
+    private static void CheckResultReports(MainForm main, string dataHome, IReadOnlyList<SessionSummary> sessions, ActionsPresenter actions, string fixture)
+    {
+        var reportItems = Enumerable.Range(0, 160).Select(i => new OutcomeItem(
+            Path.Combine(fixture, "synthetic-private-text-must-not-be-logged", new string('p', 100), $"file-{i}.jsonl"),
+            CleanupCategory.SessionLog, "synthetic-session", i % 2 == 0 ? OutcomeItemStatus.Deleted : OutcomeItemStatus.Skipped,
+            i % 2 == 0 ? null : "CHANGED_SHA256", i % 2 == 0 ? 100 : 0)).ToArray();
+        var report = new OutcomeReport(new OutcomeReportInput(false, null,
+            Path.Combine(fixture, new string('b', 130), "synthetic-backup.zip"), new string('a', 64), 160, 16000, reportItems));
+        using var attachmentOwner = new AttachmentsForm(dataHome, sessions, actions);
+        attachmentOwner.Show(main);
+        foreach (var owner in new Form[] { main, attachmentOwner })
+        {
+            using var dialog = new ResultsDialog(report, Path.Combine(fixture, "report-logs", new string('l', 80)));
+            dialog.Show(owner);
+            Pump(() => dialog.LogFilePath is not null);
+            CheckCentered("result report centered on " + owner.GetType().Name, dialog, owner);
+            var grid = Field<DataGridView>(dialog, "_itemGrid");
+            var logPath = Field<TextBox>(dialog, "_logPath");
+            Check("result counts and original path preserved", dialog.DisplayedItemCount == 160 && dialog.BackupText.Contains("synthetic-backup.zip", StringComparison.Ordinal)
+                && dialog.SummaryText.Contains("删除 80 个", StringComparison.Ordinal));
+            Check("selectable readonly log path matches written file", logPath.ReadOnly && logPath.Enabled && logPath.ShortcutsEnabled && logPath.Text == dialog.LogFilePath);
+            var originalClipboard = Clipboard.GetDataObject();
+            try
+            {
+                dialog.Activate();
+                logPath.Focus();
+                logPath.SelectAll();
+                // SendKeys depends on the desktop foreground window; target this textbox's
+                // native copy command directly, the same command used by its Ctrl+C shortcut.
+                logPath.Copy();
+                Application.DoEvents();
+                Check("textbox copy command copies exact synthetic log path", Clipboard.GetText() == dialog.LogFilePath);
+            }
+            finally
+            {
+                if (originalClipboard is not null) Clipboard.SetDataObject(originalClipboard, true);
+                else Clipboard.Clear();
+            }
+            foreach (var size in new[] { dialog.Size, dialog.MinimumSize, new Size(1200, 800) })
+            {
+                dialog.Size = size;
+                Application.DoEvents();
+                var controls = new Control[] { Field<TextBox>(dialog, "_summaryLabel"), Field<TextBox>(dialog, "_backupLabel"), grid,
+                    Field<Label>(dialog, "_logLabel"), logPath, Field<Button>(dialog, "_closeButton") };
+                var rectangles = controls.Select(c => dialog.RectangleToClient(c.RectangleToScreen(c.ClientRectangle))).ToArray();
+                Check("report controls visible within resized client " + size, controls.All(c => c.Visible && c.Width > 0 && c.Height > 0)
+                    && rectangles.All(r => dialog.ClientRectangle.Contains(r)));
+                Check("report controls do not overlap " + size, !rectangles.Where((r, i) => rectangles.Skip(i + 1).Any(r.IntersectsWith)).Any());
+                if (size == dialog.MinimumSize)
+                {
+                    Check("report shows actual horizontal and vertical scrollbars", grid.Controls.OfType<HScrollBar>().Any(c => c.Visible)
+                        && grid.Controls.OfType<VScrollBar>().Any(c => c.Visible));
+                    grid.FirstDisplayedScrollingRowIndex = grid.RowCount - 1;
+                    grid.FirstDisplayedScrollingColumnIndex = grid.ColumnCount - 1;
+                    Application.DoEvents();
+                    Check("scroll reaches final row and final column", grid.Rows[^1].Displayed && grid.Columns[^1].Displayed && grid.HorizontalScrollingOffset > 0);
+                }
+                using var bitmap = new Bitmap(dialog.Width, dialog.Height);
+                dialog.DrawToBitmap(bitmap, new Rectangle(Point.Empty, dialog.Size));
+                bitmap.Save(Path.Combine(fixture, $"report-{owner.GetType().Name}-{size.Width}.png"));
+            }
+            Check("report log stays redacted", !File.ReadAllText(dialog.LogFilePath!).Contains("synthetic-private-text-must-not-be-logged", StringComparison.Ordinal));
+            dialog.Close();
+        }
+        using var noBackup = new ResultsDialog(new OutcomeReport(new OutcomeReportInput(false, null, null, null, 0, 0, [])), Path.Combine(fixture, "empty-report"));
+        noBackup.Show(main);
+        Pump(() => noBackup.LogFilePath is not null);
+        Check("empty no-backup report remains usable", noBackup.DisplayedItemCount == 0 && noBackup.BackupText.Contains("无 ZIP", StringComparison.Ordinal));
+        noBackup.Close();
+        var blocked = Path.Combine(fixture, "blocked-report-log");
+        File.WriteAllText(blocked, "preserve existing file");
+        using var failed = new ResultsDialog(report, blocked);
+        failed.Show(main);
+        Pump(() => Field<Label>(failed, "_logLabel").Text.Contains("失败", StringComparison.Ordinal));
+        Check("log write failure shows error without invented path", failed.LogFilePath is null && Field<TextBox>(failed, "_logPath").Text.Length > 0
+            && File.ReadAllText(blocked) == "preserve existing file");
+        failed.Close();
+        attachmentOwner.Close();
+        Console.WriteLine("REPORT_FIXTURE=" + fixture);
     }
 
     private static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));

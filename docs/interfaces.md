@@ -55,6 +55,24 @@ interface ICleanupExecutor { Task<CleanupResult> ExecuteAsync(CleanupPlan plan, 
 - `previewMaxItems` 固定上限 2000；恶意大值按设计上限截断或报配置错误；不得扩展到未授权根。
 - 任何未知 `schemaVersion`：只读提示/回退默认，不覆盖用户已有配置。
 
+### 4.1 主窗自动记忆（2026-10-20 用户指定，已实施）
+
+位置为程序目录 `AppContext.BaseDirectory/DeepSeekHarnessCleaner.window-state.json`，不受进程当前工作目录影响，与上述通用设置文件分离：
+
+```json
+{
+  "schemaVersion": 1,
+  "normalBounds": { "x": 100, "y": 100, "width": 1120, "height": 720 },
+  "windowState": "Normal",
+  "savedDpi": 96
+}
+```
+
+- `normalBounds` 为正常窗口外框的屏幕坐标/大小；`windowState` 仅保存 Normal 或 Maximized，最小化关闭按 Normal 恢复。启动时按当前工作区和 DPI 校正，不直接信任越界、极端或无效尺寸。
+- 缺失文件使用默认；损坏或未知版本只读回退、不覆盖原文件。保存采用同目录唯一临时文件和原子替换；程序目录只读/文件占用时反馈失败，保留已有有效文件，不另找位置静默保存。
+- 仅窗口字段落盘，不包含会话内容、扫描路径或凭据；不因关闭窗体写入真实 Harness 目录。测试必须注入独立应用目录/窗口状态路径，禁止自动测试污染发布目录或用户设置。
+- 原 settings.json 的 windowWidth/windowHeight 保留旧 schema 兼容性，不再与自动窗口记录双向同步，防止双重来源覆盖。
+
 ## 5. 错误码
 
 | 错误码 | 意义 | 结果 |

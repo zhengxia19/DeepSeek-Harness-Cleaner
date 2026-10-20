@@ -14,11 +14,12 @@ namespace DeepSeekHarnessCleaner.UI;
 /// </summary>
 public sealed class ResultsDialog : Form
 {
-    private readonly Label _summaryLabel = new();
-    private readonly Label _backupLabel = new();
+    private readonly TextBox _summaryLabel = new();
+    private readonly TextBox _backupLabel = new();
     private readonly DataGridView _itemGrid = new();
     private readonly Button _closeButton = new();
     private readonly Label _logLabel = new();
+    private readonly TextBox _logPath = new() { ReadOnly = true, Dock = DockStyle.Fill, ShortcutsEnabled = true };
     private readonly OutcomeReport _report;
     private readonly string? _logDirectory;
 
@@ -31,37 +32,37 @@ public sealed class ResultsDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         MaximizeBox = false;
-        ClientSize = new Size(720, 460);
+        ClientSize = new Size(820, 540);
+        MinimumSize = new Size(620, 420);
 
-        _summaryLabel.AutoSize = true;
-        _summaryLabel.Location = new Point(12, 10);
+        ConfigureText(_summaryLabel);
         _summaryLabel.Text = _report.Aborted
             ? $"已中止：{_report.AbortCode}（未执行任何删除）"
             : $"删除 {_report.DeletedCount} 个 / 跳过 {_report.SkippedCount} 个 / 失败 {_report.FailedCount} 个，" +
               $"实际释放 {InventoryPresenter.FormatBytes(_report.FreedBytes)}。";
 
-        _backupLabel.AutoSize = true;
-        _backupLabel.Location = new Point(12, 34);
+        ConfigureText(_backupLabel);
         _backupLabel.Text = _report.BackupZipPath is { Length: > 0 } zip
             ? $"备份：{zip}（{_report.BackupEntryCount} 个文件，{InventoryPresenter.FormatBytes(_report.BackupTotalBytes)}，" +
               $"清单签名 {_report.BackupSignature}）"
             : "备份：本次无 ZIP 备份。";
 
-        _itemGrid.Location = new Point(12, 60);
-        _itemGrid.Size = new Size(696, 330);
+        _itemGrid.Dock = DockStyle.Fill;
         _itemGrid.AllowUserToAddRows = false;
         _itemGrid.AllowUserToDeleteRows = false;
         _itemGrid.ReadOnly = true;
         _itemGrid.RowHeadersVisible = false;
         _itemGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _itemGrid.MultiSelect = false;
-        _itemGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        _itemGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "文件", FillWeight = 320 });
-        _itemGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "类别", FillWeight = 70 });
-        _itemGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "会话", FillWeight = 90 });
-        _itemGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "状态", FillWeight = 50 });
-        _itemGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "错误码", FillWeight = 90 });
-        _itemGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "释放字节", FillWeight = 60 });
+        _itemGrid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+        TableHeaders.Apply(_itemGrid);
+        _itemGrid.ScrollBars = ScrollBars.Both;
+        _itemGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "文件", Width = 400 });
+        _itemGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "类别", Width = 110 });
+        _itemGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "会话", Width = 180 });
+        _itemGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "状态", Width = 90 });
+        _itemGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "错误码", Width = 160 });
+        _itemGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "释放字节", Width = 110 });
         foreach (var item in _report.Items)
         {
             _itemGrid.Rows.Add(
@@ -75,16 +76,53 @@ public sealed class ResultsDialog : Form
 
         _closeButton.Text = "关闭(&L)";
         _closeButton.AutoSize = true;
-        _closeButton.Location = new Point(620, 400);
+        _closeButton.Anchor = AnchorStyles.Right;
         _closeButton.TabIndex = 10;
         _closeButton.Click += (_, _) => Close();
 
         _logLabel.AutoSize = true;
-        _logLabel.Location = new Point(12, 404);
+        _logLabel.Dock = DockStyle.Fill;
         _logLabel.Text = "脱敏日志：写入中…";
 
-        Controls.AddRange(new Control[] { _summaryLabel, _backupLabel, _itemGrid, _closeButton, _logLabel });
+        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Margin = Padding.Empty };
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        footer.Controls.Add(_logLabel, 0, 0);
+        footer.Controls.Add(_logPath, 0, 1);
+        footer.Controls.Add(_closeButton, 1, 0);
+        footer.SetRowSpan(_closeButton, 2);
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 4 };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+        layout.Controls.Add(_summaryLabel, 0, 0);
+        layout.Controls.Add(_backupLabel, 0, 1);
+        layout.Controls.Add(_itemGrid, 0, 2);
+        layout.Controls.Add(footer, 0, 3);
+        Controls.Add(layout);
         Shown += OnShownWriteLog;
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        OwnedFormPosition.Center(this);
+        base.OnShown(e);
+    }
+
+    private static void ConfigureText(TextBox control)
+    {
+        control.Dock = DockStyle.Fill;
+        control.Multiline = true;
+        control.ReadOnly = true;
+        control.WordWrap = true;
+        control.ScrollBars = ScrollBars.Vertical;
+        control.BorderStyle = BorderStyle.None;
+        control.TabStop = false;
+        control.BackColor = SystemColors.Control;
     }
 
     /// <summary>已写入的脱敏日志文件路径（写入失败为 null）。</summary>
@@ -111,11 +149,13 @@ public sealed class ResultsDialog : Form
                 $"outcome-{DateTime.Now:yyyyMMdd-HHmmss}-{Environment.ProcessId}.log");
             File.WriteAllText(path, _report.BuildLog());
             LogFilePath = path;
-            _logLabel.Text = "脱敏日志已写入：" + path;
+            _logLabel.Text = "脱敏日志已写入（路径可选中复制）：";
+            _logPath.Text = path;
         }
         catch (Exception ex)
         {
-            _logLabel.Text = "脱敏日志写入失败：" + ex.Message;
+            _logLabel.Text = "脱敏日志写入失败：";
+            _logPath.Text = ex.Message;
         }
     }
 

@@ -69,6 +69,7 @@ public sealed class SettingsDialog : Form
         _previewMaxItems.Value = ClampToRange(settings.PreviewMaxItems, _previewMaxItems.Minimum, _previewMaxItems.Maximum);
         _windowWidth.Value = ClampToRange(settings.WindowWidth, _windowWidth.Minimum, _windowWidth.Maximum);
         _windowHeight.Value = ClampToRange(settings.WindowHeight, _windowHeight.Minimum, _windowHeight.Maximum);
+        _windowWidth.Enabled = _windowHeight.Enabled = false; // Legacy schema only; main window now remembers its actual geometry.
 
         _notice.AutoSize = false;
         _notice.MaximumSize = new Size(600, 0);
@@ -97,8 +98,8 @@ public sealed class SettingsDialog : Form
         row = AddRootRow(layout, row, "备份输出根", _backupRoot);
         AddRow(layout, ref row, "日期筛选字段", _dateField, span: false);
         AddRow(layout, ref row, "预览最大条目", _previewMaxItems, span: false);
-        AddRow(layout, ref row, "窗口宽度", _windowWidth, span: false);
-        AddRow(layout, ref row, "窗口高度", _windowHeight, span: false);
+        AddRow(layout, ref row, "旧版窗口宽度（已停用）", _windowWidth, span: false);
+        AddRow(layout, ref row, "旧版窗口高度（已停用）", _windowHeight, span: false);
         AddRow(layout, ref row, string.Empty, _notice, span: true);
 
         var buttons = new FlowLayoutPanel

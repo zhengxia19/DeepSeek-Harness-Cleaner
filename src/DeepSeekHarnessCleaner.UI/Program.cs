@@ -24,7 +24,8 @@ internal static class Program
 
         string? scanRootPath = null;
         string? logDirPath = null;
-        for (var i = 2; i + 1 < args.Length; i++)
+        string? windowStatePath = null;
+        for (var i = isSmoke ? 2 : 0; i + 1 < args.Length; i++)
         {
             if (args[i] == ScanRootSwitch)
             {
@@ -34,9 +35,12 @@ internal static class Program
             {
                 logDirPath = Path.GetFullPath(args[i + 1]);
             }
+            else if (args[i] == "--window-state-file") windowStatePath = Path.GetFullPath(args[i + 1]);
         }
 
-        using var form = new MainForm(smokeResultPath, scanRootPath, logDirPath);
+        using var form = new MainForm(smokeResultPath, scanRootPath, logDirPath,
+            windowStatePath is not null ? new Infrastructure.WindowStateStore(windowStatePath)
+                : args.Contains("--persist-window-state", StringComparer.Ordinal) ? new Infrastructure.WindowStateStore() : null);
         System.Windows.Forms.Application.Run(form);
         return form.SmokeExitCode;
     }

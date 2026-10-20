@@ -24,16 +24,23 @@ public sealed class AttachmentsForm : Form
     private readonly CancellationTokenSource _cts = new();
     private CleanupDialog? _cleanup;
     private bool _loading;
+    private bool _opening;
+    private readonly AttachmentOpener _opener;
+    private readonly ContextMenuStrip _fileMenu = new();
+    private readonly ToolStripMenuItem _openItem = new("打开附件(&O)");
+    private AttachmentInventoryItem? _contextItem;
 
-    public AttachmentsForm(string dataHome, IReadOnlyList<SessionSummary> sessions, ActionsPresenter actions)
+    public AttachmentsForm(string dataHome, IReadOnlyList<SessionSummary> sessions, ActionsPresenter actions, AttachmentOpener? opener = null)
     {
         _dataHome = dataHome;
         _sessions = sessions;
         _actions = actions;
+        _opener = opener ?? new AttachmentOpener();
         Text = "附件管理";
         StartPosition = FormStartPosition.CenterParent;
         Size = new Size(1000, 620);
         MinimumSize = new Size(650, 420);
+        TableHeaders.Apply(_files);
         var warning = new Label
         {
             Text = "附件不会随会话自动删除。Unknown 表示引用不可判定，不表示孤儿；仅处理人工勾选的普通文件，备份可选。名称和类型仅展示可验证信息。",
@@ -57,9 +64,40 @@ public sealed class AttachmentsForm : Form
         Controls.Add(controls);
         _refresh.Click += async (_, _) => await RefreshAsync();
         _delete.Click += OnDelete;
-        _files.ItemChecked += (_, _) => { if (!_loading) _delete.Enabled = _files.CheckedItems.Count > 0 && _cleanup is not { IsDisposed: false }; };
+        _fileMenu.Items.Add(_openItem);
+        _files.ContextMenuStrip = _fileMenu;
+        _fileMenu.Opening += (_, e) =>
+        {
+            ResolveContextItem(_files.PointToClient(Cursor.Position));
+            e.Cancel = !_openItem.Enabled;
+        };
+        _openItem.Click += async (_, _) =>
+        {
+            if (_contextItem is null || _opening) return;
+            _opening = true;
+            _openItem.Enabled = false;
+            _delete.Enabled = _refresh.Enabled = false;
+            var item = _contextItem;
+            var token = _cts.Token;
+            var result = await Task.Run(() => _opener.Open(_dataHome, item, token));
+            if (!IsDisposed) _status.Text = result.Success ? "已请求系统默认应用打开附件。" : "无法打开附件：" + result.Error;
+            _opening = false;
+            if (!IsDisposed)
+            {
+                _refresh.Enabled = !_loading;
+                _delete.Enabled = !_loading && _files.CheckedItems.Count > 0 && _cleanup is not { IsDisposed: false };
+            }
+        };
+        _files.ItemChecked += (_, _) => { if (!_loading) _delete.Enabled = !_opening && _files.CheckedItems.Count > 0 && _cleanup is not { IsDisposed: false }; };
         Shown += async (_, _) => await RefreshAsync();
         FormClosing += (_, _) => _cts.Cancel();
+        Disposed += (_, _) => { _fileMenu.Dispose(); _cts.Dispose(); };
+    }
+
+    private void ResolveContextItem(Point location)
+    {
+        _contextItem = _files.HitTest(location).Item?.Tag as AttachmentInventoryItem;
+        _openItem.Enabled = !_loading && !_opening && _contextItem is not null;
     }
 
     protected override void OnShown(EventArgs e)
@@ -111,7 +149,7 @@ public sealed class AttachmentsForm : Form
 
     private void OnDelete(object? sender, EventArgs e)
     {
-        if (_loading || _cleanup is { IsDisposed: false }) return;
+        if (_loading || _opening || _cleanup is { IsDisposed: false }) return;
         var selected = _files.CheckedItems.Cast<ListViewItem>().Select(x => x.Tag).OfType<AttachmentInventoryItem>().ToArray();
         if (selected.Length == 0) return;
         var paths = selected.Select(x => x.Candidate.FullPath).ToArray();

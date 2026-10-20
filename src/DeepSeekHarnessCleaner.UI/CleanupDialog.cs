@@ -92,6 +92,7 @@ public sealed class CleanupDialog : Form
         _targetList.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         _targetList.Scrollable = true;
         _targetList.View = View.Details;
+        TableHeaders.Apply(_targetList);
         _targetList.FullRowSelect = true;
         _targetList.HideSelection = true;
         _targetList.Columns.Add(attachmentPaths is null ? "会话标题" : "操作对象", 210);

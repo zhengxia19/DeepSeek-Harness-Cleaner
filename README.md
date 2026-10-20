@@ -1,6 +1,6 @@
 # DeepSeek Harness Cleaner（设计与实施文档）
 
-> 当前修复版：0.2.3，Windows 10 x64，C# / .NET 10 / WinForms。会话及附件备份可选，窗口按父窗体居中，附件信息、会话归档及解析状态明确展示。原 T-01～T-34 的历史记录保留，本次范围与证据见 `artifacts/evidence/2026-10-20/T-31.txt`。
+> 当前修复版：0.2.4，Windows 10 x64，C# / .NET 10 / WinForms。新增附件右键打开、主窗位置大小记忆、选择表头全选及统一表格标题；执行结果报告支持缩放与日志路径复制。原始任务历史保留，本次验收见 `artifacts/evidence/2026-10-20/T-38.txt`。
 
 ## 项目目标
 
@@ -9,10 +9,16 @@
 ## 当前发布方式
 
 - Windows 10 x64，Release 单文件 EXE，不捆绑 .NET 运行时；客户端须自行安装 **.NET 10 Windows Desktop Runtime x64**（不是 .NET Framework 4.x）。
-- 使用 `scripts/publish.ps1 -Version 0.2.3`，产物为 `dist/v0.2.3/win-x64/DeepSeekHarnessCleaner.UI.exe`；默认参数为 `--self-contained false -p:PublishSingleFile=true`。
+- 使用 `scripts/publish.ps1 -Version 0.2.4`，产物为 `dist/v0.2.4/win-x64/DeepSeekHarnessCleaner.UI.exe`；默认参数为 `--self-contained false -p:PublishSingleFile=true`。
 - 本次有独立的自动回归及 Windows 窗口测试；以本次证据记录为准，不沿用 0.1.0 的验收结论。详见 [发布说明](docs/release.md)。
 
 ## 本次功能修复
+
+- 执行结果报告按父窗体居中，随窗口缩放；日志路径可选择复制，表格可横纵滚动。
+- 附件行右键“打开附件”交给系统默认应用。无扩展名对象仅按识别出的 PNG/JPEG/GIF/WebP/PDF 文件头生成独立校验副本；未知类型明确提示，源附件不改动。成功打开的副本保留在工具私有 opened-attachments 目录，不自动清理或联动删除。
+- 主窗正常关闭时在 EXE 同目录保存 `DeepSeekHarnessCleaner.window-state.json`，下次恢复位置、正常尺寸及最大化状态。目录不可写时提示并保留旧记录；原通用设置文件不被迁移或覆盖。
+- 点击会话“选择”表头全选/取消当前筛选结果，包括需滚动才能看到的行。既有隐藏勾选保留，状态栏明确显示隐藏及总勾选数；删除前核对完整清单。
+- 四类表格列标题加粗居中，正文保持原样。实际 100% DPI 已测；150% 实际 DPI 按用户指示由用户验收。
 
 - 会话扫描后可选择原生 v0/v4 会话进入删除确认；重新核对身份、代际集合、JSONL 完整性和文件哈希，可选备份全部代际。Harness 必须完全退出后才能执行删除。
 - 预览跳过请求配置、待办等内部状态，展示工具调用名称与工具结果文本；尚未支持的扩展单独提示“未支持”，不再等同于原始数据损坏。预览仍按日志顺序展示，不声称重放完整历史替换。

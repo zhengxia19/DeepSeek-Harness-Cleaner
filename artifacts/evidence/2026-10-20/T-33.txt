@@ -1,0 +1,67 @@
+FinishedAt: 2026-10-20 14:14:06 +08:00
+Task: repair-list T-33, responsive centered result report
+Status: ACCEPTED for this task only
+Baseline: ca0cfe9a7a2f2e04f17c5e1ff34d4f085c08ad92 plus preexisting T-32 documentation changes.
+Prerequisite: repair-list T-32 checked and artifacts/evidence/2026-10-20/T-32.txt inspected.
+Authorization: user requested implementation according to task list; project rule limits this round to one atomic task.
+Backup: .artifacts/t33-backup-20261020-141011/ (source, Windows tests, task list, previous checkpoint).
+GitCommit: NOT_COMMITTED; no push in this round.
+
+Changes:
+- ResultsDialog.cs reuses OwnedFormPosition.Center in OnShown before existing Shown log creation.
+  Existing main/attachment report callsites retain their direct owner via Show(this).
+- Replaced fixed coordinates with a docked TableLayoutPanel: summary, backup information, expanding
+  results grid and footer. Minimum outer size 620x420; summary/backup are read-only multiline scrolling
+  controls so long text remains accessible at minimum size. Footer separates path and close button.
+- Separate enabled read-only TextBox for actual log path, selection and standard Ctrl+C shortcuts.
+  Failure displays actual error text, LogFilePath remains null; log directory/content contract unchanged.
+- Replaced Fill with adjustable explicit column widths and Both scrollbars. Overflow actually scrolls
+  horizontally and vertically, including to final row/column, instead of squeezing every column to fit.
+- Extended WindowsTests/Program.cs only with report-specific checks; no later-task feature changes.
+
+Commands and actual results (project-local SDK via . ./scripts/enter-env.ps1; TEMP/TMP=.artifacts/tmp):
+1. dotnet build DeepSeekHarnessCleaner.sln -c Release -warnaserror -m:1 --no-restore
+   EXIT=0, 0 warnings / 0 errors. Log .artifacts/t33/build-solution.log.
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests -c Release --no-build --no-restore
+   --logger 'trx;LogFileName=regression.trx' --results-directory .artifacts/t33
+   EXIT=0; 324 passed, 0 failed, 0 skipped. regression.log / regression.trx.
+3. dotnet build tests/DeepSeekHarnessCleaner.WindowsTests -c Release -warnaserror --no-restore
+   EXIT=0, 0 warnings / 0 errors. build-windows-final.log.
+   dotnet tests/DeepSeekHarnessCleaner.WindowsTests/bin/Release/net10.0-windows/DeepSeekHarnessCleaner.WindowsTests.dll
+   EXIT=0; 66 PASS / 0 FAIL, WINDOWS_REGRESSION=PASS. windows-final.log.
+   Actual Windows 10 Pro 10.0.19045, WinForms message loop and cross-thread checks enabled.
+4. git diff --check: EXIT=0 (line-ending warnings only).
+
+Windows acceptance evidence:
+- Center coordinates measured within 1 pixel for both MainForm and AttachmentsForm report owners;
+  existing working-area clamp reused. Default, minimum 620x420 and expanded 1200x800 outer sizes tested.
+- All summary/backup/grid/log label/log textbox/close button rectangles within client, mutually disjoint.
+- 160 synthetic mixed deleted/skipped items, long source and backup paths, exact 80 deleted count;
+  both visible scrollbars at minimum size, last row and last column reached with nonzero horizontal offset.
+- Native textbox selection and Copy command copied the exact synthetic log path to Windows clipboard;
+  standard ShortcutsEnabled remains true. Previous clipboard data restored without logging it.
+- Empty/no-backup report usable. Log directory occupied by a regular file produces a real error without
+  inventing a written path, and preserves that file's bytes. Written result log omits synthetic private path.
+- Existing session/attachment cleanup checks still pass; unselected/outside sentinel hashes unchanged.
+- Synthetic screenshots saved under .artifacts/functional-ui-36469bbda86643569b57a09943081502/:
+  report-MainForm-620.png, report-MainForm-836.png, report-MainForm-1200.png and equivalent AttachmentsForm files.
+  Visually inspected MainForm minimum and AttachmentsForm default screenshots: readable controls,
+  no overlap, correct footer and real overflow. Images contain synthetic data only and are not committed.
+
+Failed/adjusted test evidence (not counted as a pass):
+- Initial SendKeys Ctrl+C test did not copy the expected path. Foreground-directed keystrokes were replaced
+  with the target textbox's native Copy command; exact clipboard result then passed. A separate physical
+  keyboard/foreground integration claim is not made.
+- Initial screenshot target used ClientRectangle and cropped the whole-form capture. Changed only the
+  capture target to full form bounds; final screenshots rendered and inspected without that artifact.
+
+Limits:
+- No real Harness data written, moved or deleted; all deletion regression roots are freshly synthetic.
+- No full actual-DPI matrix or clean-machine install acceptance. Source/tests only; no new published EXE.
+- T-34..T-38 remain unchecked. Existing dist/v0.2.3 executable is unchanged by this source repair.
+Final formatting verification:
+- dotnet format whitespace DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes
+  --include src/DeepSeekHarnessCleaner.UI/ResultsDialog.cs: EXIT=0 (format-verify.log).
+- dotnet format whitespace tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj
+  --no-restore --verify-no-changes: EXIT=0 (format-windows-verify.log).
+Final task-state check: T-33 checked; T-34..T-38 unchecked. Implementation diff limited to the two files above.

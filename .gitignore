@@ -4,6 +4,10 @@
 .artifacts/
 dist/
 
+# Portable window state is runtime user data, not source.
+DeepSeekHarnessCleaner.window-state.json
+DeepSeekHarnessCleaner.window-state.json.tmp-*
+
 # 构建与测试产物
 bin/
 obj/

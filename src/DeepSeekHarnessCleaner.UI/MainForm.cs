@@ -53,11 +53,14 @@ public sealed partial class MainForm : Form
     private readonly HashSet<SessionSummary> _checkedSessions = new();
     private readonly System.Windows.Forms.Timer _previewDebounce = new() { Interval = 140 };
 
-    public MainForm(string? smokeResultPath = null, string? scanRootPath = null, string? logDirPath = null)
+    public MainForm(string? smokeResultPath = null, string? scanRootPath = null, string? logDirPath = null,
+        WindowStateStore? windowStateStore = null, Action<string>? windowNotice = null, bool persistWindowState = true)
     {
         _smokeResultPath = smokeResultPath;
         _scanRootOverride = scanRootPath;
         _logDirOverride = logDirPath;
+        _windowStore = windowStateStore ?? (persistWindowState && smokeResultPath is null ? new WindowStateStore() : null);
+        _windowNotice = windowNotice ?? (message => MessageBox.Show(message, "窗口位置记录", MessageBoxButtons.OK, MessageBoxIcon.Warning));
         _presenter = new InventoryPresenter(new UiScanSource(), TimeZoneInfo.Local);
         // 冒烟模式注入“无进程”快照，避免开发机上宿主进程使删除门禁恒阻断；真实模式用真实探测。
         _actionsPresenter = new ActionsPresenter(_smokeResultPath is not null ? static () => [] : null);
@@ -75,6 +78,7 @@ public sealed partial class MainForm : Form
         BuildPreviewRegion();
         BuildActionPanel();
         BuildStatusBar();
+        TableHeaders.Apply(_sessionGrid);
 
         // Dock 布局按 z 序从最前到后处理：Fill 控件最先加入，菜单最后加入（最先停靠、占据顶部）。
         Controls.Add(_split);
@@ -89,6 +93,7 @@ public sealed partial class MainForm : Form
             if (!_bindingSessions && !IsDisposed) _ = RequestPreviewAsync();
         };
         _sessionGrid.SelectionChanged += OnSessionGridSelectionChanged;
+        _sessionGrid.ColumnHeaderMouseClick += OnSelectionHeaderClick;
         _sessionGrid.CurrentCellDirtyStateChanged += (_, _) =>
         {
             if (_sessionGrid.IsCurrentCellDirty && _sessionGrid.CurrentCell?.OwningColumn?.Name == "checked")
@@ -101,7 +106,7 @@ public sealed partial class MainForm : Form
             if (row.Tag is not SessionSummary session) return;
             if (row.Cells["checked"].Value is true) _checkedSessions.Add(session);
             else _checkedSessions.Remove(session);
-            _deleteButton.Enabled = _checkedSessions.Count > 0 || _sessionGrid.SelectedRows.Count > 0;
+            UpdateSelectionStatus();
         };
         _deleteButton.Enabled = false; // UX-01：未选择会话时禁用删除。
 
@@ -427,7 +432,7 @@ public sealed partial class MainForm : Form
                 BindSessions(result.Sessions);
             }
 
-            _statusLabel.Text = _presenter.BuildStatusText(filtered: null);
+            UpdateSelectionStatus();
         }
         catch (OperationCanceledException)
         {
@@ -498,7 +503,7 @@ public sealed partial class MainForm : Form
         }
 
         BindSessions(filtered);
-        _statusLabel.Text = _presenter.BuildStatusText(filtered);
+        UpdateSelectionStatus();
     }
 
     /// <summary>绑定列表：每行 Tag 持有对应 SessionSummary，排序/筛选后选中项仍指向原会话。</summary>
@@ -536,6 +541,7 @@ public sealed partial class MainForm : Form
         _sessionGrid.ClearSelection();
         _sessionGrid.ResumeLayout();
         _bindingSessions = false;
+        UpdateSelectionStatus();
         _deleteButton.Enabled = _checkedSessions.Count > 0;
         _preview.Clear();
     }
@@ -642,7 +648,8 @@ public sealed partial class MainForm : Form
             if (refresh.RootErrorCode is null)
             {
                 BindSessions(refresh.Sessions);
-                _statusLabel.Text = _presenter.BuildStatusText(filtered: null) + "（删除后已刷新）";
+                UpdateSelectionStatus();
+                _statusLabel.Text += "（删除后已刷新）";
             }
         }
         catch (Exception ex)

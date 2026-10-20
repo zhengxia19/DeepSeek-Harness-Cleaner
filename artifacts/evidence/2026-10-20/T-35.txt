@@ -1,0 +1,52 @@
+FinishedAt: 2026-10-20 14:37:17 +08:00
+Task: repair-list T-35, portable main-window position/size persistence
+Prerequisites: T-32; historical T-20 DTO/store inspected, not mistaken for existing main-window lifecycle integration.
+ChangedFiles: Infrastructure/WindowStateStore.cs; UI/MainForm.WindowState.cs, MainForm.cs, Program.cs,
+SettingsDialog.cs; interaction/Windows tests; interfaces/design docs and this evidence.
+
+Implementation:
+- Default file is AppContext.BaseDirectory/DeepSeekHarnessCleaner.window-state.json, independent of cwd.
+- Versioned window-only JSON: normalBounds, Normal/Maximized state, savedDpi. No session/root/credential fields.
+- Normal bounds or non-Normal RestoreBounds captured after accepted FormClosing; write once on FormClosed.
+  Canceled close never writes. Maximized restores maximized; minimized closes restore as normal.
+- Restore bounds normalized against present monitor work areas, minimum size and saved/current DPI, including
+  valid negative monitor coordinates. CenterScreen cannot override the restored manual position.
+- Same-directory unique temporary file, flushed write and atomic replace. Unknown/corrupt records preserved.
+  Existing/ancestor reparse paths rejected; locked/unwritable directory errors notify and still allow close,
+  retaining the old file and never silently switching location. Legacy settings schema retained; old width/height
+  editors explicitly disabled and labeled legacy to avoid a second active geometry source.
+- Test/smoke can inject a state store or disable persistence. Regular smoke does not touch production settings.
+
+Acceptance:
+- Windows move/resize/close/reopen exact bounds; cancel close preserves previous hash; maximize/restore/minimize;
+  locked save reports failure and still closes; corrupt state retained; offscreen window brought into active work area.
+- Unit schema/normalization tests include multi-monitor negative coordinates and DPI ratios (simulation only).
+- Real NTFS tool-directory write-deny fixture: save failed, old bytes and no-temp-remnant assertions passed;
+  test DACL restored in finally. Initial test fixture mistakenly requested audit privilege and failed during setup;
+  corrected to Access/DACL-only operations, with no elevation or system ACL modification.
+- Published EXE copied byte-for-byte into a fresh app directory, launched from a different cwd twice using
+  --smoke <result> --persist-window-state (default store, no explicit state path). Both exit 0 with 30 checks;
+  valid state appeared in EXE directory, none in cwd. Fixture:
+  .artifacts/package-window-final-ab550b2452974f12b1bc5e8d480ab558/.
+- Actual 150% DPI is user-owned acceptance, not claimed by normalization/font simulations.
+Status: ACCEPTED in the user-authorized scope
+Baseline: ca0cfe9a7a2f2e04f17c5e1ff34d4f085c08ad92 plus prior T-32 documentation and accepted T-33 source changes.
+Authorization: user explicitly requested continuous implementation through all remaining tasks and acceptance.
+Scope amendment: actual 150% DPI testing is assigned to the user by their explicit reply; not counted as passed here.
+Backup: .artifacts/continuous-backup-20261020-141529/; previous T-33 backup and evidence retained.
+Environment: Windows 10 Pro 10.0.19045 x64; project-local SDK 10.0.402; actual monitor DPI=96.
+Shared final commands (all via scripts/enter-env.ps1, TEMP/TMP=.artifacts/tmp):
+- dotnet build DeepSeekHarnessCleaner.sln -c Release -warnaserror -m:1 --no-restore: EXIT=0, zero warnings/errors.
+  Log: .artifacts/continuous/build-final.log.
+- dotnet test tests/DeepSeekHarnessCleaner.Tests -c Release --no-build --no-restore
+  --logger 'trx;LogFileName=all-final.trx' --results-directory .artifacts/continuous:
+  EXIT=0, 350 passed / 0 failed / 0 skipped, including 26 InteractionServicesTests.
+  Logs: all-final.log, all-final.trx.
+- dotnet build tests/DeepSeekHarnessCleaner.WindowsTests -c Release -warnaserror --no-restore:
+  EXIT=0, zero warnings/errors; windows-build-final.log.
+- dotnet tests/DeepSeekHarnessCleaner.WindowsTests/bin/Release/net10.0-windows/DeepSeekHarnessCleaner.WindowsTests.dll:
+  EXIT=0, 91 PASS / 0 FAIL; real message loop and cross-thread access checks enabled; windows-final.log.
+- Same Windows test executable with --default-open-only: EXIT=0, 5 PASS;
+  default-open-final.log. Real OS default applications and exact synthetic file window titles verified.
+No real Harness data was written/moved/deleted. Only fresh synthetic roots were used for deletion tests.
+Git: implementation commit containing this evidence; delivery revision and push result are recorded in the final checkpoint.

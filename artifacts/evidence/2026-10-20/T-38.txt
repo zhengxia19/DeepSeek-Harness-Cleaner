@@ -1,0 +1,91 @@
+FinishedAt: 2026-10-20 14:38:49 +08:00
+Task: repair-list T-38, integrated acceptance and release v0.2.4
+Status: ACCEPTED for the user-agreed scope
+Prerequisites: repair-list T-33..T-37 all checked and their real evidence present.
+Authorization: continuous implementation/acceptance through all tasks; earlier explicit Git push authorization
+remains applicable. User explicitly owns actual 150% DPI acceptance; it is not marked passed by this agent.
+Baseline: ca0cfe9a7a2f2e04f17c5e1ff34d4f085c08ad92 with preserved T-32/T-33 dirty changes.
+Backup: .artifacts/continuous-backup-20261020-141529/; earlier backups and old releases preserved.
+
+Final implementation scope:
+- Accepted T-33 responsive owner-centered result window, selectable log path and real two-axis scrolling.
+- T-34 guarded right-click exact-file default opening; known extensionless signature copies; original unchanged.
+- T-35 EXE-directory geometry record, accepted-close lifecycle, screen normalization and failure retention.
+- T-36 selection-header toggle with visible/total/hidden checkbox counts and exact delete plan.
+- T-37 header-only bold centered styling across all four table controls.
+- T-38 test/publish isolation hooks, package notes, current docs, evidence and checkpoint.
+No later feature or historical task acceptance was silently added. C#/.NET 10/WinForms stack unchanged.
+
+Final environment: Windows 10 Pro 10.0.19045 x64, project-local SDK 10.0.402.
+All dotnet commands used . ./scripts/enter-env.ps1; TEMP/TMP=.artifacts/tmp.
+
+Final source commands/results:
+1. dotnet build DeepSeekHarnessCleaner.sln -c Release -warnaserror -m:1 --no-restore
+   EXIT=0, zero warnings/errors; .artifacts/continuous/build-final.log.
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests -c Release --no-build --no-restore
+   --logger 'trx;LogFileName=all-final.trx' --results-directory .artifacts/continuous
+   EXIT=0; 350 PASS, 0 failed, 0 skipped. Includes 26 new interaction-service cases; counters independently
+   read from all-final.trx. all-final.log and all-final.trx retained.
+3. dotnet build tests/DeepSeekHarnessCleaner.WindowsTests -c Release -warnaserror --no-restore
+   EXIT=0, zero warnings/errors; windows-build-final.log.
+   dotnet tests/DeepSeekHarnessCleaner.WindowsTests/bin/Release/net10.0-windows/DeepSeekHarnessCleaner.WindowsTests.dll
+   EXIT=0, 91 PASS / 0 FAIL; windows-final.log. Real WinForms loop/cross-thread checks.
+   Fixture .artifacts/functional-ui-7e5e16c9ad944624953942deab3396a5/.
+   Includes actual owner placement/layout/copy/scroll, normal/maximized/minimized/canceled geometry close,
+   locked-save/error retention, 1000-row select-all (11 ms final run), hidden selection counts, exact plan,
+   menu hit/blank checks, real header drawing and unchanged unselected/outside sentinel hashes.
+4. Same Windows test DLL --default-open-only
+   EXIT=0, 5 PASS; default-open-final.log. Synthetic .txt and extensionless valid PNG were opened by actual
+   system default apps and their unique filenames were observed in matching windows; source hashes unchanged.
+   Only newly created matching test windows were closed; preexisting app windows were excluded.
+5. dotnet format whitespace DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include
+   [explicit changed/new source .cs paths excluding WindowsTests]
+   EXIT=0; format-verify.log.
+   dotnet format whitespace tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj
+   --no-restore --verify-no-changes
+   EXIT=0; format-windows-verify.log.
+6. git diff --check: EXIT=0. Focused credential-marker scan of source/tests/docs/evidence: no matches.
+
+Final release commands/results:
+7. scripts/publish.ps1 -Version 0.2.4
+   EXIT=0; .artifacts/continuous/publish-final.log. Verified exact repository-local publish/move boundaries.
+   Final EXE dist/v0.2.4/win-x64/DeepSeekHarnessCleaner.UI.exe
+   Framework-dependent win-x64 single file, unsigned; requires client .NET 10 Windows Desktop Runtime x64.
+   Bytes: 970763
+   SHA256: 7c5c371b02a14e226abfb5822aaff2fe3e2938d9f84c3d91eb7aa025236ef3e4
+   All 4 SHA256SUMS.txt entries independently checked with Get-FileHash: PASS.
+   No generated window-state file inside the distributed package; portable runtime files are git-ignored.
+8. Existing .artifacts/functional-fix/prepare-legacy-smoke.ps1 created a NEW synthetic 305-header fixture:
+   .artifacts/functional-legacy-smoke-v022-2167b6421afb4a328e782668e02803ae/sessions
+   Published EXE --smoke D:\Code\DeepSeek-Harness-Cleaner\.artifacts\continuous\package-smoke-final.txt
+   --scan-root D:\Code\DeepSeek-Harness-Cleaner\.artifacts\functional-legacy-smoke-v022-2167b6421afb4a328e782668e02803ae\sessions
+   --log-dir D:\Code\DeepSeek-Harness-Cleaner\.artifacts\functional-legacy-smoke-v022-2167b6421afb4a328e782668e02803ae\logs
+   EXIT=0; 72 PASS / 0 FAIL, SMOKE_RESULT=PASS. Source fixture was not modified.
+9. Copy of the FINAL EXE with the exact final hash placed in a fresh app directory:
+   .artifacts/package-window-final-ab550b2452974f12b1bc5e8d480ab558/app/
+   Started twice with WorkingDirectory=../other-working-directory and arguments
+   --smoke <fixture>/smoke-1.txt (then smoke-2.txt) --persist-window-state.
+   Both EXIT=0 with 30 PASS each. Default WindowStateStore (not an explicit file override) created valid
+   DeepSeekHarnessCleaner.window-state.json in EXE directory, never in cwd. Second launch loaded existing state.
+   The published distribution itself remained free of generated runtime configuration.
+10. Prepublish lockfile copies compared after final publish: no changes requiring restoration.
+
+Failures/corrections retained honestly:
+- First advanced Windows build had one nullable dereference in test code; fixed before execution; final builds clean.
+- First unwritable-directory test setup requested audit-section privilege and failed before application testing.
+  Scoped to DACL Access only, restored original DACL in finally; real write-deny negative test passed.
+- A provisional v0.2.4 package was generated before the final copy-path recheck; not delivered as final.
+  Preserved at .artifacts/continuous/provisional-v024/ with publish-provisional.log. Source guard then
+  rebuilt/retested and final package regenerated; only final hash above is current release proof.
+- Earlier T-33 SendKeys foreground dependency and image-capture correction remain documented in T-33 evidence.
+
+Limits and recovery:
+- Actual 150% DPI is delegated to the user, not a failed or fabricated pass. Actual 96 DPI and supplemental
+  font/normalization tests passed; no full real-DPI matrix or clean-machine install claim.
+- Runtime creation/opening/delete tests used fresh synthetic data. No real .dsh or dsh-desktop writes/moves/deletes.
+- Existing backup-optional contract and process/root/reparse/file integrity gates remain tested and enforced.
+- Old v0.2.0/0.2.1/0.2.2/0.2.3 packages preserved. Source dirty-tree and provisional package backups retained.
+  Program rollback does not recover files deleted without ZIP backups.
+- Historical original T-01..T-34 and older repair-list A..F acceptance is not rewritten; this closes current
+  user-requested T-33..T-38 scope only.
+- Implementation commit containing this evidence and final remote verification are recorded in AGENT_CHECKPOINT.md.
