@@ -1,0 +1,19 @@
+release 0.3.1 — win-x64 单文件框架依赖包（含 ROOT-20261104 修复）
+Date: 2026-11-04
+Task: docs/implementation-tasks.md BUILD-20261104（用户 2026-11-04 授权"需要构建程序"）
+Base commit: f596263 (ROOT-20261104)
+
+Commands and results:
+1. .\scripts\publish.ps1 -Version 0.3.1
+   Exit 0；PUBLISH_OK version=0.3.1 out=dist/v0.3.1/win-x64
+   FILES=DeepSeekHarnessCleaner.UI.exe,LICENSE.txt,README.md,SHA256SUMS.txt,THIRD-PARTY-NOTICES.txt
+2. 版本资源（Get-Item .VersionInfo）：FileVersion=0.3.1；ProductVersion=0.3.1+f596263a53350ff1f6b5d1e7b3f3bd032a0ff3bf。
+3. EXE：1492560 字节；SHA-256 09f8490ac84f0674c92c8247f6d555f2c10cfdf59ec6cfd6ca6ff560b6171ed1；
+   与包内 SHA256SUMS.txt 一致（Get-FileHash 复算匹配）。
+4. 冒烟：Start-Process -Wait dist\v0.3.1\win-x64\DeepSeekHarnessCleaner.UI.exe --smoke .artifacts\release-0.3.1\smoke-published.txt
+   Exit 0；SMOKE_RESULT=PASS（含 150% 缩放布局与键盘自检逐项 PASS；本机 144 DPI 原生运行）。
+   注：首次误跑不带结果文件参数导致 GUI 挂起，已终止并按正确用法重跑，不计入验收。
+5. 目标机（191.1.220.202，只读 ssh）：已装 Microsoft.WindowsDesktop.App 10.0.14，
+   框架依赖单文件包可直接运行；未向目标机拷贝或执行（部署属用户操作）。
+
+Limits: 未签名；目标机实机 GUI 验收未做（待用户部署验证）；完整 UI 回归的既有 144 DPI 滚动条环境问题见 ROOT-20261104.txt，不影响本包冒烟。

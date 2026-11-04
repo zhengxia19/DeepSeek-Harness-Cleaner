@@ -1,5 +1,11 @@
 # 变更记录
 
+## 0.3.1 — 2026-11-04
+
+- 数据根标记契约调整（ROOT-20261104）：会话根必备顶层标记改为 `sessions`+`storages`；`attachments` 为 DSH 懒创建的可选目录——存在时仍经 `PathGuard` 复验（重解析/访问拒绝仍拒绝该根），缺失不再判 `ROOT_MARKERS_MISSING`，探测不创建该目录；缺失附件目录由附件盘点以问题项降级，不阻断会话清理。手选目录说明同步为"包含 sessions/storages"。
+- 该修复使从未使用附件的合法 DSH 数据根（如仅有 sessions/storages 的机器）可正常选择并清理；实施与测试证据见 `artifacts/evidence/ROOT-20261104.txt`。
+- 发布：单文件、不捆绑 .NET 10 Windows Desktop Runtime 的 win-x64 包；EXE 1492560 字节，SHA-256 `09f8490ac84f0674c92c8247f6d555f2c10cfdf59ec6cfd6ca6ff560b6171ed1`。构建与冒烟证据见 `artifacts/evidence/release-0.3.1.txt`。
+
 ## 0.3.0 — 2026-11-04
 
 - 发布：单文件、不捆绑 .NET 10 Windows Desktop Runtime 的 win-x64 包；EXE 1492560 字节，SHA-256 `ec54fe29e7ab0aeda531c6fb803539596e373410dc8a39b9d5e774025278afda`。实测命令、门禁结果与限制见 `artifacts/evidence/release-0.3.0.txt`。

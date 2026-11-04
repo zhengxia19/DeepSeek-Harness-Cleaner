@@ -19,3 +19,9 @@
 范围：`RootLocator` 会话根必备标记改为 `sessions`+`storages`；`attachments` 为可选标记——存在时仍经 `PathGuard` 复验（reparse/访问拒绝仍拒绝），缺失不影响有效性；同步更新选择对话框目录说明与 `interfaces.md` §2 标记契约。不改动桌面根标记、扫描/删除路径白名单与 `Resolve` 派生子根行为（缺失 `attachments` 由 `AttachmentInventoryService` 既有 `ATTACHMENT_ROOT_MISSING` 问题项降级处理）。
 
 验收：[x] 编译通过；[x] 单元测试含"缺 attachments 仍有效且不创建该目录"与"attachments 为 reparse 仍拒绝"；[x] 原必备标记缺失（仅 sessions）仍 `ROOT_MARKERS_MISSING`；[x] 相关回归测试通过（单元测试 683 全过；WindowsTests `--roots-only` 全过；完整 UI 回归存在既有环境失败"报告窗口滚动条"，经未修改 HEAD 基线复跑确认为既有问题，与本任务无关）；[x] 证据落盘 `artifacts/evidence/ROOT-20261104.txt`。
+
+## 新任务 BUILD-20261104：发布 v0.3.1（用户 2026-11-04 授权"需要构建程序"）
+
+范围：以 `scripts/publish.ps1 -Version 0.3.1` 产出 `dist/v0.3.1/win-x64` 单文件框架依赖包（含 ROOT-20261104 修复）；发布包冒烟 `--smoke`；CHANGELOG 增补 0.3.1 条目；记录 SHA-256 与证据。不改代码；不执行目标机实机 GUI 验收（属用户实机验收）。
+
+验收：[x] publish exit 0 且产物含 EXE/README/LICENSE/THIRD-PARTY-NOTICES/SHA256SUMS；[x] 发布 EXE `--smoke` exit 0（SMOKE_RESULT=PASS，144 DPI 原生）；[x] 版本资源为 0.3.1（FileVersion 0.3.1，ProductVersion 0.3.1+f596263）；[x] 证据落盘 `artifacts/evidence/release-0.3.1.txt`。

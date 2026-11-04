@@ -1,10 +1,10 @@
 # Agent Checkpoint
 
-LastTask: ROOT-20261104 会话根标记契约调整（sessions/storages 必备，attachments 可选；用户 2026-11-04 对话授权）。
-LastResult: COMPLETE（待提交）。RootLocator 必备标记改为 sessions+storages；attachments 降为可选标记，存在时仍经 PathGuard 复验（reparse/访问拒绝仍拒绝根），缺失不创建、不影响有效性；UI 手选说明与 interfaces.md §2 契约同步更新。
-Evidence: artifacts/evidence/ROOT-20261104.txt（编译 exit0；单测 683/683；WindowsTests --roots-only exit0 全 PASS；完整 UI 回归 FAIL 于"report shows actual horizontal and vertical scrollbars"，在未修改 HEAD d5915a9 基线复跑同断言同 FAIL——既有 144 DPI 环境问题，与 DpiNote 一致，非本任务阻断）。
-ChangedFiles: RootLocator.cs; RootSelectionDialog.cs; RootLocatorTests.cs; RootSafetyTests.cs; docs/interfaces.md; docs/implementation-tasks.md（新增任务条目已勾选）。packages.lock.json restore 副产物已还原。
-DiagnosisContext: 目标机 191.1.220.202（ssh, thinkbook14\zx）.dsh 缺 attachments（懒创建未发生），sessions/storages 有 2 会话可清理；修复后该根应判 Valid。
-NextCandidate: 目标机实机验证新构建（重开"选择数据根"应显示有效并放行扫描）；如需发布新版另行授权。多 DPI 对话框布局修复仍是未授权待办。
-Safety: 真实数据根只读（本机与目标机均仅 dir/Get-ChildItem）；无 PATH/注册表改动；删除类测试仅在合成夹具根。
-Limits: 完整 UI 回归在 144 DPI 本机存在既有最小尺寸滚动条失败；未重新发布 dist；目标机未实机运行新 exe。
+LastTask: BUILD-20261104 发布 v0.3.1（用户 2026-11-04 授权"需要构建程序"）。
+LastResult: COMPLETE。dist/v0.3.1/win-x64 单文件框架依赖包（含 ROOT-20261104 修复）：publish exit0；FileVersion 0.3.1 / ProductVersion 0.3.1+f596263；EXE 1492560B，SHA-256 09f8490ac84f0674c92c8247f6d555f2c10cfdf59ec6cfd6ca6ff560b6171ed1（与包内 SHA256SUMS 一致）；发布 EXE --smoke exit0 SMOKE_RESULT=PASS（144 DPI 原生）。CHANGELOG 增补 0.3.1。
+Evidence: artifacts/evidence/release-0.3.1.txt；ROOT-20261104 实施证据 artifacts/evidence/ROOT-20261104.txt。
+Git: f596263（ROOT-20261104）已推送 origin/main；本次发布提交随后创建。
+TargetMachine: 191.1.220.202 已装 WindowsDesktop.App 10.0.14，可直接运行本包；尚未拷贝/部署（用户操作）。其 .dsh 缺 attachments，v0.3.1 应判该根有效。
+NextCandidate: 用户将 dist/v0.3.1/win-x64/DeepSeekHarnessCleaner.UI.exe 部署到目标机实机验收（重开"选择数据根"应显示有效并放行扫描）。多 DPI 对话框布局修复仍未授权。
+Safety: 真实数据根未写入（本机与目标机均只读）；冒烟仅合成夹具。
+Limits: 未签名；目标机 GUI 未实机验证；完整 UI 回归存在既有 144 DPI 滚动条环境问题（基线复跑确认，与改动无关）。
