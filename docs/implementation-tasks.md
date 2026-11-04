@@ -59,7 +59,7 @@
 - 目标：每个不可变值在同一调用链只校验一次；reparse/越界/访问拒绝的负向错误码逐项不变。
 - 实施内容：`RootLocator` 删除 `Add` 内或 `ProbeCandidate` 内的重复 `InputError`（同一调用链三次）；删除 `ProbeCandidate:96-102` 手写逐段 reparse 走查（保留其后的 `PathGuard.Check`，走查已由 PathGuard 覆盖）；`CleanupExecutor.DeleteOne` 删除 `PathGuard.Check` 之后的二次 reparse 属性判断（保留 mtime/length/hash 复验，属不同维度）；`WindowStateStore` 一次 Save 内三次 `RejectReparse` 收敛为构造/首次访问一次；`WorkspaceBackupService.Paths` 删除对 backupRoot 子目录的受保护根二次检查（ValidateDestination 已覆盖）。
 - 源码映射：`RootLocator.cs:61,93,96-107`、`CleanupExecutor.cs:125-141`、`WindowStateStore.cs:21,43,51`、`WorkspaceBackupService.cs:110-114`。
-- 验收：[ ] 编译零警告；[ ] 既有负向测试（reparse 拒绝、越界拒绝、访问拒绝、受保护根拒绝）逐项通过且错误码不变；[ ] 单元测试全过 + WindowsTests `--roots-only` 全过；[ ] 提交信息记录删除的校验点清单。
+- 验收：[x] 编译零警告；[x] 既有负向测试（reparse 拒绝、越界拒绝、访问拒绝、受保护根拒绝）逐项通过且错误码不变；[x] 单元测试全过 + WindowsTests `--roots-only` 全过；[x] 提交信息记录删除的校验点清单。
 - 最小验证：`dotnet test --no-restore`（单元 + roots-only）。
 
 ### S05 统一会话文件名白名单与代际解析正则

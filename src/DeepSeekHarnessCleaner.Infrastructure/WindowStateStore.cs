@@ -40,7 +40,6 @@ public sealed class WindowStateStore
             var existing = Load();
             if (!existing.CanSave) return existing.Error;
             var directory = Path.GetDirectoryName(FilePath)!;
-            RejectReparse(directory);
             Directory.CreateDirectory(directory);
             temp = Path.Combine(directory, Path.GetFileName(FilePath) + ".tmp-" + Guid.NewGuid().ToString("N"));
             using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))

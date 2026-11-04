@@ -135,11 +135,6 @@ public sealed class CleanupExecutor
         }
 
         var attributes = info.Attributes;
-        if ((attributes & FileAttributes.ReparsePoint) != 0)
-        {
-            return new ItemOutcome(full, ItemStatus.Skipped, "PATH_REPARSE", 0);
-        }
-
         if ((attributes & FileAttributes.Directory) != 0)
         {
             return new ItemOutcome(full, ItemStatus.Skipped, "NOT_REGULAR_FILE", 0);

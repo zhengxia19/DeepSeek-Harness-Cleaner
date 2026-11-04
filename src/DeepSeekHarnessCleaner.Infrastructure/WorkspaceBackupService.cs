@@ -106,13 +106,8 @@ public sealed class WorkspaceBackupService
     {
         ValidateDestination(plan.DataHome, backupRoot);
         var directory = Path.Combine(Path.GetFullPath(backupRoot), "workspace-sync-" + plan.OperationId.ToString("N"));
-        if (Within(directory, plan.DataHome)) throw new IOException("WORKSPACE_BACKUP_INSIDE_DATA_ROOT");
-        if (OperatingSystem.IsWindows())
-        {
-            var dsh = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dsh");
-            var desktop = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "@deepseek-ai", "dsh-desktop");
-            if (Within(directory, dsh) || Within(directory, desktop)) throw new IOException("WORKSPACE_BACKUP_PROTECTED_DESTINATION");
-        }
+        // ValidateDestination(backupRoot) 已拒绝 backupRoot 位于 DataHome/.dsh/dsh-desktop 内（Within 含根自身）；
+        // directory 段名固定前缀不可能等于这些根，故其子目录检查必然被上游蕴含。
         return (directory, Path.Combine(directory, RawName), Path.Combine(directory, ManifestName), Path.Combine(directory, VerificationName));
     }
 

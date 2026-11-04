@@ -90,9 +90,10 @@ public sealed class RootLocator
     {
         try
         {
-            var inputError = InputError(path);
-            if (inputError is not null) return (RootCandidateStatus.Invalid, inputError);
+            // 入口已单次校验：Add/Normalize 各链在 InputError 之后才规范化并到达此处。
             // Walk path components only, never recurse through data. Check ancestors before following them.
+            // 根祖先 reparse 唯一防线：PathGuard.Check(path, path) 在 relative="." 时直接返回 PATH_ESCAPE，
+            // ValidateRoot 只查根自身，均不覆盖根之上的祖先（S04 复核确认，勿删）。
             var prefix = Path.GetPathRoot(path)!;
             foreach (var segment in path[prefix.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
             {
