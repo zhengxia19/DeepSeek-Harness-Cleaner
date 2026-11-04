@@ -17,3 +17,4 @@
 ## 已知环境问题（2026-11-04 记录）
 
 - 开发机 144 DPI（150% 缩放）下，完整 WindowsTests UI 回归失败于报告窗口最小尺寸检查（断言 `report shows actual horizontal and vertical scrollbars`）。2026-11-04 在未修改 HEAD `d5915a9` 基线复跑同一断言同样失败，确认为既有环境问题（对话框固定像素布局不随 DPI 缩放），与代码改动无关。后续回归再遇该断言失败，引用本节即可，不再基线复跑；`--roots-only`、单元测试与发布冒烟不受影响。多 DPI 对话框布局修复属未授权待办。
+- 非提权且进程令牌缺少符号链接特权的会话（2026-11-04 实测：Developer Mode 开启但 `IsAdmin=False` 的 harness 会话），单元测试中 17 个 reparse/符号链接夹具测试在 `File.CreateSymbolicLink` 夹具创建阶段即失败（`IOException: 客户端没有所需的特权`），其余 666/683 全过。失败发生在夹具建立阶段、未触及产品代码，与改动无关；此类会话中引用本节即可，提权会话或令牌含 `SeCreateSymbolicLinkPrivilege` 时会话不受影响。另：该会话 `%TEMP%` 下 MSBuild 无法创建临时目录（`MSB1025 UnauthorizedAccessException`），以项目本地 `.artifacts\tmp` 作为进程级 `TMP/TEMP` 绕过，不改机器环境。

@@ -25,3 +25,47 @@
 范围：以 `scripts/publish.ps1 -Version 0.3.1` 产出 `dist/v0.3.1/win-x64` 单文件框架依赖包（含 ROOT-20261104 修复）；发布包冒烟 `--smoke`；CHANGELOG 增补 0.3.1 条目；记录 SHA-256 与证据。不改代码；不执行目标机实机 GUI 验收（属用户实机验收）。
 
 验收：[x] publish exit 0 且产物含 EXE/README/LICENSE/THIRD-PARTY-NOTICES/SHA256SUMS；[x] 发布 EXE `--smoke` exit 0（SMOKE_RESULT=PASS，144 DPI 原生）；[x] 版本资源为 0.3.1（FileVersion 0.3.1，ProductVersion 0.3.1+f596263）；[x] 证据落盘 `artifacts/evidence/release-0.3.1.txt`。
+
+## 新任务清单 SIMPLIFY-20261104：复杂度纪律审查整改（用户 2026-11-04 授权）
+
+背景：按 AGENTS.md §4 复杂度纪律对 src 三层逐行审查，A 级（真实缺陷）发现形成以下任务；B 级简化与 C 级待决项未列入，须另行授权。S01–S05 相互无依赖，按编号执行（S01 为用户可见缺陷优先）。
+
+### S01 修复 LastActivityAt 死过滤器
+
+- 目标：日期过滤可选项与实际生产的数据一致，用户选择后不再静默清空列表。
+- 实施内容：`LastActivityAt` 全仓唯一赋值点为 null，但 UI 暴露该过滤项且过滤器恒 false。端到端删除该死字段：不发明"活动时间"语义（现有"文件修改时间"过滤已覆盖 mtime）；如未来需要按活动过滤，另立任务定义数据来源。
+- 源码映射：`InventoryService.cs:120`（唯一赋值 null）、`SessionSummary.cs:41`（字段）、`SessionFilter.cs:12,81`（枚举与恒 false 分支）、`SettingsDialog.cs:19`（UI 选项）、`SettingsStore.cs:275,283`（设置 token 映射）、`ReadableExport.cs:240`（导出行；如 `interfaces.md` 列有该字段同步更新）。
+- 验收：[ ] 编译零警告；[ ] 相关测试（InventoryTests/FilterTests/SettingsTests）同步更新后全过；[ ] "创建时间/文件修改时间"过滤行为不变；[ ] 旧 settings.json 含 `lastActivityAt` token 时加载不报错（未知 token 按既有策略处理）。
+- 最小验证：`dotnet test --no-restore`（单元测试项目）。
+
+### S02 收敛路径守卫与根指纹（五份发散拷贝）
+
+- 目标：路径规范化/包含检查/根指纹在 Application 层单一实现；同一根经所有规划器与审计器得到相同指纹。
+- 实施内容：新建 internal 静态类（如 `RootGuard`）收敛五处 `NormalizeRoot`、四处 `TryContain/TryNormalizeRelative`、四处 `ComputeRootFingerprint`；统一语义（驱动器根检查、Trim、UNC 处理取一套并在注释写明理由）；暴露命名指纹方法，替换五处 `new CleanupPlanner().Build(root, [], [])` 空计划预言机调用。指纹仅在单次操作内比对，格式变化不跨运行持久化。
+- 源码映射：`BackupManifest.cs:461-471`、`CleanupPlanner.cs:~275-331`、`CacheCleanupSelection.cs:167-217`、`DesktopCleanupSelection.cs:151-203`、`AttachmentCleanupSelection.cs:139-190`；预言机调用：`PreCleanupAuditor.cs:16`、`PostCleanupAuditor.cs:22`、`WorkspaceSyncCoordinator.cs:33`、`WorkspaceMetadataWriter.cs:187`、`WorkspaceRecoveryService.cs:109`。
+- 验收：[ ] 编译零警告；[ ] 新增测试：同一根集合经各规划器/审计器所得 `RootFingerprint` 一致；[ ] 单元测试全过；[ ] 净删除重复行数在提交信息中记录。
+- 最小验证：`dotnet test --no-restore`。
+
+### S03 删除生产死代码与仅测试消费的平行实现
+
+- 目标：src 内无生产零调用者的公开 API。
+- 实施内容：删除 `JsonlLineSplitter`（生产零调用；`SessionEventReader.ParseLines:147-183` 为实际实现，其测试改测 `ParseLines` 或删除）；删除 `HeadersConsistent`（生产走 `header.IdentityMatches`）；删除 `ISessionInventory`（调用方持具体类型）；删除 `ScanAsync`（`Task.FromResult` 假异步，零生产调用）；`BackupManifestBuilder.Verify`（90 行仅测试用）降为 internal 或删除；删除 `SourceContractId`/`SourceContractCommit` 死常量。
+- 源码映射：`Compression/JsonlLineSplitter.cs`、`SessionHeaderReader.cs:105`、`InventoryService.cs:15-18,76-81`、`BackupManifest.cs:124-214`、`WorkspaceMetadataPlan.cs:17-23`；对应测试 `CompressionTests.cs`、`HeaderTests.cs`、`InventoryTests.cs:241`、`ManifestTests.cs:160-236`。
+- 验收：[ ] 编译零警告；[ ] 测试项目同步更新后全过；[ ] grep 证实上述符号在 src 零引用；[ ] 提交信息记录删除符号清单与行数。
+- 最小验证：`dotnet test --no-restore`。
+
+### S04 去除同一时刻对同一不可变值的重复校验
+
+- 目标：每个不可变值在同一调用链只校验一次；reparse/越界/访问拒绝的负向错误码逐项不变。
+- 实施内容：`RootLocator` 删除 `Add` 内或 `ProbeCandidate` 内的重复 `InputError`（同一调用链三次）；删除 `ProbeCandidate:96-102` 手写逐段 reparse 走查（保留其后的 `PathGuard.Check`，走查已由 PathGuard 覆盖）；`CleanupExecutor.DeleteOne` 删除 `PathGuard.Check` 之后的二次 reparse 属性判断（保留 mtime/length/hash 复验，属不同维度）；`WindowStateStore` 一次 Save 内三次 `RejectReparse` 收敛为构造/首次访问一次；`WorkspaceBackupService.Paths` 删除对 backupRoot 子目录的受保护根二次检查（ValidateDestination 已覆盖）。
+- 源码映射：`RootLocator.cs:61,93,96-107`、`CleanupExecutor.cs:125-141`、`WindowStateStore.cs:21,43,51`、`WorkspaceBackupService.cs:110-114`。
+- 验收：[ ] 编译零警告；[ ] 既有负向测试（reparse 拒绝、越界拒绝、访问拒绝、受保护根拒绝）逐项通过且错误码不变；[ ] 单元测试全过 + WindowsTests `--roots-only` 全过；[ ] 提交信息记录删除的校验点清单。
+- 最小验证：`dotnet test --no-restore`（单元 + roots-only）。
+
+### S05 统一会话文件名白名单与代际解析正则
+
+- 目标：会话文件名白名单判定与代际解析共用同一正则，消除改一漏一漂移。
+- 实施内容：`PathGuard.IsSessionFileName` 改为返回匹配结果（含代际捕获组）或提供单一 `MatchSessionFileName`；`SessionLogDiscovery` 用一次匹配同时完成白名单判定与代际解析，删除并存的 `GenerationPattern` 第二正则。
+- 源码映射：`PathGuard.cs:42-43`、`SessionLogDiscovery.cs:109,123`。
+- 验收：[ ] 编译零警告；[ ] DiscoveryTests/HeaderTests 全过；[ ] 新增测试：白名单通过与代际解析结果对同一文件名恒一致（含畸形代际数字用例）；[ ] 单元测试全过。
+- 最小验证：`dotnet test --no-restore`。
