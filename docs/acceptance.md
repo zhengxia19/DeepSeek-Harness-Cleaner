@@ -13,3 +13,7 @@
 发布 EXE：`dist/v0.2.4/win-x64/DeepSeekHarnessCleaner.UI.exe`，970763 字节，SHA-256 `7c5c371b02a14e226abfb5822aaff2fe3e2938d9f84c3d91eb7aa025236ef3e4`。单文件、不捆绑运行时、未签名；客户端需要 .NET 10 Windows Desktop Runtime x64。
 
 本次仅更新文档与归档，未修改程序、重新发布或重新执行功能测试。用户确认不扩大为完整 DPI/干净机器/全部 Windows SKU 兼容矩阵通过，也不改写历史证据中的未执行项。
+
+## 已知环境问题（2026-11-04 记录）
+
+- 开发机 144 DPI（150% 缩放）下，完整 WindowsTests UI 回归失败于报告窗口最小尺寸检查（断言 `report shows actual horizontal and vertical scrollbars`）。2026-11-04 在未修改 HEAD `d5915a9` 基线复跑同一断言同样失败，确认为既有环境问题（对话框固定像素布局不随 DPI 缩放），与代码改动无关。后续回归再遇该断言失败，引用本节即可，不再基线复跑；`--roots-only`、单元测试与发布冒烟不受影响。多 DPI 对话框布局修复属未授权待办。

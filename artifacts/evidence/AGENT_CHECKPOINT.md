@@ -1,10 +1,9 @@
 # Agent Checkpoint
 
-LastTask: BUILD-20261104 发布 v0.3.1（用户 2026-11-04 授权"需要构建程序"）。
-LastResult: COMPLETE。dist/v0.3.1/win-x64 单文件框架依赖包（含 ROOT-20261104 修复）：publish exit0；FileVersion 0.3.1 / ProductVersion 0.3.1+f596263；EXE 1492560B，SHA-256 09f8490ac84f0674c92c8247f6d555f2c10cfdf59ec6cfd6ca6ff560b6171ed1（与包内 SHA256SUMS 一致）；发布 EXE --smoke exit0 SMOKE_RESULT=PASS（144 DPI 原生）。CHANGELOG 增补 0.3.1。
-Evidence: artifacts/evidence/release-0.3.1.txt；ROOT-20261104 实施证据 artifacts/evidence/ROOT-20261104.txt。
-Git: f596263（ROOT-20261104）已推送 origin/main；本次发布提交随后创建。
-TargetMachine: 191.1.220.202 已装 WindowsDesktop.App 10.0.14，可直接运行本包；尚未拷贝/部署（用户操作）。其 .dsh 缺 attachments，v0.3.1 应判该根有效。
-NextCandidate: 用户将 dist/v0.3.1/win-x64/DeepSeekHarnessCleaner.UI.exe 部署到目标机实机验收（重开"选择数据根"应显示有效并放行扫描）。多 DPI 对话框布局修复仍未授权。
-Safety: 真实数据根未写入（本机与目标机均只读）；冒烟仅合成夹具。
-Limits: 未签名；目标机 GUI 未实机验证；完整 UI 回归存在既有 144 DPI 滚动条环境问题（基线复跑确认，与改动无关）。
+LastTask: 流程分级固化（用户 2026-11-04 授权"按建议修改，更新文档"）。低风险文档改动，按新规则本身不建任务条目、不落盘独立证据。
+LastResult: COMPLETE。AGENTS.md §3 新增验证分级（低风险改动以实质提交信息为证据；已知环境问题直接引用不再基线复跑；临时命令带 --no-restore）；docs/acceptance.md 增"已知环境问题"节（144 DPI 报告窗口滚动条既有失败，基线 d5915a9 复跑确认）；docs/development.md §3 增临时命令纪律（--no-restore，锁文件噪音用 git checkout 还原）。
+Git: 本次文档提交随后创建；此前 f596263（ROOT-20261104）、b551dbe（v0.3.1 发布）已推送 origin/main。
+Released: dist/v0.3.1/win-x64（EXE SHA-256 09f8490a…b6171ed1，冒烟 PASS）；目标机 191.1.220.202 已装 Desktop Runtime 10.0.14，待用户部署实机验收（其 .dsh 缺 attachments，v0.3.1 应判有效）。
+NextCandidate: 用户目标机实机验收 v0.3.1；多 DPI 对话框布局修复仍未授权。
+Safety: 真实数据根未写入；无代码改动。
+Limits: acceptance.md 正文仍以 0.2.4 为主（0.3.x 状态见 CHANGELOG/release 证据），全面刷新未授权。

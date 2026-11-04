@@ -63,6 +63,8 @@ $env:PATH = "$install;$env:PATH"  # 仅当前进程，不使用 setx
 
 NuGet 锁文件应由 `RestorePackagesWithLockFile=true` 生成并纳入版本控制；`--locked-mode` 只在已生成锁文件后启用，初次创建锁文件时使用正常 `restore`。`Directory.Build.props` 应避免 WinForms 项目输出路径与测试项目冲突。
 
+**临时命令纪律（2026-11-04）**：不经 `restore --locked-mode` 预步骤的临时 `dotnet build/test/run` 一律加 `--no-restore`；否则隐式 restore 会按当前 SDK 重写 `packages.lock.json`（如移除 ILLink.Tasks 条目），产生与任务无关的改动。已发生时用 `git checkout --` 还原锁文件。
+
 发布默认使用 `scripts/publish.ps1`，生成依赖客户端运行时的单文件 EXE，不捆绑 .NET。客户端须安装 .NET 10 Windows Desktop Runtime x64；仅安装 .NET Framework 4.x 不满足要求。开发机 SDK 与 NuGet 缓存继续保持项目本地隔离。
 
 ## 4. 推荐项目拆分
