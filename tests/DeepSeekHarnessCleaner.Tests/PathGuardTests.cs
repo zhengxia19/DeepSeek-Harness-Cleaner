@@ -188,16 +188,17 @@ public sealed class PathGuardTests : IDisposable
     [Fact]
     public void SessionFileNameWhitelist_MatchesDesignContract()
     {
-        Assert.True(_guard.IsSessionFileName("session.jsonl"));
-        Assert.True(_guard.IsSessionFileName("session.jsonl.zstd"));
-        Assert.True(_guard.IsSessionFileName("session.v4.jsonl"));
-        Assert.True(_guard.IsSessionFileName("session.v10.jsonl.zstd"));
-        Assert.False(_guard.IsSessionFileName("Session.jsonl"));      // 大写不自动删（design.md §3）
-        Assert.False(_guard.IsSessionFileName("session.json"));
-        Assert.False(_guard.IsSessionFileName("session.jsonl.bak"));
-        Assert.False(_guard.IsSessionFileName("session.v0.jsonl"));   // N 为正整数
-        Assert.False(_guard.IsSessionFileName("session.vA.jsonl"));
-        Assert.False(_guard.IsSessionFileName("other.jsonl"));
+        // S05：白名单判定即 MatchSessionFileName 的 Success（单一正则，含 generation 捕获）。
+        Assert.True(_guard.MatchSessionFileName("session.jsonl").Success);
+        Assert.True(_guard.MatchSessionFileName("session.jsonl.zstd").Success);
+        Assert.Equal(4, int.Parse(_guard.MatchSessionFileName("session.v4.jsonl").Groups["generation"].Value));
+        Assert.Equal(10, int.Parse(_guard.MatchSessionFileName("session.v10.jsonl.zstd").Groups["generation"].Value));
+        Assert.False(_guard.MatchSessionFileName("Session.jsonl").Success);   // 大写不自动删（design.md §3）
+        Assert.False(_guard.MatchSessionFileName("session.json").Success);
+        Assert.False(_guard.MatchSessionFileName("session.jsonl.bak").Success);
+        Assert.False(_guard.MatchSessionFileName("session.v0.jsonl").Success); // N 为正整数
+        Assert.False(_guard.MatchSessionFileName("session.vA.jsonl").Success);
+        Assert.False(_guard.MatchSessionFileName("other.jsonl").Success);
     }
 
     [Fact]

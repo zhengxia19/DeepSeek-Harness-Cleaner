@@ -38,11 +38,12 @@ public sealed class PathGuard
     public static readonly string[] DesktopCacheDirs =
         ["Cache", "Code Cache", "GPUCache", "DawnGraphiteCache", "DawnWebGPUCache"];
 
-    /// <summary>会话文件名白名单：session.jsonl(.zstd)、session.vN.jsonl(.zstd)，N 为正整数（design.md §3）。大小写敏感。</summary>
+    /// <summary>会话文件名白名单：session.jsonl(.zstd)、session.vN.jsonl(.zstd)，N 为正整数（design.md §3）。大小写敏感。单一实现：白名单判定与代际解析共用此正则（S05）。</summary>
     private static readonly Regex SessionFileNamePattern =
-        new(@"^session(\.v[1-9][0-9]*)?\.jsonl(\.zstd)?$", RegexOptions.Compiled);
+        new(@"^session(?:\.v(?<generation>[1-9][0-9]*))?\.jsonl(?:\.zstd)?$", RegexOptions.Compiled);
 
-    public bool IsSessionFileName(string fileName) => SessionFileNamePattern.IsMatch(fileName);
+    /// <summary>一次匹配同时完成白名单判定与代际捕获：Success=false 即白名单外；generation 组未命中即 v0 默认代际。</summary>
+    public Match MatchSessionFileName(string fileName) => SessionFileNamePattern.Match(fileName);
 
     /// <summary>相对根的首段是否属于桌面缓存目录白名单。</summary>
     public bool IsDesktopCacheDirectory(string relativeDir)

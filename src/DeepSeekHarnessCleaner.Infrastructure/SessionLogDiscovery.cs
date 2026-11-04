@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Security;
-using System.Text.RegularExpressions;
 
 namespace DeepSeekHarnessCleaner.Infrastructure;
 
@@ -54,9 +53,6 @@ public sealed class SessionLogDiscovery
     public const string FileAccessReason = PathGuard.FileAccessDeniedErrorCode;
     public const string MissingReason = "MISSING";
 
-    private static readonly Regex GenerationPattern =
-        new(@"^session(?:\.v([1-9][0-9]*))?\.jsonl(?:\.zstd)?$", RegexOptions.Compiled);
-
     private readonly PathGuard _guard;
 
     public SessionLogDiscovery(PathGuard guard) =>
@@ -106,7 +102,9 @@ public sealed class SessionLogDiscovery
                 continue;
             }
 
-            if (!_guard.IsSessionFileName(name))
+            // 白名单判定与代际解析共用 PathGuard 的单一正则（S05），一次匹配。
+            var nameMatch = _guard.MatchSessionFileName(name);
+            if (!nameMatch.Success)
             {
                 anomalies.Add(new DiscoveryAnomaly(file, check.RelativePath, NotWhitelistedReason));
                 continue;
@@ -120,17 +118,17 @@ public sealed class SessionLogDiscovery
                 continue;
             }
 
-            var match = GenerationPattern.Match(name);
-            if (!match.Success
-                || (match.Groups[1].Success
-                    && !int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out _)))
+            // 白名单正则可接受超出 int 的代际数字：TryParse 失败按白名单外处理（行为不变）。
+            var generationGroup = nameMatch.Groups["generation"];
+            if (generationGroup.Success
+                && !int.TryParse(generationGroup.Value, NumberStyles.None, CultureInfo.InvariantCulture, out _))
             {
                 anomalies.Add(new DiscoveryAnomaly(file, check.RelativePath, NotWhitelistedReason));
                 continue;
             }
 
-            var generation = match.Groups[1].Success
-                ? int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture)
+            var generation = generationGroup.Success
+                ? int.Parse(generationGroup.Value, CultureInfo.InvariantCulture)
                 : 0;
             var encoding = name.EndsWith(".zstd", StringComparison.Ordinal)
                 ? SessionFileEncoding.Zstd

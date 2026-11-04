@@ -67,5 +67,5 @@
 - 目标：会话文件名白名单判定与代际解析共用同一正则，消除改一漏一漂移。
 - 实施内容：`PathGuard.IsSessionFileName` 改为返回匹配结果（含代际捕获组）或提供单一 `MatchSessionFileName`；`SessionLogDiscovery` 用一次匹配同时完成白名单判定与代际解析，删除并存的 `GenerationPattern` 第二正则。
 - 源码映射：`PathGuard.cs:42-43`、`SessionLogDiscovery.cs:109,123`。
-- 验收：[ ] 编译零警告；[ ] DiscoveryTests/HeaderTests 全过；[ ] 新增测试：白名单通过与代际解析结果对同一文件名恒一致（含畸形代际数字用例）；[ ] 单元测试全过。
+- 验收：[x] 编译零警告；[x] DiscoveryTests/HeaderTests 全过；[x] 新增测试：白名单通过与代际解析结果对同一文件名恒一致（含畸形代际数字用例）；[x] 单元测试全过。
 - 最小验证：`dotnet test --no-restore`。

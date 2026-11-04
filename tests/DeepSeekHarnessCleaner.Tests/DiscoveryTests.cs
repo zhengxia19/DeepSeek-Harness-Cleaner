@@ -191,4 +191,51 @@ public sealed class DiscoveryTests
         Assert.Equal(before, TreeSnapshot(fx.Root));
         Assert.Equal(sentinelSha, Sha256(sentinel));
     }
+
+    [Theory]
+    [InlineData("session.jsonl", 0)]
+    [InlineData("session.jsonl.zstd", 0)]
+    [InlineData("session.v1.jsonl", 1)]
+    [InlineData("session.v7.jsonl", 7)]
+    [InlineData("session.v10.jsonl", 10)]
+    [InlineData("session.v4.jsonl.zstd", 4)]
+    public void WhitelistPass_AndGenerationParse_AreSameSingleMatch(string name, int expectedGeneration)
+    {
+        // S05：白名单判定与代际解析共用 PathGuard 单一正则；Match.Success 与识别结果、
+        // generation 捕获与 Generation 字段对同一文件名恒一致。
+        var guard = new PathGuard();
+        Assert.True(guard.MatchSessionFileName(name).Success);
+
+        using var fx = FixtureRoot.Create();
+        var dir = Path.Combine(fx.SessionsRoot, "proj-s05", "s-consistent");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, name), "{}\n");
+
+        var result = Discovery.Discover(fx.SessionsRoot);
+        Assert.Empty(result.Anomalies);
+        var file = Assert.Single(result.Candidates).Files.Single();
+        Assert.Equal(name, Path.GetFileName(file.FullPath));
+        Assert.Equal(expectedGeneration, file.Generation);
+    }
+
+    [Theory]
+    [InlineData("session.v0.jsonl")]
+    [InlineData("session.v01.jsonl")]
+    [InlineData("session.v-1.jsonl")]
+    [InlineData("session.v99999999999.jsonl")] // 正则可匹配但超出 int：TryParse 拒绝，仍按白名单外
+    public void MalformedGeneration_WhitelistAndParse_RejectConsistently(string name)
+    {
+        var guard = new PathGuard();
+        using var fx = FixtureRoot.Create();
+        var dir = Path.Combine(fx.SessionsRoot, "proj-s05", "s-malformed");
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, name), "{}\n");
+
+        var result = Discovery.Discover(fx.SessionsRoot);
+        Assert.Empty(result.Candidates);
+        var anomaly = Assert.Single(result.Anomalies);
+        Assert.Equal(SessionLogDiscovery.NotWhitelistedReason, anomaly.Reason);
+        // 一致性：正则不匹配者（v0/v01/v-1）与正则匹配但代际溢出者（v99999999999）均被拒。
+        Assert.True(!guard.MatchSessionFileName(name).Success || name == "session.v99999999999.jsonl");
+    }
 }
