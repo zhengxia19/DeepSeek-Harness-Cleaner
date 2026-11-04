@@ -16,8 +16,6 @@ public sealed record WorkspaceMetadataPlan(Guid OperationId, Guid CleanupPlanId,
     IReadOnlyList<CleanupTarget> PhysicalTargets, IReadOnlyList<WorkspacePhysicalOutcome> DeletionOutcomes,
     IReadOnlyList<TargetPresenceEvidence> AbsenceEvidence)
 {
-    public const string SourceContractCommit = "687f282e8625c6b8d11ff58211a90524be2e4317";
-    public const string SourceContractId = "workspace/v2/json-single";
     // Recognition alone is insufficient: installed fingerprints/configuration/root and all safety gates must match.
     public static IReadOnlyList<string> ProductionWriteContractIds { get; } = Array.AsReadOnly(
         new[] { "dsh-desktop@0.2.1-rc.2/workspace/v2/json-single" });

@@ -227,22 +227,6 @@ public sealed class InventoryTests
     }
 
     [Fact]
-    public async Task ScanAsync_ReturnsSessionsViaResolvedRoots()
-    {
-        using var fx = FixtureRoot.Create();
-        fx.Factory.WriteValidV0Session();
-        fx.Factory.WriteValidV4Session();
-
-        var probe = new RootProbe(fx.SessionsRoot, RootSource.UserSelected, RootProbeStatus.Valid, null);
-        var roots = new ResolvedRoots(
-            fx.SessionsRoot, fx.SessionsRoot, fx.StoragesRoot, fx.AttachmentsRoot, fx.DesktopHome, probe, probe);
-
-        var sessions = await new InventoryService(new ScanSource()).ScanAsync(roots, CancellationToken.None);
-
-        Assert.Equal(2, sessions.Count);
-    }
-
-    [Fact]
     public void Sorting_CreatedAtDescending_UnknownDatesLast()
     {
         using var fx = FixtureRoot.Create();

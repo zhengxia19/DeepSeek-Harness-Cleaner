@@ -40,7 +40,7 @@ public sealed class CompressionTests
     }
 
     [Fact]
-    public void MultiFrameFile_DecodesThenSplitsToLines()
+    public void MultiFrameFile_DecodesAllFramesContent()
     {
         using var fixture = FixtureRoot.Create();
         var path = Path.Combine(fixture.Root, "session.v4.jsonl.zstd");
@@ -48,14 +48,9 @@ public sealed class CompressionTests
 
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         var decoded = ZstdFrameDecoder.Decode(fs);
-        var split = JsonlLineSplitter.Split(decoded.Content);
 
         Assert.True(decoded.IsSuccess);
-        Assert.Equal(3, split.Lines.Count);
-        Assert.Equal("a", Encoding.UTF8.GetString(split.Lines[0]));
-        Assert.Equal("b", Encoding.UTF8.GetString(split.Lines[1]));
-        Assert.Equal("c", Encoding.UTF8.GetString(split.Lines[2]));
-        Assert.False(split.HasTruncation);
+        Assert.Equal("a\nb\nc\n", Encoding.UTF8.GetString(decoded.Content));
     }
 
     // ---- 截断尾帧：不可当成正常成功 ----
@@ -203,33 +198,5 @@ public sealed class CompressionTests
         var result = ZstdFrameDecoder.Decode(new MemoryStream(ms.ToArray()));
 
         Assert.Equal(ZstdDecodeStatus.DecompressedLimitExceeded, result.Status);
-    }
-
-    // ---- 8MiB 行保护 ----
-
-    [Fact]
-    public void Line_Exceeding8MiB_CountedAndBodyDropped()
-    {
-        var longLine = new string('a', CompressionLimits.MaxLineBytes + 1);
-        var content = FixtureFactory.Utf8("first\n" + longLine + "\nlast\n");
-
-        var split = JsonlLineSplitter.Split(content);
-
-        Assert.Equal(1, split.TooLongLineCount);
-        Assert.True(split.HasTruncation);
-        Assert.Equal(2, split.Lines.Count);
-        Assert.Equal("first", Encoding.UTF8.GetString(split.Lines[0]));
-        Assert.Equal("last", Encoding.UTF8.GetString(split.Lines[1]));
-    }
-
-    [Fact]
-    public void Line_Exactly8MiB_Preserved()
-    {
-        var line = new string('b', CompressionLimits.MaxLineBytes);
-        var split = JsonlLineSplitter.Split(FixtureFactory.Utf8(line + "\n"));
-
-        Assert.Equal(0, split.TooLongLineCount);
-        Assert.Single(split.Lines);
-        Assert.Equal(CompressionLimits.MaxLineBytes, split.Lines[0].Length);
     }
 }

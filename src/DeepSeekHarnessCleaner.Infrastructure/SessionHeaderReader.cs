@@ -98,26 +98,6 @@ public sealed class SessionHeaderReader
             ? null : string.Equals(parsed.Header.SessionId, expectedSessionId, StringComparison.Ordinal));
     }
 
-    /// <summary>
-    /// 同一会话目录内各代际 header 身份一致性（design.md §2：身份冲突 → Ambiguous）。
-    /// 任一文件无有效 header，或有效 header 的 sessionId 不一致，均返回 false（不可删）。
-    /// </summary>
-    public static bool HeadersConsistent(IEnumerable<SessionHeaderReadResult> results)
-    {
-        string? id = null;
-        foreach (var result in results)
-        {
-            if (!result.HasValidHeader)
-                return false;
-            if (id is null)
-                id = result.Header!.SessionId;
-            else if (!string.Equals(id, result.Header!.SessionId, StringComparison.Ordinal))
-                return false;
-        }
-
-        return id is not null;
-    }
-
     private static SessionHeaderReadResult WithIdentity(
         SessionHeaderReadResult result,
         string? expectedSessionId,

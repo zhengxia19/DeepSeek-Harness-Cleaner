@@ -64,8 +64,8 @@ public sealed class HeaderTests
         Assert.Equal(4, v4.Header!.FormatVersion);
         Assert.True(v0.IdentityMatches);
         Assert.True(v4.IdentityMatches);
-        // TC-03：同一会话两代际 header 身份一致 → 允许清理。
-        Assert.True(SessionHeaderReader.HeadersConsistent(new[] { v0, v4 }));
+        // TC-03：同一会话两代际 header 身份一致 → 允许清理（Ambiguous 判定由 InventoryService 固定，见 InventoryTests）。
+        Assert.Equal(v0.Header!.SessionId, v4.Header!.SessionId);
     }
 
     [Fact]
@@ -78,7 +78,6 @@ public sealed class HeaderTests
         Assert.Equal(ParseStatus.Partial, result.Status);
         Assert.Equal(SessionHeaderReader.ZstdTruncatedErrorCode, result.ErrorCode);
         Assert.False(result.AllowsAutoCleanup);
-        Assert.False(SessionHeaderReader.HeadersConsistent(new[] { result }));
     }
 
     [Fact]
@@ -175,25 +174,6 @@ public sealed class HeaderTests
         var match = Reader.Read(path, expectedSessionId: "synth-v4-001");
         Assert.True(match.IdentityMatches);
         Assert.True(match.AllowsAutoCleanup);
-    }
-
-    [Fact]
-    public void ConflictingHeadersAcrossGenerations_NotConsistent()
-    {
-        using var fx = FixtureRoot.Create();
-        var dir = Path.Combine(fx.SessionsRoot, "proj-h", "s-conflict");
-        Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "session.jsonl"),
-            FixtureFactory.HeaderLine("id-a", 0, "2026-01-01T00:00:00Z") + "\n");
-        File.WriteAllBytes(Path.Combine(dir, "session.v4.jsonl.zstd"),
-            FixtureFactory.ZstdFrames(FixtureFactory.HeaderLine("id-b", 4, "2026-01-02T00:00:00Z") + "\n"));
-
-        var a = Reader.Read(Path.Combine(dir, "session.jsonl"));
-        var b = Reader.Read(Path.Combine(dir, "session.v4.jsonl.zstd"));
-        Assert.Equal(ParseStatus.Valid, a.Status);
-        Assert.Equal(ParseStatus.Valid, b.Status);
-        // design.md §2：header 身份冲突 → 不进入可删白名单。
-        Assert.False(SessionHeaderReader.HeadersConsistent(new[] { a, b }));
     }
 
     [Fact]

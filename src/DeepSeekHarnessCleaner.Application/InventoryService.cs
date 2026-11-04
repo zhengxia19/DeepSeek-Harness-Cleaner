@@ -11,12 +11,6 @@ public interface ISessionScanSource
     SessionScanData Scan(string sessionRoot);
 }
 
-/// <summary>会话库存扫描合同（interfaces.md ISessionInventory）。</summary>
-public interface ISessionInventory
-{
-    Task<IReadOnlyList<SessionSummary>> ScanAsync(ResolvedRoots roots, CancellationToken ct);
-}
-
 /// <summary>
 /// 库存与磁盘统计结果。TotalBytes 为全部逻辑会话物理文件求和；
 /// AnomalousFiles 为不属于任何会话目录的异常文件（可解释、不自动清理）。
@@ -34,7 +28,7 @@ public sealed record InventoryResult(
 /// 多代际物理文件归并为一条逻辑会话；容量按所有物理文件求和；
 /// 单个文件损坏只影响该会话状态，不中断扫描。
 /// </summary>
-public sealed class InventoryService : ISessionInventory
+public sealed class InventoryService
 {
     private readonly ISessionScanSource _source;
 
@@ -71,13 +65,6 @@ public sealed class InventoryService : ISessionInventory
 
         var total = sessions.Sum(static s => s.TotalBytes);
         return new InventoryResult(null, sessions, data.AnomalousFiles) { TotalBytes = total };
-    }
-
-    public Task<IReadOnlyList<SessionSummary>> ScanAsync(ResolvedRoots roots, CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(roots);
-        var result = Scan(roots.SessionRoot, ct);
-        return Task.FromResult(result.Sessions);
     }
 
     private static SessionSummary MergeSession(ScannedSessionDirectory dir)

@@ -119,8 +119,9 @@ public sealed class BackupManifestBuilder
     /// <summary>
     /// 校验清单：结构复核 → 可选签名核对 → 逐条目从磁盘复算长度与 SHA-256 →
     /// 可选实际文件集合（出现清单外文件即 UNKNOWN_FILE）。
+    /// internal：生产路径（BackupService）不复验清单对象，仅测试直接复验。
     /// </summary>
-    public ManifestVerifyResult Verify(
+    internal ManifestVerifyResult Verify(
         BackupManifest manifest,
         string root,
         IReadOnlyList<string>? actualFiles = null,

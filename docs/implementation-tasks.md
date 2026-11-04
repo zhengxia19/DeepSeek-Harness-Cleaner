@@ -51,7 +51,7 @@
 - 目标：src 内无生产零调用者的公开 API。
 - 实施内容：删除 `JsonlLineSplitter`（生产零调用；`SessionEventReader.ParseLines:147-183` 为实际实现，其测试改测 `ParseLines` 或删除）；删除 `HeadersConsistent`（生产走 `header.IdentityMatches`）；删除 `ISessionInventory`（调用方持具体类型）；删除 `ScanAsync`（`Task.FromResult` 假异步，零生产调用）；`BackupManifestBuilder.Verify`（90 行仅测试用）降为 internal 或删除；删除 `SourceContractId`/`SourceContractCommit` 死常量。
 - 源码映射：`Compression/JsonlLineSplitter.cs`、`SessionHeaderReader.cs:105`、`InventoryService.cs:15-18,76-81`、`BackupManifest.cs:124-214`、`WorkspaceMetadataPlan.cs:17-23`；对应测试 `CompressionTests.cs`、`HeaderTests.cs`、`InventoryTests.cs:241`、`ManifestTests.cs:160-236`。
-- 验收：[ ] 编译零警告；[ ] 测试项目同步更新后全过；[ ] grep 证实上述符号在 src 零引用；[ ] 提交信息记录删除符号清单与行数。
+- 验收：[x] 编译零警告；[x] 测试项目同步更新后全过；[x] grep 证实上述符号在 src 零引用；[x] 提交信息记录删除符号清单与行数。
 - 最小验证：`dotnet test --no-restore`。
 
 ### S04 去除同一时刻对同一不可变值的重复校验
