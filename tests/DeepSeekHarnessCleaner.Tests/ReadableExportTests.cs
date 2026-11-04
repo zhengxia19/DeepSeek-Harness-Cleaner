@@ -15,7 +15,6 @@ public sealed class ReadableExportTests
             "synth-exp-001",
             "proj-exp",
             new DateTimeOffset(2026, 1, 5, 9, 0, 0, TimeSpan.Zero),
-            null,
             DateOrigin.Header,
             [new PhysicalLog(@"C:\synth\session.jsonl", generation, false, 123, DateTimeOffset.UnixEpoch, null, ParseStatus.Valid)],
             ParseStatus.Valid)

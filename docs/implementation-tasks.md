@@ -35,7 +35,7 @@
 - 目标：日期过滤可选项与实际生产的数据一致，用户选择后不再静默清空列表。
 - 实施内容：`LastActivityAt` 全仓唯一赋值点为 null，但 UI 暴露该过滤项且过滤器恒 false。端到端删除该死字段：不发明"活动时间"语义（现有"文件修改时间"过滤已覆盖 mtime）；如未来需要按活动过滤，另立任务定义数据来源。
 - 源码映射：`InventoryService.cs:120`（唯一赋值 null）、`SessionSummary.cs:41`（字段）、`SessionFilter.cs:12,81`（枚举与恒 false 分支）、`SettingsDialog.cs:19`（UI 选项）、`SettingsStore.cs:275,283`（设置 token 映射）、`ReadableExport.cs:240`（导出行；如 `interfaces.md` 列有该字段同步更新）。
-- 验收：[ ] 编译零警告；[ ] 相关测试（InventoryTests/FilterTests/SettingsTests）同步更新后全过；[ ] "创建时间/文件修改时间"过滤行为不变；[ ] 旧 settings.json 含 `lastActivityAt` token 时加载不报错（未知 token 按既有策略处理）。
+- 验收：[x] 编译零警告；[x] 相关测试（InventoryTests/FilterTests/SettingsTests）同步更新后全过；[x] "创建时间/文件修改时间"过滤行为不变；[x] 旧 settings.json 含 `lastActivityAt` token 时加载不报错（未知 token 按既有策略处理）。
 - 最小验证：`dotnet test --no-restore`（单元测试项目）。
 
 ### S02 收敛路径守卫与根指纹（五份发散拷贝）

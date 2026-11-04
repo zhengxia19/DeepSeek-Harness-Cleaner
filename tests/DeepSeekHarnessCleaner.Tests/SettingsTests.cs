@@ -166,7 +166,7 @@ public sealed class SettingsTests
         var store = new SettingsStore(SettingsPath(fx));
         Directory.CreateDirectory(Path.GetDirectoryName(store.FilePath)!);
         File.WriteAllText(store.FilePath, """
-            { "schemaVersion": 1, "dateField": "lastLoginAt" }
+            { "schemaVersion": 1, "dateField": "lastActivityAt" }
             """);
 
         var loaded = store.Load();

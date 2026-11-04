@@ -38,7 +38,6 @@ public sealed record SessionSummary(
     string? SessionId,
     string? Project,
     DateTimeOffset? CreatedAt,
-    DateTimeOffset? LastActivityAt,
     DateOrigin DateOrigin,
     IReadOnlyList<PhysicalLog> Generations,
     ParseStatus Status)

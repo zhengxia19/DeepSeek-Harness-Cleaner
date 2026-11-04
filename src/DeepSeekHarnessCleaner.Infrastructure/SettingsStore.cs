@@ -272,7 +272,6 @@ public sealed class SettingsStore
         return value.GetString() switch
         {
             var token when string.Equals(token, "createdAt", StringComparison.OrdinalIgnoreCase) => DateFilterField.CreatedAt,
-            var token when string.Equals(token, "lastActivityAt", StringComparison.OrdinalIgnoreCase) => DateFilterField.LastActivityAt,
             _ => DateFilterField.FileModified,
         };
     }
@@ -280,7 +279,6 @@ public sealed class SettingsStore
     private static string DateFieldToToken(DateFilterField field) => field switch
     {
         DateFilterField.CreatedAt => "createdAt",
-        DateFilterField.LastActivityAt => "lastActivityAt",
         DateFilterField.FileModified => "fileModified",
         _ => "fileModified",
     };

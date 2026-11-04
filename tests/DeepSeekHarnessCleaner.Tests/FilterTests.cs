@@ -36,7 +36,6 @@ public sealed class FilterTests
             sessionId,
             project,
             createdAt,
-            LastActivityAt: null,
             createdAt is null ? DateOrigin.Unknown : DateOrigin.Header,
             logs,
             ParseStatus.Valid)
@@ -83,11 +82,9 @@ public sealed class FilterTests
     public void UnknownDates_Excluded_NotCoercedToToday()
     {
         var noCreated = Make("s-nc", "proj-a", null, new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero));
-        var noActivity = Make("s-na", "proj-a", new DateTimeOffset(2026, 5, 1, 0, 0, 0, TimeSpan.Zero), null);
-        var noFiles = new SessionSummary("s-nf", "proj-a", null, null, DateOrigin.Unknown, [], ParseStatus.Corrupt);
+        var noFiles = new SessionSummary("s-nf", "proj-a", null, DateOrigin.Unknown, [], ParseStatus.Corrupt);
 
         Assert.Empty(Apply(new[] { noCreated }, ByDate(DateFilterField.CreatedAt, "2020-01-01", "2030-12-31"), TimeZoneInfo.Utc));
-        Assert.Empty(Apply(new[] { noActivity }, ByDate(DateFilterField.LastActivityAt, "2020-01-01", "2030-12-31"), TimeZoneInfo.Utc));
         Assert.Empty(Apply(new[] { noFiles }, ByDate(DateFilterField.FileModified, "2020-01-01", "2030-12-31"), TimeZoneInfo.Utc));
     }
 

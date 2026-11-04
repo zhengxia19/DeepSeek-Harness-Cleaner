@@ -19,7 +19,7 @@ public sealed class LegacyPreviewTests
         new($@"X:\synth\session.v{generation}.jsonl", generation, Compressed: false, bytes, Epoch, null, status);
 
     private static SessionSummary Summary(ParseStatus status, params PhysicalLog[] logs) =>
-        new("synth-legacy-001", "proj-alpha", Epoch, null, DateOrigin.Header, logs, status)
+        new("synth-legacy-001", "proj-alpha", Epoch, DateOrigin.Header, logs, status)
         {
             TotalBytes = logs.Sum(l => l.Bytes),
         };

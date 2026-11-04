@@ -114,7 +114,6 @@ public sealed class InventoryTests
         Assert.False(session.IsAmbiguous);
         Assert.Equal(new DateTimeOffset(2026, 1, 20, 8, 0, 0, TimeSpan.Zero), session.CreatedAt);
         Assert.Equal(DateOrigin.Header, session.DateOrigin);
-        Assert.Null(session.LastActivityAt);
     }
 
     [Fact]

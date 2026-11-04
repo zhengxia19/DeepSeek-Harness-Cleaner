@@ -88,7 +88,7 @@ public sealed class SessionResidueInventory
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 { valid = false; issues.Add(new("LOG_UNREADABLE", file.FullPath, id)); }
             }
-            summaries.Add(new SessionSummary(valid ? id : null, null, null, null, DateOrigin.Unknown, logs,
+            summaries.Add(new SessionSummary(valid ? id : null, null, null, DateOrigin.Unknown, logs,
                 valid ? ParseStatus.Valid : ParseStatus.Partial)
             { IsAmbiguous = !valid });
             if (!valid)

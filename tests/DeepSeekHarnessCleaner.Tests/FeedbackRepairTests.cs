@@ -61,7 +61,7 @@ public sealed class FeedbackRepairTests
             var before = new[] { sentinel, keep }.ToDictionary(x => x, Hash);
             var actions = new ActionsPresenter(() => []);
             var session = Assert.Single(new InventoryService(new UiScanSource()).Scan(fx.SessionsRoot).Sessions.DefaultIfEmpty(
-                new SessionSummary(null, null, null, null, DateOrigin.Unknown, [], ParseStatus.Valid)));
+                new SessionSummary(null, null, null, DateOrigin.Unknown, [], ParseStatus.Valid)));
             var plan = attachment
                 ? new AttachmentCleanupSelection().Select(fx.DshHome, new AttachmentInventoryService().Scan(fx.DshHome, []).Items.Select(x => x.Candidate).ToArray(), [target]).Plan!
                 : actions.BuildSessionPlan(fx.SessionsRoot, [session]).Plan!;

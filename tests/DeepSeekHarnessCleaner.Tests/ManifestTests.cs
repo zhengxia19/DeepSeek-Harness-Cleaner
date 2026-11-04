@@ -17,7 +17,7 @@ public sealed class ManifestTests
         new(full, generation, false, new FileInfo(full).Length, DateTimeOffset.UnixEpoch, null, status);
 
     private static SessionSummary Session(string? id, params PhysicalLog[] logs) =>
-        new(id, "proj", null, null, DateOrigin.FileMtime, logs, ParseStatus.Valid);
+        new(id, "proj", null, DateOrigin.FileMtime, logs, ParseStatus.Valid);
 
     private static string ExpectedSha(byte[] content) =>
         Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant();
@@ -85,7 +85,7 @@ public sealed class ManifestTests
         using var fx = FixtureRoot.Create();
         var file = fx.Factory.WriteSessionFile("proj-a", "sess-1", "session.jsonl", FixtureFactory.Utf8("s\n"));
         var session = new SessionSummary(
-            "sess-1", "proj", null, null, DateOrigin.FileMtime,
+            "sess-1", "proj", null, DateOrigin.FileMtime,
             [Log(file, 0, ParseStatus.Corrupt)], ParseStatus.Corrupt);
 
         var result = new BackupManifestBuilder().Build(fx.DshHome, [session]);

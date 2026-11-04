@@ -68,7 +68,7 @@ public sealed class CleanupExecutorTests
         var outside = fx.Factory.WriteFile(fx.Root, "outside.txt", FixtureFactory.Utf8("sentinel\n"), BaseTime);
 
         var sessionSummary = new SessionSummary(
-            SessionId, Project, null, null, DateOrigin.FileMtime, [Log(session, 0), Log(v4, 4)], ParseStatus.Valid);
+            SessionId, Project, null, DateOrigin.FileMtime, [Log(session, 0), Log(v4, 4)], ParseStatus.Valid);
 
         var plan = new CleanupPlanner().Build(fx.DshHome, [sessionSummary], []).Plan! with { RequiresBackup = true };
         var manifest = new BackupManifestBuilder().Build(fx.DshHome, [sessionSummary]).Manifest!;

@@ -8,9 +8,6 @@ public enum DateFilterField
     /// <summary>有效 header 的 createdAt。</summary>
     CreatedAt,
 
-    /// <summary>经 schema 验证的最近活动事件时间（缺失即未知）。</summary>
-    LastActivityAt,
-
     /// <summary>物理文件 LastWriteTimeUtc 兜底（UI 须标注“文件修改时间（非会话活动）”）。</summary>
     FileModified,
 }
@@ -78,7 +75,6 @@ public static class SessionFilter
         var instant = range.Field switch
         {
             DateFilterField.CreatedAt => session.CreatedAt,
-            DateFilterField.LastActivityAt => session.LastActivityAt,
             DateFilterField.FileModified => MaxModifiedAt(session),
             _ => throw new ArgumentOutOfRangeException(nameof(range), range.Field, "未知日期筛选字段。"),
         };

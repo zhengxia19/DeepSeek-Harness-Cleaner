@@ -117,7 +117,6 @@ public sealed class InventoryService : ISessionInventory
             sessionId,
             project,
             createdAt,
-            LastActivityAt: null,
             createdAt is not null ? DateOrigin.Header : DateOrigin.Unknown,
             generations,
             status)

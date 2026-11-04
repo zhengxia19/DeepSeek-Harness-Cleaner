@@ -12,7 +12,7 @@ record ResolvedRoots(string SessionRoot, string StorageRoot, string AttachmentRo
 record PhysicalLog(string FullPath, int Generation, bool Compressed, long Bytes,
                    DateTimeOffset ModifiedAt, string? Sha256, ParseStatus Status);
 record SessionSummary(string SessionId, string? Project, DateTimeOffset? CreatedAt,
-                      DateTimeOffset? LastActivityAt, DateOrigin DateOrigin,
+                      DateOrigin DateOrigin,
                       IReadOnlyList<PhysicalLog> Generations, ParseStatus Status);
 record PreviewItem(string Role, string Text, DateTimeOffset? At, bool IsPartial);
 record AttachmentRecord(string FullPath, long Bytes, ReferenceStatus Status,
@@ -50,8 +50,8 @@ record ItemOutcome(string FullPath, ActionStatus Status, long BytesRemoved, stri
 ## 3. 时间规则
 
 - `createdAt`：有效 header 值；不能从目录名猜测。
-- `lastActivityAt`：仅使用经 schema 验证的事件时间戳，缺失则标记不确定；文件 `LastWriteTimeUtc` 仅可作为文件修改时间兜底筛选，UI 标注“文件修改时间（非会话活动）”。
-- 筛选模式：创建日期/最近活动日期/文件修改日期，默认“文件修改日期”以实现所有记录可筛选，用户可切换；日期均以本机当前本地时区的 `DateOnly` 包含式区间 `[start 00:00, day-after-end 00:00)` 计算；不支持将未知日期硬填为今天。
+- 文件修改时间：文件 `LastWriteTimeUtc` 仅可作为文件修改时间兜底筛选，UI 标注“文件修改时间（非会话活动）”；会话活动事件时间戳未形成可验证字段，不提供“最近活动时间”筛选（2026-11-04 S01 移除恒空字段）。
+- 筛选模式：创建日期/文件修改日期，默认“文件修改日期”以实现所有记录可筛选，用户可切换；日期均以本机当前本地时区的 `DateOnly` 包含式区间 `[start 00:00, day-after-end 00:00)` 计算；不支持将未知日期硬填为今天。
 - 排序稳定：日期降序 → 会话 ID 升序；没有日期的条目排末尾。
 - 日期筛选**只控制要删除哪些完整会话**，绝不编辑日志内部事件。
 

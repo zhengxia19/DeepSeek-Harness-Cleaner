@@ -16,14 +16,12 @@ public sealed class SettingsDialog : Form
     private static readonly DateFilterField[] DateFieldOrder =
     [
         DateFilterField.CreatedAt,
-        DateFilterField.LastActivityAt,
         DateFilterField.FileModified,
     ];
 
     private static readonly string[] DateFieldLabels =
     [
         "创建时间",
-        "最近活动时间",
         "文件修改时间（非会话活动）",
     ];
 

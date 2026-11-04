@@ -16,7 +16,7 @@ public sealed class BackupTests
         new(full, generation, false, new FileInfo(full).Length, DateTimeOffset.UnixEpoch, null, ParseStatus.Valid);
 
     private static SessionSummary Session(string id, params PhysicalLog[] logs) =>
-        new(id, "proj", null, null, DateOrigin.FileMtime, logs, ParseStatus.Valid);
+        new(id, "proj", null, DateOrigin.FileMtime, logs, ParseStatus.Valid);
 
     private static BackupManifest BuildManifest(FixtureRoot fx, string sessionFile, string v4File, string attachmentFile)
     {

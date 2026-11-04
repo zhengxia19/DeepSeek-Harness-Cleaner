@@ -24,7 +24,6 @@ public sealed class CleanupPlanTests
             id,
             "proj",
             new DateTimeOffset(2026, 1, 5, 9, 0, 0, TimeSpan.Zero),
-            null,
             DateOrigin.Header,
             logs,
             status)

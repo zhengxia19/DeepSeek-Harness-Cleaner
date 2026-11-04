@@ -237,7 +237,6 @@ public sealed class ReadableExport
         WriteStringOrNull(writer, "sessionId", session.SessionId);
         WriteStringOrNull(writer, "project", session.Project);
         WriteDate(writer, "createdAt", session.CreatedAt);
-        WriteDate(writer, "lastActivityAt", session.LastActivityAt);
         writer.WriteString("status", session.Status.ToString());
         writer.WriteBoolean("exportIncomplete", exportIncomplete);
 
