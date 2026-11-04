@@ -145,13 +145,26 @@ public sealed class RootLocatorTests : IDisposable
     {
         var partial = MakeDir("partial-dsh");
         Directory.CreateDirectory(Path.Combine(partial, "sessions"));
-        Directory.CreateDirectory(Path.Combine(partial, "storages"));
-        // 缺 attachments
+        // 缺 storages（ROOT-20261104：必备标记为 sessions+storages）
 
         var roots = new RootLocator().Resolve(partial, null);
 
         Assert.Equal(RootProbeStatus.NotHarness, roots.DshProbe.Status);
         Assert.Equal(RootLocator.RootInvalidErrorCode, roots.DshProbe.ErrorCode);
+    }
+
+    [Fact]
+    public void AttachmentsMarker_IsOptional_AndNeverCreatedByProbe()
+    {
+        var home = MakeDir("no-attachments-dsh");
+        Directory.CreateDirectory(Path.Combine(home, "sessions"));
+        Directory.CreateDirectory(Path.Combine(home, "storages"));
+
+        var roots = new RootLocator().Resolve(home, null);
+
+        Assert.Equal(RootProbeStatus.Valid, roots.DshProbe.Status);
+        Assert.Null(roots.DshProbe.ErrorCode);
+        Assert.False(Directory.Exists(Path.Combine(home, "attachments")));
     }
 
     [Fact]

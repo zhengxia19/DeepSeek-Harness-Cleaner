@@ -66,6 +66,7 @@ public sealed class RootSafetyTests
         Assert.Equal(RootCandidateStatus.Missing, absent.Status);
         Assert.Equal("ROOT_MISSING", absent.Reason);
         Assert.False(Directory.Exists(Path.Combine(partial, "storages")));
+        Assert.False(Directory.Exists(Path.Combine(partial, "attachments")));
         Assert.False(Directory.Exists(missing));
     }
 
@@ -99,6 +100,26 @@ public sealed class RootSafetyTests
         }
         finally { if (Directory.Exists(link)) Directory.Delete(link); }
         Assert.Equal(hash, SHA256.HashData(File.ReadAllBytes(sentinel)));
+    }
+
+    [Fact]
+    public void OptionalAttachmentsMarker_IsStillProbedForReparse()
+    {
+        using var root = FixtureRoot.Create();
+        using var outside = FixtureRoot.Create();
+        var home = Path.Combine(root.Root, "no-att-home");
+        Directory.CreateDirectory(Path.Combine(home, "sessions"));
+        Directory.CreateDirectory(Path.Combine(home, "storages"));
+        var link = Path.Combine(home, "attachments");
+        try
+        {
+            Directory.CreateSymbolicLink(link, outside.Root);
+            var candidate = Assert.Single(Locator(root).DiscoverCandidates(selectedDshHome: home).Candidates,
+                x => x.Sources.Contains(RootCandidateSource.UserSelected));
+            Assert.Equal(RootCandidateStatus.Invalid, candidate.Status);
+            Assert.Equal(PathGuard.PathReparseErrorCode, candidate.Reason);
+        }
+        finally { if (Directory.Exists(link)) Directory.Delete(link); }
     }
 
     [Theory]

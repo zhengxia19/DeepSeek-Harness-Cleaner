@@ -1,0 +1,46 @@
+ROOT-20261104 会话根标记契约调整（sessions/storages 必备，attachments 可选）
+Date: 2026-11-04
+Task source: docs/implementation-tasks.md “新任务 ROOT-20261104”（用户 2026-11-04 对话授权）
+Baseline commit: d5915a9 (v0.3.0)
+
+ChangedFiles:
+- src/DeepSeekHarnessCleaner.Infrastructure/RootLocator.cs
+  DshRequiredDirs = ["sessions","storages"]；新增 DshOptionalMarkerDirs = ["attachments"]；
+  可选标记存在时仍经 PathGuard 复验（reparse/访问拒绝仍拒绝根），缺失不创建、不影响有效性。
+- src/DeepSeekHarnessCleaner.UI/RootSelectionDialog.cs
+  手选目录说明改为“包含 sessions/storages”。
+- tests/DeepSeekHarnessCleaner.Tests/RootLocatorTests.cs
+  PartialMarkers 改为缺 storages 仍 NotHarness；新增 AttachmentsMarker_IsOptional_AndNeverCreatedByProbe。
+- tests/DeepSeekHarnessCleaner.Tests/RootSafetyTests.cs
+  MissingMarkers 负例增加 attachments 不被创建断言；
+  新增 OptionalAttachmentsMarker_IsStillProbedForReparse（attachments 符号链接 → PATH_REPARSE 拒绝）。
+- docs/interfaces.md §2 增加 ROOT-20261104 标记契约段。
+- docs/implementation-tasks.md 新增任务条目与勾选。
+
+Real-machine diagnosis evidence (target machine 191.1.220.202, read-only via ssh):
+- dir C:\Users\zx\.dsh: profiles/sessions/storages 存在，attachments 缺失；sessions 含 2 个会话目录。
+- 开发机 C:\Users\zx\.dsh: attachments 创建于 2026-10-15，晚于 sessions/storages（2026-08-24），证实懒创建。
+
+Commands and results (project-local SDK via scripts/enter-env.ps1):
+1. dotnet build src\DeepSeekHarnessCleaner.UI\DeepSeekHarnessCleaner.UI.csproj -c Release
+   Exit 0；0 warnings / 0 errors。
+2. dotnet test tests\DeepSeekHarnessCleaner.Tests\DeepSeekHarnessCleaner.Tests.csproj -c Release
+   Exit 0；683 passed, 0 failed, 0 skipped（含新增 2 个用例与修改的 2 个用例）。
+3. dotnet build tests\DeepSeekHarnessCleaner.WindowsTests\...csproj -c Release -warnaserror
+   Exit 0；0 warnings / 0 errors。
+4. dotnet run --project tests\DeepSeekHarnessCleaner.WindowsTests\... -- --roots-only
+   Exit 0；根选择/扫描/删除门禁断言全部 PASS，哨兵哈希未变。
+5. dotnet run --project tests\DeepSeekHarnessCleaner.WindowsTests\...（完整 UI 回归）
+   Exit 1；失败断言 “report shows actual horizontal and vertical scrollbars”。
+   基线对照：git stash 后在未修改 HEAD(d5915a9) 上以同命令复跑，同一断言同样 FAIL（Exit 1）。
+   结论：该失败为既有环境问题（报告窗口最小尺寸下 DataGridView 水平滚动条未出现），
+   与本任务改动无关；roots-only 与单元测试覆盖本任务全部相关路径。
+6. packages.lock.json 因 restore 产生的 incidental 改动已 git checkout 还原，不在提交范围。
+
+Negative checks:
+- 仅 sessions（缺 storages）→ ROOT_MARKERS_MISSING / NotHarness：PASS（RootSafetyTests、RootLocatorTests 实测）。
+- attachments 为符号链接 → PATH_REPARSE 拒绝：PASS（新增用例实测）。
+- sessions+storages 缺 attachments → Valid 且探测不创建 attachments：PASS（新增用例实测）。
+- 真实根只读：本任务未向任何真实数据根写入；SSH 检查仅 dir/echo。
+
+Status: 全部任务验收项通过；完整 UI 回归的既有环境失败已记录，不视为本任务阻断。

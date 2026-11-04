@@ -13,8 +13,11 @@ public sealed class RootLocator
     public const string DshHomeEnvironmentVariable = "DSH_HOME";
     public const string RootInvalidErrorCode = "ROOT_INVALID";
 
-    /// <summary>.dsh 根必须同时存在的顶层结构目录（architecture.md §5 三个受控区域）。</summary>
-    private static readonly string[] DshRequiredDirs = ["sessions", "storages", "attachments"];
+    /// <summary>.dsh 根必须同时存在的顶层结构目录（architecture.md §5 受控区域；ROOT-20261104：attachments 为 DSH 懒创建，降为可选）。</summary>
+    private static readonly string[] DshRequiredDirs = ["sessions", "storages"];
+
+    /// <summary>可选标记：存在时仍须通过 PathGuard 复验，缺失不影响根有效性（ROOT-20261104）。</summary>
+    private static readonly string[] DshOptionalMarkerDirs = ["attachments"];
 
     /// <summary>桌面根必备目录与任一佐证目录（architecture.md §5 DesktopRoot 白名单）。</summary>
     private const string DesktopRequiredDir = "Cache";
@@ -105,7 +108,8 @@ public sealed class RootLocator
                 return (check.ErrorCode == PathGuard.FileAccessDeniedErrorCode ? RootCandidateStatus.Inaccessible : RootCandidateStatus.Invalid,
                     check.ErrorCode ?? RootInvalidErrorCode);
             var dirs = TopLevelDirectories(path);
-            var markers = kind == RootCandidateKind.DshHome ? DshRequiredDirs : new[] { DesktopRequiredDir }.Concat(DesktopEvidenceDirs).ToArray();
+            var markers = kind == RootCandidateKind.DshHome ? DshRequiredDirs.Concat(DshOptionalMarkerDirs).ToArray()
+                : new[] { DesktopRequiredDir }.Concat(DesktopEvidenceDirs).ToArray();
             var valid = kind == RootCandidateKind.DshHome ? DshRequiredDirs.All(dirs.Contains)
                 : dirs.Contains(DesktopRequiredDir) && DesktopEvidenceDirs.Any(dirs.Contains);
             foreach (var marker in markers)

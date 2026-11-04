@@ -75,7 +75,7 @@ public sealed class RootSelectionDialog : Form
 
     private void Browse(bool desktop)
     {
-        using var picker = new FolderBrowserDialog { Description = desktop ? "选择桌面数据根" : "选择 .dsh 数据根（包含 sessions/storages/attachments）", UseDescriptionForTitle = true };
+        using var picker = new FolderBrowserDialog { Description = desktop ? "选择桌面数据根" : "选择 .dsh 数据根（包含 sessions/storages）", UseDescriptionForTitle = true };
         if (picker.ShowDialog(this) != DialogResult.OK) return;
         if (desktop) _manualDesktop = picker.SelectedPath;
         else _manualDsh = picker.SelectedPath;

@@ -38,6 +38,10 @@ T05 校验限定为上述四类来源：相对/驱动器相对路径、UNC/设�
 末尾点/空格歧义段在探测前拒绝。驱动器根、真实用户目录根和运行程序目录由 `PathGuard`
 拒绝；逐级检查祖先与根自身，不跟随重解析点。只枚举已列根的顶层标记，并通过 `PathGuard`
 复验各受控子目录及其枚举权限；不递归发现其他根。
+ROOT-20261104：会话根必备标记为 `sessions` 与 `storages`；`attachments` 为 DSH 懒创建的
+可选标记——存在时仍经同一 `PathGuard` 复验（重解析/访问拒绝仍拒绝该根），缺失不影响
+有效性，且探测不得创建它。缺失的 `attachments` 由附件盘点以 `ATTACHMENT_ROOT_MISSING`
+问题项降级，不阻断会话清理。
 
 候选原因包含 `ROOT_NOT_ABSOLUTE`、`ROOT_UNC_OR_DEVICE`、`ROOT_TRAVERSAL`、
 `ROOT_AMBIGUOUS_SEGMENT`、`ROOT_INVALID`、`ROOT_MISSING`、`ROOT_MARKERS_MISSING`、

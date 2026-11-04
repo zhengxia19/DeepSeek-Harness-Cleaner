@@ -11,3 +11,11 @@
 历史任务的原始勾选与证据不重写；旧计划中未勾选条目不自动成为新待办。后续开发先根据用户新需求形成独立任务清单，明确范围、依赖、验收及证据，再按单任务规则实施。
 
 本次维护任务 DOC-20261020：更新用户验收状态、归档历史变更/过程文件、校验哈希与文档引用，提交并推送。证据见 [维护记录](../artifacts/evidence/DOC-20261020.txt)。
+
+## 新任务 ROOT-20261104：会话根标记契约调整（用户 2026-11-04 授权）
+
+背景：目标机 `C:\Users\zx\.dsh` 含 `sessions`/`storages` 会话数据但从未使用附件，`attachments` 为 DSH 懒创建目录（开发机实测其创建时间晚于 sessions/storages 两个月），被现行为"三目录必备"整体判为 `ROOT_MARKERS_MISSING`，无法清理。
+
+范围：`RootLocator` 会话根必备标记改为 `sessions`+`storages`；`attachments` 为可选标记——存在时仍经 `PathGuard` 复验（reparse/访问拒绝仍拒绝），缺失不影响有效性；同步更新选择对话框目录说明与 `interfaces.md` §2 标记契约。不改动桌面根标记、扫描/删除路径白名单与 `Resolve` 派生子根行为（缺失 `attachments` 由 `AttachmentInventoryService` 既有 `ATTACHMENT_ROOT_MISSING` 问题项降级处理）。
+
+验收：[x] 编译通过；[x] 单元测试含"缺 attachments 仍有效且不创建该目录"与"attachments 为 reparse 仍拒绝"；[x] 原必备标记缺失（仅 sessions）仍 `ROOT_MARKERS_MISSING`；[x] 相关回归测试通过（单元测试 683 全过；WindowsTests `--roots-only` 全过；完整 UI 回归存在既有环境失败"报告窗口滚动条"，经未修改 HEAD 基线复跑确认为既有问题，与本任务无关）；[x] 证据落盘 `artifacts/evidence/ROOT-20261104.txt`。
