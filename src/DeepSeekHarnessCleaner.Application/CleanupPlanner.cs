@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using DeepSeekHarnessCleaner.Domain;
 
 namespace DeepSeekHarnessCleaner.Application;
@@ -63,8 +61,6 @@ public sealed record DedicatedCacheEvidence(
 /// </summary>
 public sealed class CleanupPlanner
 {
-    private const string CodeTraversal = "PATH_TRAVERSAL";
-    private const string CodeCrossRoot = "CROSS_ROOT";
     private const string CodeRootInvalid = "ROOT_INVALID";
 
     /// <summary>生成计划。<paramref name="selectedSessions"/> 为用户选择（含日期筛选结果）的完整会话集合。</summary>
@@ -79,7 +75,7 @@ public sealed class CleanupPlanner
         string rootFull;
         try
         {
-            rootFull = NormalizeRoot(sessionRoot);
+            rootFull = RootGuard.NormalizeRoot(sessionRoot);
         }
         catch (ArgumentException)
         {
@@ -171,7 +167,8 @@ public sealed class CleanupPlanner
                 continue; // 未选会话（或其缓存属于被排除会话）：不进入计划。
             }
 
-            if (TryContain(rootFull, cache.FullPath, out var cacheFull, out var cacheError))
+            var cacheError = RootGuard.TryContain(rootFull, cache.FullPath, out var cacheFull);
+            if (cacheError is null)
             {
                 targets.Add(new CleanupTarget(
                     cacheFull, CleanupCategory.DedicatedCache, cache.OwnerSessionId,
@@ -188,7 +185,7 @@ public sealed class CleanupPlanner
         var plan = new CleanupPlan(
             Guid.NewGuid(),
             DateTimeOffset.UtcNow,
-            ComputeRootFingerprint(rootFull),
+            RootGuard.FingerprintOf(rootFull),
             targets,
             RequiresBackup: false);
         return new CleanupPlanResult(null, plan, exclusions);
@@ -216,9 +213,10 @@ public sealed class CleanupPlanner
                 return false;
             }
 
-            if (!TryContain(rootFull, log.FullPath, out var logFull, out var pathError))
+            var pathError = RootGuard.TryContain(rootFull, log.FullPath, out var logFull);
+            if (pathError is not null)
             {
-                exclusions.Add(new PlanExclusion(session.SessionId, pathError!, log.FullPath));
+                exclusions.Add(new PlanExclusion(session.SessionId, pathError, log.FullPath));
                 return false;
             }
 
@@ -275,62 +273,5 @@ public sealed class CleanupPlanner
         }
 
         return digits != "0";
-    }
-
-    /// <summary>根规范化（同 T-21 BackupManifest）：必须为绝对路径，去尾分隔符。</summary>
-    private static string NormalizeRoot(string root)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(root);
-        var full = Path.GetFullPath(root);
-        if (!Path.IsPathFullyQualified(full))
-        {
-            throw new ArgumentException("root 必须是绝对路径", nameof(root));
-        }
-
-        return full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-    }
-
-    /// <summary>根内复验（同 T-21 语义）：原始路径任何 .. 段先拒（PATH_TRAVERSAL），根外/跨盘拒（CROSS_ROOT）。</summary>
-    private static bool TryContain(string rootFull, string fullPath, out string normalizedFull, out string? errorCode)
-    {
-        errorCode = null;
-        normalizedFull = fullPath;
-
-        foreach (var segment in fullPath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-        {
-            if (segment == "..")
-            {
-                errorCode = CodeTraversal;
-                return false;
-            }
-        }
-
-        string full;
-        try
-        {
-            full = Path.GetFullPath(fullPath);
-        }
-        catch (ArgumentException)
-        {
-            errorCode = CodeRootInvalid;
-            return false;
-        }
-
-        var rel = Path.GetRelativePath(rootFull, full);
-        if (Path.IsPathFullyQualified(rel) || rel == ".." || rel.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-        {
-            errorCode = CodeCrossRoot;
-            return false;
-        }
-
-        normalizedFull = full;
-        return true;
-    }
-
-    /// <summary>根指纹：规范化根完整路径（UTF-8）SHA-256 小写 hex；同根稳定，异根不同。</summary>
-    private static string ComputeRootFingerprint(string rootFull)
-    {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(rootFull));
-        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

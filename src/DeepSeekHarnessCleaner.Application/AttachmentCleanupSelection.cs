@@ -1,6 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
-
 namespace DeepSeekHarnessCleaner.Application;
 
 /// <summary>
@@ -58,7 +55,7 @@ public sealed class AttachmentCleanupSelection
         string rootFull;
         try
         {
-            rootFull = NormalizeRoot(dataRoot);
+            rootFull = RootGuard.NormalizeRoot(dataRoot);
         }
         catch (ArgumentException)
         {
@@ -75,7 +72,7 @@ public sealed class AttachmentCleanupSelection
         {
             ArgumentNullException.ThrowIfNull(candidate);
 
-            var containError = TryContain(rootFull, candidate.FullPath, out var full);
+            var containError = RootGuard.TryContain(rootFull, candidate.FullPath, out var full);
             if (containError is not null)
             {
                 exclusions.Add(new AttachmentExclusion(candidate.FullPath, "ATTACHMENT_" + containError));
@@ -129,64 +126,10 @@ public sealed class AttachmentCleanupSelection
         var plan = new CleanupPlan(
             Guid.NewGuid(),
             DateTimeOffset.UtcNow,
-            ComputeRootFingerprint(rootFull),
+            RootGuard.FingerprintOf(rootFull),
             staged,
             RequiresBackup: false);
 
         return new AttachmentCleanupPlanResult(null, plan, exclusions, statuses);
     }
-
-    private static string NormalizeRoot(string root)
-    {
-        if (string.IsNullOrWhiteSpace(root))
-        {
-            throw new ArgumentException("根路径为空", nameof(root));
-        }
-
-        var full = Path.GetFullPath(root.Trim());
-        if (Path.GetPathRoot(full) is not { Length: > 1 }
-            || string.Equals(Path.GetPathRoot(full), full, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ArgumentException("根不得为驱动器根", nameof(root));
-        }
-
-        return full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-    }
-
-    /// <summary>与 T-24/T-27/T-28 同构的根内复验。</summary>
-    private static string? TryContain(string rootFull, string candidatePath, out string full)
-    {
-        full = candidatePath;
-        if (string.IsNullOrWhiteSpace(candidatePath))
-        {
-            return "INVALID";
-        }
-
-        if (candidatePath.Contains("..", StringComparison.Ordinal)
-            && candidatePath.Split('\\', '/').Any(static segment => segment == ".."))
-        {
-            return "PATH_TRAVERSAL";
-        }
-
-        try
-        {
-            full = Path.GetFullPath(candidatePath);
-        }
-        catch (ArgumentException)
-        {
-            return "INVALID";
-        }
-
-        var relative = Path.GetRelativePath(rootFull, full);
-        if (Path.IsPathRooted(relative) || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-            || relative == "..")
-        {
-            return "CROSS_ROOT";
-        }
-
-        return null;
-    }
-
-    private static string ComputeRootFingerprint(string rootFull) =>
-        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rootFull))).ToLowerInvariant();
 }

@@ -106,7 +106,7 @@ public sealed class WorkspaceRecoveryService
         ct.ThrowIfCancellationRequested();
         Require(_scope.AllowsScope(plan.DataHome) && _probe.Probe().AllowsWrite);
         Require(plan.WorkspacePath == Path.Combine(Path.GetFullPath(plan.DataHome), "storages", "workspace.json")
-            && new CleanupPlanner().Build(Path.Combine(plan.DataHome, "sessions"), [], []).Plan?.RootFingerprint == plan.RootFingerprint);
+            && RootGuard.TryRootFingerprint(Path.Combine(plan.DataHome, "sessions")) == plan.RootFingerprint);
         Require(new WorkspaceBackupService(_probe).Verify(plan, backup, ct).Success);
     }
 

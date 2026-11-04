@@ -19,7 +19,7 @@ public sealed class PostCleanupAuditor
             if (!Path.IsPathFullyQualified(sessionRoot)
                 || !string.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(sessionRoot)), "sessions", StringComparison.OrdinalIgnoreCase))
                 return Unknown("POST_AUDIT_ROOT_INVALID");
-            if (new CleanupPlanner().Build(sessionRoot, [], []).Plan?.RootFingerprint != plan.RootFingerprint)
+            if (RootGuard.TryRootFingerprint(sessionRoot) != plan.RootFingerprint)
                 return Unknown("POST_AUDIT_ROOT_MISMATCH");
             var dataHome = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(sessionRoot)))!;
             var guard = new PathGuard();

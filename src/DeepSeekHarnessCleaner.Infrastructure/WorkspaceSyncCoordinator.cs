@@ -30,7 +30,7 @@ public sealed class WorkspaceSyncCoordinator
         {
             if (before is null || !before.Matches(cleanup)) return Disabled("审计与删除计划不一致，请重新扫描。");
             var home = before.Snapshot.DataHome;
-            if (new CleanupPlanner().Build(Path.Combine(home, "sessions"), [], []).Plan?.RootFingerprint != cleanup.RootFingerprint)
+            if (RootGuard.TryRootFingerprint(Path.Combine(home, "sessions")) != cleanup.RootFingerprint)
                 return Disabled("数据根与当前计划不一致，请重新扫描。");
             var index = new WorkspaceReferenceReader().Read(home);
             if (index.Status != WorkspaceReferenceStatus.Known || index.SnapshotSha256 != before.Snapshot.Workspace.SnapshotSha256)

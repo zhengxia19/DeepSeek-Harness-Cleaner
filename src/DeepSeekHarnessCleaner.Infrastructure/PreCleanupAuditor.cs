@@ -13,8 +13,7 @@ public sealed class PreCleanupAuditor
         if (!Path.IsPathFullyQualified(sessionRoot)
             || !string.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(sessionRoot)), "sessions", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("AUDIT_SESSION_ROOT_INVALID", nameof(sessionRoot));
-        var binding = new CleanupPlanner().Build(sessionRoot, [], []);
-        if (binding.Plan?.RootFingerprint != plan.RootFingerprint) throw new InvalidOperationException("AUDIT_ROOT_MISMATCH");
+        if (RootGuard.TryRootFingerprint(sessionRoot) != plan.RootFingerprint) throw new InvalidOperationException("AUDIT_ROOT_MISMATCH");
         var targets = Array.AsReadOnly(plan.Targets.ToArray());
         var dataHome = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(sessionRoot)))!;
         var snapshot = new SessionResidueInventory().Scan(dataHome, selectedSessionIds, targets, ct);

@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using DeepSeekHarnessCleaner.Application;
 
 namespace DeepSeekHarnessCleaner.Infrastructure;
@@ -100,7 +99,7 @@ public sealed class CleanupExecutor
             return new CleanupExecutionResult(true, $"{GateProcessCode}:{probeResult.State}", []);
         }
 
-        if (!string.Equals(ComputeRootFingerprint(root), plan.RootFingerprint, StringComparison.Ordinal))
+        if (!string.Equals(RootGuard.TryRootFingerprint(root), plan.RootFingerprint, StringComparison.Ordinal))
         {
             return new CleanupExecutionResult(true, GateFingerprintCode, []);
         }
@@ -187,12 +186,5 @@ public sealed class CleanupExecutor
         {
             return new ItemOutcome(full, ItemStatus.Failed, "IO_FAILURE", 0);
         }
-    }
-
-    /// <summary>与 T-24 CleanupPlanner 同构：规范化根完整路径 UTF-8 SHA-256 小写 hex。</summary>
-    private static string ComputeRootFingerprint(string root)
-    {
-        var full = Path.GetFullPath(root.Trim());
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(full))).ToLowerInvariant();
     }
 }

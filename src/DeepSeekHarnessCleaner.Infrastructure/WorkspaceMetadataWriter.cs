@@ -184,7 +184,7 @@ public sealed class WorkspaceMetadataWriter
         Require(plan.State == WorkspaceSyncState.Proposed && plan.OperationId != Guid.Empty && plan.CleanupPlanId != Guid.Empty
             && plan.BlockReasons.Count == 0 && plan.ReferencesToRemove.Count > 0, "SYNC_PLAN_INVALID");
         Require(plan.WorkspacePath == Path.Combine(Path.GetFullPath(plan.DataHome), "storages", "workspace.json"), "SYNC_SOURCE_PATH_INVALID");
-        Require(new CleanupPlanner().Build(Path.Combine(plan.DataHome, "sessions"), [], []).Plan?.RootFingerprint == plan.RootFingerprint,
+        Require(RootGuard.TryRootFingerprint(Path.Combine(plan.DataHome, "sessions")) == plan.RootFingerprint,
             "SYNC_ROOT_CHANGED");
         Require(_probe.Probe().AllowsWrite, "SYNC_PROCESS_NOT_INACTIVE");
         var index = new WorkspaceReferenceReader().Read(plan.DataHome, FileShare.Read | FileShare.Delete);

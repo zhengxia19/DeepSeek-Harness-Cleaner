@@ -43,7 +43,7 @@
 - 目标：路径规范化/包含检查/根指纹在 Application 层单一实现；同一根经所有规划器与审计器得到相同指纹。
 - 实施内容：新建 internal 静态类（如 `RootGuard`）收敛五处 `NormalizeRoot`、四处 `TryContain/TryNormalizeRelative`、四处 `ComputeRootFingerprint`；统一语义（驱动器根检查、Trim、UNC 处理取一套并在注释写明理由）；暴露命名指纹方法，替换五处 `new CleanupPlanner().Build(root, [], [])` 空计划预言机调用。指纹仅在单次操作内比对，格式变化不跨运行持久化。
 - 源码映射：`BackupManifest.cs:461-471`、`CleanupPlanner.cs:~275-331`、`CacheCleanupSelection.cs:167-217`、`DesktopCleanupSelection.cs:151-203`、`AttachmentCleanupSelection.cs:139-190`；预言机调用：`PreCleanupAuditor.cs:16`、`PostCleanupAuditor.cs:22`、`WorkspaceSyncCoordinator.cs:33`、`WorkspaceMetadataWriter.cs:187`、`WorkspaceRecoveryService.cs:109`。
-- 验收：[ ] 编译零警告；[ ] 新增测试：同一根集合经各规划器/审计器所得 `RootFingerprint` 一致；[ ] 单元测试全过；[ ] 净删除重复行数在提交信息中记录。
+- 验收：[x] 编译零警告；[x] 新增测试：同一根集合经各规划器/审计器所得 `RootFingerprint` 一致；[x] 单元测试全过；[x] 净删除重复行数在提交信息中记录。
 - 最小验证：`dotnet test --no-restore`。
 
 ### S03 删除生产死代码与仅测试消费的平行实现

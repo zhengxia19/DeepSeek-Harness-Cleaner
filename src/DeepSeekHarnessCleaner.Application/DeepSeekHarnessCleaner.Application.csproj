@@ -8,4 +8,11 @@
     <ProjectReference Include="..\DeepSeekHarnessCleaner.Domain\DeepSeekHarnessCleaner.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- RootGuard 为跨层单一实现（S02），Infrastructure 与测试项目需可见。 -->
+    <InternalsVisibleTo Include="DeepSeekHarnessCleaner.Infrastructure" />
+    <InternalsVisibleTo Include="DeepSeekHarnessCleaner.Tests" />
+    <InternalsVisibleTo Include="DeepSeekHarnessCleaner.WindowsTests" />
+  </ItemGroup>
+
 </Project>

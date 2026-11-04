@@ -61,7 +61,6 @@ public sealed class BackupManifestBuilder
     public const string SessionsCategory = "sessions";
     public const string AttachmentsCategory = "attachments";
 
-    private const string CodeTraversal = "PATH_TRAVERSAL";
     private const string CodeCrossRoot = "CROSS_ROOT";
     private const string CodeUnknownFile = "UNKNOWN_FILE";
     private const string CodeDuplicate = "DUPLICATE_ENTRY";
@@ -84,7 +83,7 @@ public sealed class BackupManifestBuilder
         IReadOnlyList<string>? attachmentPaths = null)
     {
         ArgumentNullException.ThrowIfNull(sessions);
-        var rootFull = NormalizeRoot(root);
+        var rootFull = RootGuard.NormalizeRoot(root);
 
         var issues = new List<ManifestIssue>();
         var entries = new Dictionary<string, ManifestEntry>(StringComparer.OrdinalIgnoreCase);
@@ -129,7 +128,7 @@ public sealed class BackupManifestBuilder
     {
         ArgumentNullException.ThrowIfNull(manifest);
         var issues = new List<ManifestIssue>();
-        var rootFull = NormalizeRoot(root);
+        var rootFull = RootGuard.NormalizeRoot(root);
 
         if (manifest.SchemaVersion != BackupManifest.CurrentSchemaVersion)
         {
@@ -161,7 +160,7 @@ public sealed class BackupManifestBuilder
             }
 
             var full = Path.Combine(rootFull, entry.RelativePath.Replace('/', Path.DirectorySeparatorChar));
-            if (!IsUnderRoot(rootFull, full))
+            if (!RootGuard.IsUnderRoot(rootFull, full))
             {
                 issues.Add(new ManifestIssue(CodeCrossRoot, entry.ZipPath, "条目解析到数据根之外"));
                 continue;
@@ -416,23 +415,11 @@ public sealed class BackupManifestBuilder
     private static string? TryNormalizeRelative(string rootFull, string fullPath, out string? rejectCode)
     {
         rejectCode = null;
-
-        // 先于规范化检查原始路径：任何 .. 段（zip-slip 特征）一律拒绝，
-        // 不依赖 GetFullPath 折叠语义。
-        foreach (var segment in fullPath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+        // 复验统一走 RootGuard：.. 段=PATH_TRAVERSAL；根外/跨盘=CROSS_ROOT；空白/不可解析=INVALID。
+        var containError = RootGuard.TryContain(rootFull, fullPath, out var full);
+        if (containError is not null)
         {
-            if (segment == "..")
-            {
-                rejectCode = CodeTraversal;
-                return null;
-            }
-        }
-
-        var full = Path.GetFullPath(fullPath);
-
-        if (!IsUnderRoot(rootFull, full))
-        {
-            rejectCode = CodeCrossRoot;
+            rejectCode = containError;
             return null;
         }
 
@@ -456,24 +443,6 @@ public sealed class BackupManifestBuilder
         }
 
         return normalized;
-    }
-
-    private static string NormalizeRoot(string root)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(root);
-        var full = Path.GetFullPath(root);
-        if (!Path.IsPathFullyQualified(full))
-        {
-            throw new ArgumentException("root 必须是绝对路径", nameof(root));
-        }
-
-        return full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-    }
-
-    private static bool IsUnderRoot(string rootFull, string full)
-    {
-        var rel = Path.GetRelativePath(rootFull, full);
-        return !Path.IsPathFullyQualified(rel) && rel != ".." && !rel.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     private static (long Length, string Sha256) HashFile(string full)
