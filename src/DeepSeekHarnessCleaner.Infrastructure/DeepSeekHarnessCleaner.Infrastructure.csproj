@@ -6,6 +6,9 @@
 
   <ItemGroup>
     <PackageReference Include="ZstdSharp.Port" />
+    <PackageReference Include="YamlDotNet" />
+    <InternalsVisibleTo Include="DeepSeekHarnessCleaner.Tests" />
+    <InternalsVisibleTo Include="DeepSeekHarnessCleaner.WindowsTests" />
   </ItemGroup>
 
   <ItemGroup>

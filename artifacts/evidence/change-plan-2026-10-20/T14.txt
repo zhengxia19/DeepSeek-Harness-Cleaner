@@ -1,0 +1,50 @@
+Task: change-plan-2026-10-20/T14 guarded Workspace metadata writer
+Result: ACCEPTED for implementation and Windows synthetic acceptance; production write capability remains disabled.
+Date: 2026-10-20; Windows 10.0.19045; local .NET SDK 10.0.402; PowerShell 7.6.4
+HEAD: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6
+Prerequisites: T12/T13 checked; contract, task definition, backup evidence and current checkpoint reviewed.
+Changes: WorkspaceMetadataWriter.Prepare/Apply; opaque instance-bound single-use WorkspaceWritePreparation; WorkspaceMetadataTransform; native WorkspaceFileIdentity; 55 writer tests; internal reader share-mode overloads; test-only InternalsVisibleTo metadata.
+Production gate: public constructor always refuses unverified production version/backend. ProductionWriteContractIds remains empty. Internal test constructor is restricted to canonical %TEMP%/dshcleaner-fixtures/fx-GUID/.dsh and exact supplied fixture home; no public force/boolean/allowlist bypass.
+Prepare: clones caller lists, checks canonical root/source path/fingerprint, Proposed nonempty selection/proofs, known v2 initialized/no transaction/no ambiguous layout, exact supported fields, current source SHA and reference set, Inactive process, actual verified backup and same-volume restriction; verifies selected physical outcomes and fresh log/target absence. Captures Windows volume/file index/creation/mtime/length/SHA; rejects reparse/hardlink/unknown identity.
+Apply: single use and writer-bound; pins source/backup directory ancestors against replacement, rechecks gates, opens stable source/candidate handles with DELETE access but denies sharing of writes/deletes, saves flushed intent/applying records and same-directory candidate, verifies transformation/hash/security, preserves original ACL/owner/group, then uses SetFileInformationByHandle(FileRenameInfo, ReplaceIfExists=false) twice. Original goes to workspace.replaced.json inside verified operation backup directory; candidate goes to now-empty source path. New target never overwritten. Source/candidate identity stays held across rename; no path-based File.Replace remains.
+Commit boundary: two controlled handle renames are NOT an atomic filesystem transaction. Crash after original retention can leave source missing, with original raw backup, retained original, candidate and durable operation marker. Failure retains all evidence, returns RecoveryRequired and blocks blind retry across different backup roots via fixed source-directory marker. T15 recovery coordination is not implemented here. No log restore occurs.
+Post verification: retained original identity/SHA, candidate source semantics/hash/reference removal, backup and physical absence, process Inactive; write-applied record, then remove only matching own tool lock. AppliedUtc describes the actual Apply attempt time; updatedAt only changes workspace records with member removals, all unrelated fields/order/missing arrays retained.
+Acceptance mapping:
+- format/initialization/transaction/version gates: PASS (version99, uninitialized, pending, duplicates, dual layout, unknown fields at all five object levels).
+- file identity/hash: PASS (same bytes at different identity rejected; content changed after Prepare rejected; original bytes incl BOM/whitespace retained).
+- process/backup: PASS (active/unknown, corrupted backup, process/backup changes during candidate stage, source/root/reference/physical/session proof failures).
+- same-directory candidate/flush/structured JSON/semantic preservation: PASS (partial physical failure excluded, selected archive/pin/members filtered, unselected log hash/other workspace/order preserved; no unrelated timestamp refresh).
+- reparse/boundary: PASS (real source/backup/lock/candidate symbolic links, last commit source/candidate substitution, source hardlink, directory rename lease, outside sentinel hashes).
+- permissions/concurrency: PASS (actual ACL CreateFiles denial and restoration; actual incompatible reader sharing; candidate/source identity/content attacks blocked by leases; original ACL/owner/group preserved).
+- interruption: PASS (intent flushed, candidate flushed, before replacement, after replacement, after final verification; original-retained interruption and newly appearing regular/link targets between renames retain all files and refuse overwrite).
+Initial investigation retained: T14-targeted.trx and T14-diagnose.trx each 27 PASS/4 FAIL due File.Replace sharing conflict. T14-sharing-fixed.trx 31 PASS after closing handles, but stricter T14-commit-reparse.trx had 1 PASS/1 FAIL: candidate link moved synthetic outside sentinel. This rejected design was replaced by handle-bound no-overwrite renames, not accepted. T14-handle-rename.trx 47 PASS/3 FAIL reflected changed safe sharing behavior in old assertions; updated tests now explicitly prove attacks denied and originals retained. Final tests cover all these scenarios.
+Command: . ./scripts/enter-env.ps1; dotnet build src/DeepSeekHarnessCleaner.Infrastructure/DeepSeekHarnessCleaner.Infrastructure.csproj --no-restore -warnaserror
+Result: EXIT 0; 0 warnings/errors.
+Command: . ./scripts/enter-env.ps1; dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter FullyQualifiedName~WorkspaceMetadataWriterTests --logger 'trx;LogFileName=T14-handle-final.trx' --results-directory .artifacts/T14
+Result: EXIT 0; 53 PASS/0 FAIL/0 SKIP, before final BOM/protected-ACL test.
+Command: . ./scripts/enter-env.ps1; dotnet format whitespace DeepSeekHarnessCleaner.sln --no-restore --include src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceFileIdentity.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceWritePreparation.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceMetadataTransform.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceMetadataWriter.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceJson.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceReferenceReader.cs tests/DeepSeekHarnessCleaner.Tests/WorkspaceMetadataWriterTests.cs
+Result: EXIT 0.
+Command: . ./scripts/enter-env.ps1; dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T14-full.trx' --results-directory .artifacts/T14
+Result: EXIT 0; 562 PASS/0 FAIL/0 SKIP; 54 new T14 tests, baseline 508. TRX inspected for writer count.
+Command: . ./scripts/enter-env.ps1; dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+Result: EXIT 0; 0 warnings/errors.
+Command: . ./scripts/enter-env.ps1; dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceFileIdentity.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceWritePreparation.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceMetadataTransform.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceMetadataWriter.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceJson.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceReferenceReader.cs tests/DeepSeekHarnessCleaner.Tests/WorkspaceMetadataWriterTests.cs
+Result: EXIT 0.
+Command: git diff --check
+Result: EXIT 0; line-ending notices only.
+Safety: only owned synthetic fixture roots were mutated; initial rejected path-based test moved only synthetic sentinel. No real .dsh/AppData mutation, process termination, system PATH/registry change, package download or publish. Existing uncommitted T02-T13 work preserved.
+Limitations/NotRun: production release/sample/backend mapping; UI integration/GUI this round; actual OS process termination/power-loss (deterministic in-process interruption with durable real files was tested); T15 recovery/retry; T16 optional UI; release/VM/DPI checks. No assertion of hardware power-loss durability or cross-file atomicity.
+API references consulted read-only:
+https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileinformationbyhandle
+https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew
+https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info
+https://learn.microsoft.com/en-us/windows/win32/fileio/symbolic-link-effects-on-file-systems-functions
+https://learn.microsoft.com/en-us/dotnet/api/system.io.file.replace?view=net-10.0 (rejected path-based approach)
+RawResults: .artifacts/T14/*.trx (initial failed runs retained); authoritative final .artifacts/T14/T14-final-full.trx.
+GitCommit: NOT_COMMITTED.
+Next: T15 partial failures, recovery inspection/retry and outcome integration; overall acceptance incomplete.
+
+Final follow-up: record serialization uses camelCase schemaVersion/operationId/source/candidateSha256/attemptUtc; positive test checks the actual intent fields. Process state is rechecked before each handle rename, including after original is retained. If Harness becomes Active there, candidate/source original remain retained and outcome is RecoveryRequired.
+Command: . ./scripts/enter-env.ps1; dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T14-final-full.trx' --results-directory .artifacts/T14
+Result: EXIT 0; 563 passed, 0 failed/skipped; 55 T14 cases (final additional between-renames Active process test).
+Final changed-file format verify and solution --no-restore -warnaserror rerun after this change: EXIT 0; 0 warnings/errors.

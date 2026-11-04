@@ -1,0 +1,46 @@
+Task: change-plan-2026-10-20/T10
+Status: ACCEPTED
+Date: 2026-10-20 Asia/Shanghai
+VerifiedHEAD: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6; earlier uncommitted T02-T09 work preserved.
+Prerequisite: T09 checked, evidence/checkpoint reviewed (456 automated tests).
+Environment: local SDK 10.0.402, PowerShell 7.6.4, Windows 10.0.19045; actual UI regression DPI=96.
+ChangedFiles: Application/PostCleanupAudit.cs; Infrastructure/PostCleanupAuditor.cs; UI/PostCleanupAuditText.cs; UI/MainForm.cs and MainForm.Roots.cs; Tests/PostCleanupAuditTests.cs and csproj presenter link; WindowsTests/PostAuditChecks.cs and Program.cs; related docs/tracking.
+ActualAPI: PostCleanupAuditor.Audit(sessionRoot, CleanupPlan, PreCleanupAudit, ct) -> PostCleanupAudit. No executor result input. Targets re-probed as Present/Absent/Unknown via PathGuard and actual attributes. Fresh SessionResidueInventory rereads logs/metadata independently of before snapshot.
+DTO: per-session PhysicalResidue/MetadataResidue/Unknown/NoObservedResidue; target presence evidence, observed log count, nullable Workspace reference count, unknown flag, fresh After snapshot/issues. NoObservedResidue never promises all-history cleanup. Metadata unknown cannot be counted as known zero.
+Integration: OnCleanupFinished captures plan/backup facts on UI thread, performs read-only post-audit off UI thread, refreshes list, displays session summary before independent file counts/abort information. Refresh failure => Unknown. Root switch resets post evidence; scanning locks root transitions. Result-window/log session extension still T11.
+TestInjection: optional ActionsPresenter constructor injection for isolated Windows tests only; production default real process probe unchanged. UI tests use only fresh .artifacts/T10 homes, no real Harness process stopped/interfered with.
+Commands after . ./scripts/enter-env.ps1:
+1. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter FullyQualifiedName~PostCleanupAuditTests --logger 'trx;LogFileName=T10-targeted.trx' --results-directory .artifacts/T10
+   Exit 0; 9 passed, 0 failed, 0 skipped.
+2. dotnet build tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-restore -warnaserror
+   Initial exit 1: two CS8602 errors in new test status-label Text checks. Corrected nullable Text fallback to string.Empty. No production safety checks weakened.
+   Rerun and final rebuild exit 0, 0 warnings/errors.
+3. dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-build -- --post-audit-only
+   Exit 0; .artifacts/T10/ui-post-audit.log then final ui-post-audit-final.log, each 18 PASS assertions. Earlier run retained, not counted twice.
+   Final metadata-residue fixture: .artifacts/T10/ui-4a7cf181b22a43a686ef210f15049083
+   Final unknown fixture: .artifacts/T10/ui-4da4f1b9d7c644f9817eaf3b49c4dc63
+4. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T10-full.trx' --results-directory .artifacts/T10
+   Exit 0, 465 passed, 0 failed/skipped. After refining unknown-only UI wording, repeated with LogFileName=T10-final-full.trx: exit 0, 465 passed, 0 failed/skipped (456 prior + 9 new).
+5. dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include src/DeepSeekHarnessCleaner.Application/PostCleanupAudit.cs src/DeepSeekHarnessCleaner.Infrastructure/PostCleanupAuditor.cs src/DeepSeekHarnessCleaner.UI/PostCleanupAuditText.cs src/DeepSeekHarnessCleaner.UI/MainForm.cs src/DeepSeekHarnessCleaner.UI/MainForm.Roots.cs tests/DeepSeekHarnessCleaner.Tests/PostCleanupAuditTests.cs tests/DeepSeekHarnessCleaner.WindowsTests/Program.cs tests/DeepSeekHarnessCleaner.WindowsTests/PostAuditChecks.cs
+   Exit 0, repeated after final wording change; changed C# files only.
+6. dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-build
+   Exit 0; .artifacts/T10/ui-regression.log: 91 PASS assertions, WINDOWS_REGRESSION=PASS.
+7. dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+   Exit 0, 0 warnings/errors. git diff --check exit 0, line-ending warnings only.
+Acceptance:
+PASS: actual synthetic executor deletes selected log, AllSucceeded true; fresh audit still reports MetadataResidue for archive+member references, showing '元数据残留' in real MainForm callback.
+PASS: controlled metadata corruption after pre-audit makes post-read Unknown with null reference count; actual callback and status display Unknown despite file execution success.
+PASS: present/recreated target is detected regardless of prior successful execution; all old targets absent but new v0 log generation present => PhysicalResidue.
+PASS: fresh metadata changes update reference count/hash instead of reusing baseline; missing/corrupt/unsupported/locked metadata never becomes known-empty references.
+PASS: real symbolic-link replacement at old target yields Unknown, outside target bytes unchanged.
+PASS: wrong plan/root binding and cancellation cannot reuse successful audit; absent facts come only from safe missing-path observation.
+PASS: retained attachments not treated as failed target deletion; unknown global attachment coverage retained, no false complete-cleanup status.
+PASS: selected file absent, unselected log/metadata/outside sentinel hashes preserved in UI cases; fault-injected metadata restored only in synthetic fixture before final hash checks. Unit retained attachment/workspace/sentinel bytes preserved too.
+VisualQA: inspected earlier successful screenshots .artifacts/T10/ui-09cd04b0891d4982b3c9d555f2b0b312/post-metadata-residue.png and ui-3792ca0099a04982a3ae2f1f5cdfc350/post-unknown.png. Main status visible with residual/unknown and independent physical counts; final run sharpened unknown-only wording without layout changes, screenshots retained in final fixtures.
+Limitations: observations are not an atomic multi-resource snapshot or proof of active backend/complete historical coverage. Attachment coverage remains explicitly unknown. File-level ResultsDialog/report remains separate and is not yet extended with session rows/log fields (T11).
+NotRun: extra DPI/VM/other SKU, default-app release checks, T11-T16, publish. No full release/overall acceptance claim.
+RawEvidence: .artifacts/T10/T10-targeted.trx; T10-full.trx; T10-final-full.trx; ui-post-audit-final.log; ui-regression.log; screenshots in fixtures above.
+Recovery: .artifacts/T10/backups/ pre-edit UI, csproj and docs; timestamped tracking backups; earlier task evidence preserved.
+GitCommit: NOT_COMMITTED.
+Safety: all destructive tests used synthetic roots; no real Harness data writes/process interference/system changes/metadata writer. No user content transferred.
+NextCandidate: T11, with T11-T16 and overall acceptance incomplete.

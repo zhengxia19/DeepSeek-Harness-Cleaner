@@ -1,0 +1,86 @@
+Task: original-plan A01-A07 and phase-completion audit
+Date: 2026-10-20
+VerifiedHEAD: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6
+Result: ACCEPTANCE_COMPLETE within original-plan scope and documented compatibility limits.
+ClosureDate: 2026-10-21 (Asia/Shanghai client date).
+Git: NOT_COMMITTED. No deployment/publishing or real-data write acceptance claimed.
+
+Scope authority:
+docs/implementation-tasks.md -> docs/change-plan-2026-10-20/00-总调度与验收.md.
+Original T01-T16 definitions, four phase-completion conditions and A01-A07 requirements retained.
+Historical 0.2.4 user acceptance is separate. No archived unchecked task imported as a new requirement.
+
+Phase1: explicit support matrix and write-denial conditions, existing read behavior locked by tests.
+Proof: workspace-compatibility.md; WorkspaceCompatibilityRegressionTests23; WorkspaceFixtureTests10;
+WorkspaceReferenceTests31; release reader12; observed sanitized sample2; policy30; config gate13;
+current source registry nonempty for one reviewed release, unknown versions/configs denied.
+Limitation/deviation: useful nonempty production allowlist was completed in A04 after synthetic-stage implementation, not during original T01. Earlier empty-list evidence is historical, not rewritten as production proof.
+
+Phase2 / A01: every plan bound to one confirmed root; switching invalidates scan, selection,
+preview and reusable cleanup context. Source MainForm.Roots.InvalidateRootState and ChooseRoots
+inspected; independent desktop confirmation, bounded RootLocator inputs and settings path persistence
+verified by RootLocatorTests10+RootDiscoveryTests8+RootSafetyTests17 and current roots UI21.
+Actual ACL denial/reparse tests exist, no whole-disk discovery. Current root-selector screenshot reviewed;
+default/environment sources and independent desktop consent shown. OS native folder picker itself not automated.
+
+Phase3 / A02-A03: readonly audit independently usable with metadata sync off.
+WorkspaceReferenceReader and WorkspaceJson inspected: strict snapshot/reference validation, Unknown/
+Unsupported failures never known-empty. PreCleanupAuditTests5 verify no target expansion and hashes;
+SessionResidueInventoryTests12 cover target/not-in-scope/unknown distinctions. PostCleanupAuditTests9
+cover recreated/new logs, changed/locked/reparse/invalid metadata and plan binding. Current
+PostCleanupAuditor code re-reads actual files and workspace; physical success does not imply session clean.
+SessionOutcomeTests6 include privacy/ordinal logs, unknown counts, backward compatibility and binding.
+Current Windows post-audit44 and report screenshots/logs inspected. UI file counts and metadata
+outcomes separated; absent audit explicitly cannot establish full cleanup.
+
+Phase4 / A04: reviewed Desktop0.2.1-rc.2/json-single conditionally writable; no caller force switch.
+WorkspaceMetadataWriter.Check, WorkspaceProductionGate, WorkspaceStoragePolicy, preparation binding,
+transform and recovery scope checks inspected. Only selected successful + freshly absent complete
+sessions eligible; original backup mandatory; unselected order/state preserved; no log restoration.
+Proof: proposal17,backup20,writer57,sync39,sync outcome7,option13; A04 targeted gate coverage;
+public coordinator installed-asset E2E11 on synthetic root, active/unknown/opt-out blocks, raw backup
+and protected hashes. Real-profile installed binding probe1 readonly. UI sync72 current PASS.
+Inactivity in E2E is simulated; this does not claim real Harness exited or permit test writes to real data.
+
+A05: damaged JSON, unknown versions/transactions/fields, content/identity change, real ACL denial,
+sharing/reparse/hardlinks, between-rename conflict, original retention, permissions and strict recovery
+records covered by current writer/sync tests. Crash log has120 PASS across8 actual owned-child
+terminations, each process-proof/recovery-proof pair present and checked: handshake, killRequested,
+exited, exitCode -1, empty stderr; resolved state/retry/protected hashes verified. No managed finally
+in terminated writer. Hardware/OS/storage-controller failure not claimed; unknown orphan recovery denied.
+
+A06: current Windows original regression91, root21, post-audit44 and sync72 logs all contain expected
+PASS counts and0 FAIL lines, processes terminal exit0 per A04 command results. Existing default-app
+actual synthetic txt/png opening5 proof retained; related product code unchanged. Existing unit tests
+cover inventory/preview/attachments/cache/backup/export/legacy report behavior. No broad DPI/VM/install claim.
+
+A07: design.md/interfaces.md/testing.md/acceptance.md/CHANGELOG.md, support matrix and sync design
+checked for current conditional support, invariant and untested-boundary records. Historical stage
+evidence retains earlier scope. New dependency metadata/rationale/platform/size/vulnerability query
+documented; mandatory HUMAN license review was confirmed by the user on2026-10-21 (see dependency-review.md).
+
+Authoritative verification:
+- Current .artifacts/FinalAcceptance/audit-full.trx Counters: total681,executed681,passed681;
+  failed/error/timeout/aborted/inconclusive/notRunnable/notExecuted/disconnected/warning all0.
+- Current solution and WindowsTests build logs:0 warnings/errors; actual prior command exits0.
+- Current gate logs: installed binding1,public E2E11,roots21,post-audit44,sync72,original91,
+  abrupt-crash120,default-open5 PASS, each0 FAIL lines. No sum advertised as distinct test cases.
+- Changed-file format --verify-no-changes and diff --check passed in A04; this audit changes only docs/evidence.
+- Source/test and proof-log SHA256 snapshot saved in FINAL-verification-manifest.json; it is a
+  collection-time record, not substituted for command execution time or original provider timestamps.
+- All16 T evidence files exist, nonempty; current TRX class coverage cross-checked against task semantics.
+
+Final required action closed:
+User explicitly replied "同意" on2026-10-21 after the outstanding YamlDotNet18.1.0 MIT human-review
+requirement was explained in this conversation. Recorded in dependency-review.md; not inferred from
+general implementation authorization or automated continuation. Source/test and proof-log hashes were
+revalidated against FINAL-verification-manifest.json with no drift; current recorded TRX681/681 passed,
+0 failed. This closure changed only documentation/evidence; no test rerun on2026-10-21 is claimed.
+Original-plan implementation and acceptance requirements are satisfied within the stated scope.
+
+Safety / unchanged limits:
+No real Harness source data writes/moves/deletes or process stops; no credential/transcript values emitted.
+No system PATH/registry/persistent environment changes. Synthetic fixture sentinels retained/verified.
+No new release executable published; clean offline VM, expanded DPI matrix, hardware power loss and
+arbitrary plugin side effects remain unverified as documented. Original requested developer acceptance
+does not imply a new production deployment or universal compatibility.

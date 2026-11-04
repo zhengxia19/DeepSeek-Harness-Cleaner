@@ -1,0 +1,49 @@
+Task: change-plan-2026-10-20/T16 optional Workspace sync UI
+Status: ACCEPTED for UI implementation and Windows synthetic acceptance. Overall A01-A07 acceptance remains incomplete.
+TaskDate: 2026-10-20; Windows 10.0.19045; local .NET SDK 10.0.402; PowerShell 7.6.4
+HEAD: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6
+Prerequisite: T15 checked and evidence/current checkpoint reviewed. Uncommitted prior work preserved.
+Changes: WorkspaceSyncOption/GetOption read-only availability; CleanupDialog default-off option, potential reference count, separate mandatory backup root chooser and reasons; frozen/revalidated consent; MainForm Run integration; WorkspaceSyncReviewDialog explicit inspect/approve/recover/retry; ResultsDialog review action and unique logs; root-operation guard; test-only Windows assembly friend; docs.
+Default/persistence: neither opt-in nor its backup-root preference is persisted. Each new confirmation starts unchecked. Existing session ZIP preference is independent; metadata backup cannot be skipped. Displayed references are eligible potential references before physical deletion, not a promise all will be removed.
+Availability: same cleanup/audit/root fingerprint and current known source SHA; complete selected log scope; production scope/version gate; Inactive process; known fields; controlled existing backup root outside data/protected roots and same drive; no pending tool operation; nonzero known references. Displayed availability never permits a write; writer/coordinator recheck actual state.
+Execution: requested flag and backup root frozen only at actual confirmation. Revalidate before physical execution; stale selected consent stops before deletion and demands re-confirmation, not a silent fallback. NotRequested never invokes metadata IO. Requested metadata runs only after original physical execution and fresh audit; independent result and latest audit bound to report. Unexpected UI status loss stays unknown/RecoveryRequired, not NotRequested.
+Recovery UI: original root/physical results/backup shown; read-only Inspect first, separate explicit approval checkbox before Resolve, Retry disabled until interrupted operation resolved. Fresh Retry never reruns physical deletion. Unknown materials/process/version cannot be forced. Root switching and new cleanup are blocked while review visible. Report retry does not overwrite original log; each report has a GUID filename.
+Production: public constructors still deny all unverified deployed versions/backends. Tests use the existing strictly confined internal TEMP/dshcleaner-fixtures/fx-GUID/.dsh seam, now accessible to WindowsTests only. This is not production enablement or deployed-release/sample validation. No user-visible force switch.
+Acceptance mapping:
+- Default unchecked/new confirmation resets: PASS in all 8 GUI scenarios and explicit cancel/reopen.
+- Display reference count/mandatory root/disable reason: PASS; current v2 fixture has exactly 2 selected refs, production and unsafe root visibly disabled.
+- No check => no workspace write: PASS, exact original bytes and empty metadata backup directory after actual physical deletion (unchecked and production cases).
+- Check => mandatory independent original backup even with session ZIP off: PASS, original bytes match backup; no ZIP and exact selected refs removed while keep refs remain.
+- Conditions not met => disabled/rechecked: PASS, production checkbox spoof, process/source changes after checking stop before physical deletion, unsafe backup root; 13 read-only option unit cases include unknown fields/root mismatch/reparse/pending tool artifacts.
+- Old cleanup path unchanged: PASS, 91 existing Windows regression assertions and 44 post-audit/report assertions; root selection 21 PASS.
+- Recovery/retry user flow: PASS, real callback interrupted after original retention; review inspect -> explicit approval -> metadata-only restore -> fresh retry Applied; deleted log stays absent, physical counts unchanged, original log file preserved.
+- Root safety and layout: PASS, review blocks root switch; all option controls stay within minimum dialog client with no overlap; screenshots visually checked.
+Initial failure: added root-switch assertion had CS8602 nullable ToolStripStatusLabel.Text, final UI build failed once before execution. Corrected null coalescing and rerun passed. Initial/earlier GUI runs retained; no runtime test failed.
+Command: . ./scripts/enter-env.ps1; dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter FullyQualifiedName~WorkspaceSyncOptionTests --logger 'trx;LogFileName=T16-option.trx' --results-directory .artifacts/T16
+Result: EXIT 0; 13 passed, 0 failed/skipped.
+Command: . ./scripts/enter-env.ps1; dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T16-full.trx' --results-directory .artifacts/T16
+Result: EXIT 0; 620 passed, 0 failed/skipped (607 baseline + 13 T16); TRX new-test count inspected.
+Command: . ./scripts/enter-env.ps1; dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-restore -- --workspace-sync-only
+Result: EXIT 0, 72 PASS; final log .artifacts/T16/ui-sync-final-rerun.txt. Eight scenarios: production, unchecked, checked, cancel, interrupted, process-change, source-change, invalid-backup. Initial 62/71-assertion runs retained; ui-sync-final.txt contains the corrected CS8602 build failure.
+Command: . ./scripts/enter-env.ps1; dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-restore
+Result: EXIT 0, 91 PASS, WINDOWS_REGRESSION=PASS; .artifacts/T16/ui-full-regression.txt. Actual monitor DPI=96.
+Command: . ./scripts/enter-env.ps1; dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-build --no-restore -- --post-audit-only
+Result: EXIT 0; 44 PASS; .artifacts/T16/ui-post.txt.
+Command: . ./scripts/enter-env.ps1; dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-build --no-restore -- --roots-only
+Result: EXIT 0; 21 PASS; .artifacts/T16/ui-roots.txt.
+Command: . ./scripts/enter-env.ps1; dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+Result: EXIT 0, 0 warnings/errors.
+Command: . ./scripts/enter-env.ps1; dotnet build tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-restore -warnaserror
+Result: EXIT 0, 0 warnings/errors. Later nullable-only test change corrected and recompiled by successful final UI run.
+Command: . ./scripts/enter-env.ps1; dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include src/DeepSeekHarnessCleaner.Application/WorkspaceSyncOption.cs src/DeepSeekHarnessCleaner.Application/OutcomeReport.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceBackupService.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceSyncCoordinator.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceMetadataWriter.cs src/DeepSeekHarnessCleaner.UI/CleanupDialog.cs src/DeepSeekHarnessCleaner.UI/MainForm.cs src/DeepSeekHarnessCleaner.UI/MainForm.Roots.cs src/DeepSeekHarnessCleaner.UI/ResultsDialog.cs src/DeepSeekHarnessCleaner.UI/WorkspaceSyncReviewDialog.cs tests/DeepSeekHarnessCleaner.Tests/WorkspaceSyncOptionTests.cs
+Result: EXIT 0; whitespace formatted beforehand, changed files only.
+Command: . ./scripts/enter-env.ps1; dotnet format tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-restore --verify-no-changes --include tests/DeepSeekHarnessCleaner.WindowsTests/Program.cs tests/DeepSeekHarnessCleaner.WindowsTests/WorkspaceSyncChecks.cs
+Result: EXIT 0.
+Command: git diff --check
+Result: EXIT 0; line-ending notices only.
+Visual evidence inspected: .artifacts/T16/ui-checked-eb0c47e3569e430ba4c57aaeef489e09/confirmation-minimum.png; ui-interrupted-51608ccae1404bf5a4508df2d1dbd92c/recovered.png; earlier production-disabled and available default confirmations. Final screenshot folders include confirmation-selected.png and result.png. No overlap; backup paths/details scroll; approval/retry state is explicit.
+All synthetic roots retained and printed in UI logs under TEMP/dshcleaner-fixtures/fx-GUID. Original raw backup, unselected log and outside sentinel hashes/bytes verified. No real USERPROFILE .dsh or APPDATA Harness mutation, no process kill, system configuration or publish in this task.
+Not proven by T16: production release/commit/backend mapping and real sanitized sample; actual abrupt process kill/power loss (current writer/recovery interruption is deterministic in-process); full release/VM/multiple-DPI acceptance. Do not equate all checked implementation tasks with overall A01-A07 achieved.
+GitCommit: NOT_COMMITTED.
+Next: final requirement-by-requirement A01-A07 audit, resolve evidence gaps within authorized scope, preserve production deny until real gates verified. Goal remains active.
+EvidenceRecordedUtc: 2026-10-20T10:32:17.9280129+00:00

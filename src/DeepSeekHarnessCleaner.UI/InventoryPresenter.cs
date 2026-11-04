@@ -132,6 +132,9 @@ public sealed class InventoryPresenter
 
     public IReadOnlyList<SessionSummary> Sessions => LastResult?.Sessions ?? [];
 
+    /// <summary>Drop root-bound scan/filter facts before switching roots; caller must finish active scans first.</summary>
+    public void Reset() => LastResult = null;
+
     /// <summary>后台线程执行扫描（UI 不冻结）；完成后缓存结果。</summary>
     public Task<InventoryResult> ScanAsync(string sessionRoot, CancellationToken ct = default) =>
         Task.Run(

@@ -1,0 +1,47 @@
+Task: change-plan-2026-10-20/T11
+Status: ACCEPTED
+Date: 2026-10-20 Asia/Shanghai
+VerifiedHEAD: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6; prior T02-T10 changes retained.
+Prerequisite: T10 checked, checkpoint/evidence reviewed (465 automated tests).
+Environment: local .NET 10.0.402, PowerShell 7.6.4, Windows 10.0.19045; actual UI checks DPI=96.
+ChangedFiles: Application/OutcomeSessionRow.cs and OutcomeReport.cs; UI/ActionsPresenter.cs, MainForm.cs, ResultsDialog.cs; Tests/SessionOutcomeTests.cs; WindowsTests/PostAuditChecks.cs; related docs/tracking.
+ActualAPI: OutcomeReportInput.SessionAudit optional init property; ActionsPresenter.BuildReport optional final PostCleanupAudit parameter; OutcomeReport.Sessions/AuditIssues/PhysicalResidueSessionCount/MetadataResidueSessionCount/UnknownSessionCount/HasAuditUnknowns. Existing constructor/calls and file metrics preserved.
+ReportSemantics: file Deleted/Skipped/Failed/FreedBytes/PartialFailure remain independent. Session rows preserve residual state, proven residue category, observed target presence counts, observed log count, nullable metadata count and unknown flag. Unknown metadata is not coerced to zero; invalid audit values lower confidence. Wrong-plan post audit becomes Unknown without altering file execution facts.
+UI: separate file/session/audit-issue tabs; independent summary lines, fixed scope caveat, copyable grids and bidirectional scrolling. UI diagnostics retain source codes/evidence paths; no full-cleanup success claim.
+LogSemantics: new events session_audit_summary/session_audit/session_audit_issue only when SessionAudit provided. Fixed enum/count/time fields and ordinal session_index; no raw audit session IDs, evidence paths, JSON pointers, related IDs or free text. Audit error codes use a closed vocabulary; unrecognized codes => OTHER_AUDIT_ISSUE. Legacy file item ID whitelist remains unchanged; no-audit legacy log line structure preserved.
+Commands after . ./scripts/enter-env.ps1:
+1. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter FullyQualifiedName~OutcomeTests --logger 'trx;LogFileName=T11-legacy.trx' --results-directory .artifacts/T11
+   Exit 0; 8 original OutcomeTests passed.
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter 'FullyQualifiedName~SessionOutcomeTests|FullyQualifiedName~OutcomeTests' --logger 'trx;LogFileName=T11-targeted.trx' --results-directory .artifacts/T11
+   Initial exit 1; 13 passed, 1 failed. New test incorrectly expected code=- on a non-aborted legacy run_summary. Existing source omits code when not aborted; corrected assertion to existing event/metric fields without changing legacy log behavior.
+   Rerun with LogFileName=T11-targeted-rerun.trx: exit 0, 14 passed, 0 failed/skipped (8 old + 6 new).
+3. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T11-full.trx' --results-directory .artifacts/T11
+   Exit 0; 471 passed, 0 failed/skipped. Final repeat after defensive unknown-summary mapping with LogFileName=T11-final-full.trx: exit 0, same 471 (465 prior + 6 new).
+4. dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include src/DeepSeekHarnessCleaner.Application/OutcomeSessionRow.cs src/DeepSeekHarnessCleaner.Application/OutcomeReport.cs src/DeepSeekHarnessCleaner.UI/ActionsPresenter.cs src/DeepSeekHarnessCleaner.UI/MainForm.cs src/DeepSeekHarnessCleaner.UI/ResultsDialog.cs tests/DeepSeekHarnessCleaner.Tests/SessionOutcomeTests.cs tests/DeepSeekHarnessCleaner.WindowsTests/PostAuditChecks.cs
+   Initial exit 1: whitespace in new object initializers (ActionsPresenter line 107 and SessionOutcomeTests lines 23/110). Corrected using dotnet format whitespace ... --include src/DeepSeekHarnessCleaner.UI/ActionsPresenter.cs tests/DeepSeekHarnessCleaner.Tests/SessionOutcomeTests.cs; exit 0. Repeated changed-file verify after final edits exit 0.
+5. dotnet build tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-restore -warnaserror
+   Exit 0; final rebuild 0 warnings/errors.
+6. dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-build -- --post-audit-only
+   Exit 0; .artifacts/T11/ui-report-final.log has 32 PASS assertions (18 retained T10 assertions + 14 new report assertions across two scenarios).
+   Existing test fixture root convention retained: .artifacts/T10/ui-87bcd4f744884f46b9f7178864293707 and ui-df33b08930f144bfaa4eb7c730a7970f. These are new synthetic fixtures from this run, not old execution evidence.
+7. dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-build
+   Exit 0; .artifacts/T11/ui-regression.log: 91 PASS assertions, WINDOWS_REGRESSION=PASS. Existing resized-window/copy/scroll report regression preserved.
+8. dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+   Exit 0, 0 warnings/errors. git diff --check exit 0, line-ending warnings only.
+Acceptance:
+PASS: file deleted=1 and file PartialFailure=false coexist with metadata-residue session=1 and unknown session=1; no logical cleanup inference from file success.
+PASS: row residue categories derived only from positive physical/log/Workspace evidence; unknown nullable reference count remains unknown in UI and logs.
+PASS: no-audit legacy report has no invented session rows and unchanged original log event count/structure; original 8 report tests pass.
+PASS: report builder rejects post audit from different plan, preserving file metrics while surfacing mismatch as Unknown.
+PASS: synthetic credential-like audit code that would pass broad regex is replaced with OTHER_AUDIT_ISSUE; raw audit session ID/path/pointer/private filenames excluded. UI preserves diagnostics, logger emits only closed tokens and ordinals. Invalid enum/count data becomes Unknown.
+PASS: actual MainForm callback binds T10 post audit to ResultsDialog; separate file/session rows, status, null-vs-2 metadata count, unknown caveat, audit issue grid and three tabs visible.
+PASS: real synthetic deletion remains physically successful while report session row is MetadataResidue or Unknown after controlled metadata corruption. New log events and independent counts verified in actual written fixture logs.
+PASS: old selected/unselected protections, metadata restoration after fixture fault injection and outside sentinel hashes retained; no new deletion scope.
+VisualQA: inspected first successful report-session.png in .artifacts/T10/ui-e68fe3a15c9648b2bcbcbd6663811652 and report-issues.png in ui-26437e1df5eb4650b78ea166af6f80ad. Refined audit columns afterward (400px code, 640px evidence) for horizontal scrolling/copy; final functional and existing resized-window regression passed, final screenshots in the final fixtures above.
+Limitations: absence of observed residue is scoped evidence, not complete historical/backend clearance. Attachment coverage unknown remains visible. New audit log intentionally suppresses unknown/free-form codes rather than exporting raw diagnostics. No metadata writer or allowlist change.
+NotRun: extra DPI/VM/SKU/native default-app release acceptance; T12-T16 sync; publish. Overall acceptance remains incomplete.
+RawEvidence: .artifacts/T11/T11-legacy.trx; T11-targeted.trx; T11-targeted-rerun.trx; T11-final-full.trx; ui-report-final.log; ui-regression.log; screenshots/logs in new .artifacts/T10 fixtures.
+Recovery: .artifacts/T11/backups/ original report/UI/extended test/docs and timestamped tracking snapshots; prior task changes preserved.
+GitCommit: NOT_COMMITTED.
+Safety: synthetic data only for destructive regressions; no real Harness writes/process interference/system changes/network content transfer. Metadata write allowlist remains empty.
+NextCandidate: T12; T12-T16 and full A01-A07 acceptance incomplete.

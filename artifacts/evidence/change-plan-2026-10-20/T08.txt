@@ -1,0 +1,45 @@
+Task: change-plan-2026-10-20/T08
+Status: ACCEPTED
+Date: 2026-10-20 Asia/Shanghai
+Baseline: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6; prior T02-T07 work preserved.
+Prerequisite: T07 checked, evidence/checkpoint reviewed (439 tests).
+Environment: project-local SDK 10.0.402; PowerShell 7.6.4; Windows 10.0.19045; existing UI regression DPI=96.
+ChangedFiles: Application/SessionResidueSnapshot.cs; Infrastructure/SessionResidueInventory.cs; Infrastructure/AttachmentInventoryService.cs; Tests/SessionResidueInventoryTests.cs; pending-contract/interfaces/acceptance/CHANGELOG and task tracking.
+ScopeReasonForAttachmentChange: existing inventory computed AttachmentIndex dangling/unresolved/coverage facts but discarded them. Added compatible init-only result properties forwarding those facts; existing constructor and reference extraction semantics unchanged.
+ActualAPI: SessionResidueInventory.Scan(string dataHome, IReadOnlyList<string> selectedSessionIds, IReadOnlyList<CleanupTarget> targets, CancellationToken ct=default) -> SessionResidueSnapshot.
+DTO: Sessions, UnattributedItems, Issues, Workspace and derived HasUnknowns; each item Kind/Scope/EvidencePath/EvidencePointer/RelatedId/RelatedSessionIds/Reason. Scope TargetFile / NotInScope / UnknownReference. No execution or all-clean flag.
+Reused: SessionLogDiscovery, SessionHeaderReader, SessionCacheIndex.Build, WorkspaceReferenceReader, AttachmentInventoryService -> AttachmentIndex. No UI dependency in new service.
+Commands after . ./scripts/enter-env.ps1:
+1. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter FullyQualifiedName~SessionResidueInventoryTests --logger 'trx;LogFileName=T08-targeted.trx' --results-directory .artifacts/T08
+   Exit 0; initial 11 new cases passed. Subsequently added real reparse-log test, covered by full run below.
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T08-full.trx' --results-directory .artifacts/T08
+   Exit 0; 451 passed, 0 failed, 0 skipped (439 existing + 12 new).
+3. dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include src/DeepSeekHarnessCleaner.Application/SessionResidueSnapshot.cs src/DeepSeekHarnessCleaner.Infrastructure/SessionResidueInventory.cs src/DeepSeekHarnessCleaner.Infrastructure/AttachmentInventoryService.cs tests/DeepSeekHarnessCleaner.Tests/SessionResidueInventoryTests.cs
+   Initial exit 1: WHITESPACE line 92 in SessionResidueInventory.cs. Corrected whitespace only using:
+   dotnet format whitespace DeepSeekHarnessCleaner.sln --no-restore --include src/DeepSeekHarnessCleaner.Infrastructure/SessionResidueInventory.cs
+   Exit 0; repeated full changed-file verify command above exit 0.
+4. dotnet build tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-restore -warnaserror
+   Exit 0, 0 warnings/errors.
+5. dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-build
+   Exit 0; .artifacts/T08/ui-regression.log has 91 PASS assertions and WINDOWS_REGRESSION=PASS, including retained file/sentinel hashes.
+6. dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+   Exit 0, 0 warnings/errors. git diff --check exit 0 (line-ending warnings only).
+Acceptance:
+PASS: selected log/cache become TargetFile only if observed association matches caller target path/category/owner. Input plan list unchanged, no extra target generation.
+PASS: shared attachment omitted from targets remains NotInScope with both verified owners; metadata refs always outside physical cleanup scope; whole caches separately out of scope. No deletion-failure inference for retained items.
+PASS: explicit independent attachment selection changes classification for proven association only; no physical deletion occurs.
+PASS: corrupt/unsupported/pending Workspace remains Unknown/Unsupported and global issues, never known no references.
+PASS: unlinked attachments and dangling references stay UnknownReference, never orphan; missing attachment uses container evidence, no invented file path.
+PASS: metadata refs without physical logs remain visible; cache ownership not established solely from requested ID or filename.
+PASS: bad/duplicate session identities never produce trusted targets. Wrong target category, unselected owner and outside-root targets remain unlinked/errors, no scope expansion.
+PASS: actual symbolic-link log rejected by discovery and plan path guard; outside target bytes unchanged before/after link cleanup.
+PASS: invalid/duplicate selection noted, pre-canceled operation throws OperationCanceledException; relative root rejected.
+PASS: all fixture files plus unselected log and root-external sentinel SHA-256 unchanged by combined inventory scan.
+PASS: actual attachment coverage limitations and per-session unresolved facts propagated. Positive reference does not imply complete coverage.
+Limitations: index is per-scan evidence, not an atomic multi-resource snapshot or execution permission. Existing attachment scanner intentionally has no global orphan proof, so HasUnknowns can remain true even with no selected physical targets. Known Workspace refers only to validated JSON snapshot/backend assumptions from T07. T09/T10 integration and T11 report semantics remain pending.
+NotRun: audit UI T09, post-cleanup service T10, report T11, writers T12-T16; extra DPI/VM/SKU/default-app/release acceptance. No publish.
+RawEvidence: .artifacts/T08/T08-targeted.trx; T08-full.trx; ui-regression.log.
+Recovery: .artifacts/T08/backups/ stores pre-edit attachment inventory and docs; timestamped tracking snapshots. New service/DTO/tests can be removed only after preserving later dependent work.
+GitCommit: NOT_COMMITTED.
+Safety: only synthetic test roots for writes/deletion regressions; no real Harness writes, body logging, system setting changes or network content transfer. Metadata writer allowlist unchanged/empty.
+NextCandidate: T09; T09-T16 and overall acceptance incomplete.

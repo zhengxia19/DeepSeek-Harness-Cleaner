@@ -1,0 +1,60 @@
+Task: A04 installed-release / backend / root mapping investigation
+Result: PARTIAL; production write gate remains closed; overall acceptance incomplete.
+Date: 2026-10-20
+
+Executed:
+1. Read installed ASAR static package manifests, selected module bundles and declared YAML patches.
+2. Read desktop profile manifest/user patch, optional home patch presence and three external bundles' declared manifests/patches only. No transcript or credential values emitted.
+3. node .artifacts/FinalAcceptance/Inspect-Profile.cjs
+   Exit: 0. Repeat observation also exit 0.
+4. git diff --check: exit 0.
+
+Installed release: @deepseek-ai/dsh-desktop 0.2.1-rc.2.
+Source observations:
+- app-boot resolveBundleDir: installation package resolution precedes profile-local resolution.
+- bundlePatchFiles: all declared patch files applied in declared order (web-app has five, not one).
+- readProfilePatches: bundle layers, profile user layer, optional home layer, launch overlays, then telemetry disable patch.
+- applyEntryPatches: inserts indexed by id; named overrides require matching names; config replaces, not merges.
+- storage-domain: routes[unit.name] overrides default backend.
+- base defaults: json backend and dshHomePath('storages').
+- workspace: unit version 2, no per-record layout; storage-json defaults to single-file layout.
+
+Observed configuration composition:
+Six bundles, ten declared patch files; three external bundles resolved by manifest lookup only.
+No optional home cordis.patch.yml; zero skipped-patch warnings in data-only composition.
+storage/storage-json/storage-domain/workspace are present, expected plugin names, not explicitly disabled.
+storage-json root is the inert expression dshHomePath('storages').
+storage-domain default backend is json; workspace route absent or json.
+See profile-routing-observation.json for hashes/booleans; external package identities/paths masked.
+
+Limits:
+- Diagnostic reads configuration declarations; it is not a dump of a running Loader.
+- No arbitrary JavaScript expression was evaluated. Pure js-yaml parser only; no Harness application module imported/executed.
+- Compatibility admission, ancestor enabled-state, dynamic overrides, launch overlays, effective DSH_HOME and active-running-process installation association still require verification.
+- Bundle resolution failures cause diagnostic failure without emitting config contents.
+- Observed declarations are insufficient to authorize production writes.
+- Production gate implementation and its synthetic positive/negative tests remain pending.
+- No real metadata/data was written, moved or deleted; no real Harness process stopped.
+- Existing 624-test result belongs to previous verification; no application code changed or test suite rerun in this investigation.
+Git: NOT_COMMITTED.
+
+Continuation: reviewed release reader implementation
+- Added internal WorkspaceReleaseReader: bounded ASAR header/member reader, exact SHA256 checks of 16 reviewed launcher/storage/workspace/config assets plus package name/version. No application module execution, dynamic evaluation or network access.
+- Recognition is explicitly necessary but insufficient for writes. Writer/Recovery/Coordinator production gate remains closed; no new public force/allowlist option.
+- Reader rejects duplicate path/member keys, links/unpacked entries, invalid offsets, oversized headers/members, unknown or changed module bytes, absent installations.
+- Added WorkspaceReleaseReaderTests synthetic positive/negative coverage and explicit WindowsTests --installed-release-only read-only probe.
+- Initial targeted test run: 10 pass/1 fail because duplicate-member test JSON had a missing closing brace. Corrected fixture; subsequent targeted 11/11 pass. Later duplicate-leaf test expands coverage to12.
+- Installed probe matched all reviewed code/patch SHA256 values, exit0. WindowsTests build --no-restore -warnaserror: zero warnings/errors.
+- Full final regression:636 pass,0 failures/skips, exit0; .artifacts/FinalAcceptance/audit-full.trx. Twelve new release-reader cases plus previous624. No UI or writer behavior changed.
+
+Additional launcher facts (static, selected source only):
+- desktop-main starts dsh-desktop-host/lib/index.js with runtimeDir/projectDir arguments and inherited environment.
+- desktop-host runProfile call explicitly supplies patchFiles:[]; no command-line patch overlay.
+- dsh/lib/profile-boot.js delegates to profile-boot-C14i-8IN.js. Both fingerprints included in reviewed reader.
+- profile-boot composeProfile rewrites the root cordis.yml to the shipped empty root; profile patches are composed over empty entries.
+- app-boot readEnvLayer treats every DSH_ key as bootstrap-only: .env cannot change DSH_HOME. No .env content was read in this investigation.
+- Inert static composition: all four core plugins top-level, no disabled ancestor or dynamic disabled condition.
+- Observed six bundle declarations have no unsatisfied engine/peer requirement against0.2.1-rc.2 with includePrerelease:true. Only observed exact ranges reviewed; diagnostic does not implement a general semver solver.
+- Read-only CIM observation found five Electron processes at the expected installed executable, including one desktop-host command line containing the default desktop profile argument. Only booleans/PIDs inspected/output, not full command lines. This does not inspect inherited process environment or prove all runtime plugin bindings.
+
+Still pending: generic effective-config validation in production C# (including compatibility, inherited root, resolution overrides and configuration changes), integration of release/config evidence with existing repeated writer/recovery checks, nonvacuous production policy and synthetic end-to-end tests. No requirement was marked complete based solely on release recognition.

@@ -1,0 +1,42 @@
+Task: change-plan-2026-10-20/T06
+Status: ACCEPTED
+Date: 2026-10-20 Asia/Shanghai
+Baseline: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6; earlier T02-T05 uncommitted work preserved.
+Prerequisites: T04/T05 checked; T05 evidence and checkpoint reviewed (408 tests).
+Environment: local SDK 10.0.402; PowerShell 7.6.4; Microsoft Windows 10.0.19045; Windows UI regression reports DPI=96.
+ChangedFiles: UI/RootSelectionDialog.cs; UI/MainForm.Roots.cs; UI/MainForm.cs; UI/InventoryPresenter.cs; WindowsTests/RootSelectionChecks.cs and Program.cs; interfaces/testing/acceptance/CHANGELOG and current task tracking.
+ActualInterfaces: RootSelectionDialog(RootLocator, AppSettings, currentDsh, currentDesktop), SelectedDshHome/SelectedDesktopHome/RememberRoots. MainForm optional RootLocator/SettingsStore injection; OnChooseRoots/ChooseRoots/InvalidateRootState; InventoryPresenter.Reset(). Existing constructor calls preserved via optional trailing parameters.
+Behavior: first normal scan opens root selection; menu permits explicit reselection. Multiple valid DSH candidates have no implicit selection. Desktop selection requires separate confirmation and may remain null. Manual directory goes through DiscoverCandidates. RememberRoots loads/saves sessions child and independent desktop via existing store, preserves other settings, clearing roots when switched off. No automatic data-root merging.
+StateBoundary: changing/confirming a root or starting rescan clears root-bound presenter facts, rows, checks, preview/timer/CTS identity and old plan/results references. Existing cleanup dialog disposed. Root switch/rescan blocked while scanning (including post-cleanup refresh), preparing plan, or cleanup/attachment window remains visible. Delete blocked during scan/root choice; completed plan checked against current effective root before dialog creation.
+Commands after . ./scripts/enter-env.ps1 (repository root):
+1. dotnet build tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-restore -warnaserror
+   Exit 0, 0 warnings/errors. Repeated after final UI logic change, same result.
+2. dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-build -- --roots-only
+   Exit 0; final log .artifacts/T06/ui-roots-final.log contains 21 PASS assertions.
+   Final fixture: .artifacts/T06/ui-66fee93d9b9c4968a7f2514a7a306ec7.
+   Earlier successful logs/fixtures retained, not counted as additional cases.
+3. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T06-full.trx' --results-directory .artifacts/T06
+   Exit 0; 408 passed, 0 failed, 0 skipped.
+4. dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-build
+   Exit 0; final .artifacts/T06/ui-regression-final.log: 91 PASS assertions, WINDOWS_REGRESSION=PASS. Run after post-cleanup scan lock change; earlier successful regression retained separately.
+5. dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+   Exit 0, 0 warnings/errors.
+6. dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include src/DeepSeekHarnessCleaner.UI/RootSelectionDialog.cs src/DeepSeekHarnessCleaner.UI/MainForm.Roots.cs src/DeepSeekHarnessCleaner.UI/MainForm.cs src/DeepSeekHarnessCleaner.UI/InventoryPresenter.cs tests/DeepSeekHarnessCleaner.WindowsTests/Program.cs tests/DeepSeekHarnessCleaner.WindowsTests/RootSelectionChecks.cs
+   Exit 0; changed C# files only, not full repository formatting.
+Acceptance:
+PASS: actual WinForms modal flow, multi-root explicit selection, no automatic scan after choice.
+PASS: independent desktop confirmation, manual-path rediscovery, desktop reconfirmation after refresh.
+PASS: saved source visibility and sessions-to-home conversion; multiple candidates still require selection on a new dialog.
+PASS: root/desktop persisted in isolated SettingsStore, RememberRoots off clears remembered paths; cancel preserves confirmed selection.
+PASS: visible pending cleanup blocks root switch; old confirmation canceled/disposed before switch.
+PASS: root switch empties rows, checked set, preview and LastResult; old cleanup reference removed, delete disabled until new scan.
+PASS: two roots with identical logical session ID scan only physical files of newly selected root.
+PASS: delete blocked while scanning; menu/scan root operation guards present, including post-cleanup refresh.
+PASS: root A log, root B log and root-external sentinel SHA-256 unchanged; existing Windows regression unselected/sentinel hashes unchanged.
+PASS: visual inspection of localized selector screenshot in .artifacts/T06/ui-1a65b624aa244ddb96ced845985c71c7/root-selector.png; list horizontal scrollbars, separate sections/checkboxes and action buttons visible. Latest equivalent screenshots in final fixture root-selector.png and root-b-main.png.
+NotRun: OS FolderBrowserDialog native interaction (test injects returned manual path then executes same discovery), multiple DPI/clean VM/other Windows SKU, standalone default-app checks, release/publish, T07-T16 audit/write tests. No broad compatibility/release acceptance claim.
+RawEvidence: .artifacts/T06/T06-full.trx; ui-roots-final.log; ui-regression-final.log; screenshots in fixture directories.
+Recovery: .artifacts/T06/backups/ original modified source and documents; timestamped tracking snapshots. No destructive cleanup of earlier work.
+Safety: no real Harness writes; root/settings UI tests use only .artifacts/T06 synthetic homes/settings, existing regression uses its isolated synthetic fixtures. No system setting changes. No metadata write allowlist changes.
+GitCommit: NOT_COMMITTED.
+NextCandidate: T07; overall T07-T16 and final A01-A07 acceptance remain incomplete.

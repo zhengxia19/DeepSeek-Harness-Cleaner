@@ -14,7 +14,12 @@ public sealed record AttachmentInventoryItem(AttachmentCandidate Candidate, stri
 }
 
 public sealed record AttachmentInventoryResult(IReadOnlyList<AttachmentInventoryItem> Items,
-    IReadOnlyList<string> Issues);
+    IReadOnlyList<string> Issues)
+{
+    public IReadOnlyList<DanglingAttachmentReference> DanglingReferences { get; init; } = [];
+    public IReadOnlyList<string> UnresolvedSessionIds { get; init; } = [];
+    public bool GlobalOrphanConclusionAvailable { get; init; }
+}
 
 /// <summary>受控根内附件只读盘点。引用只按已核对的原生内容块建立；不提供全局孤儿结论。</summary>
 public sealed class AttachmentInventoryService
@@ -81,7 +86,12 @@ public sealed class AttachmentInventoryService
                 TypeLabel = evidence is { TypeLabels.Count: > 0 } ? string.Join("；", evidence.TypeLabels) : "类型未知",
             };
         }).OrderBy(x => x.RelativePath, StringComparer.Ordinal).ToArray();
-        return new AttachmentInventoryResult(items, issues);
+        return new AttachmentInventoryResult(items, issues)
+        {
+            DanglingReferences = index.DanglingReferences,
+            UnresolvedSessionIds = index.UnresolvedSessionIds,
+            GlobalOrphanConclusionAvailable = index.GlobalOrphanConclusionAvailable,
+        };
 
         void Walk(string directory)
         {

@@ -6,6 +6,7 @@
   <ItemGroup>
     <!-- 生产依赖：Zstd 物理解码（纯托管），见 docs/dependencies.md -->
     <PackageVersion Include="ZstdSharp.Port" Version="0.8.8" />
+    <PackageVersion Include="YamlDotNet" Version="18.1.0" />
     <!-- 仅开发依赖：xUnit 测试栈 -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />

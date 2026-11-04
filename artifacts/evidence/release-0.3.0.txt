@@ -1,0 +1,49 @@
+Task: 发布 0.3.0（用户目标：验收已完成，编译发布；单文件可，但不捆绑框架，客户端已装运行时）
+Date: 2026-11-04
+HEAD: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6; change-plan 工作区改动随本次发布提交。
+Environment: Windows 10.0.19045；项目本地 .NET SDK 10.0.402（scripts/enter-env.ps1）；PowerShell 7.6.4。
+桌面 3840x2160 @150% 缩放（进程 DeviceDpi=144）。验收时环境为 96 DPI（DPI=96 见 FINAL 证据），本轮环境已变化。
+
+Build / tests / format（本轮实测）:
+1. dotnet build DeepSeekHarnessCleaner.sln -c Release -warnaserror: exit0，0 警告 0 错误。
+2. dotnet test（全解决方案）: 681 PASS，0 failed/skipped。TRX .artifacts/release-0.3.0/release-0.3.0.trx。
+3. dotnet format DeepSeekHarnessCleaner.sln --verify-no-changes: 初次 exit2（WorkspaceFixture.cs 空白符）；
+   以 dotnet format --include 修复该测试夹具空白符后 exit0。该文件因此与 2026-10-20 清单哈希不同（见下）。
+
+Windows 交互门禁（docs/testing.md §4 四套件）:
+- 原生 144 DPI 首跑：original exit1（46 PASS，止于 report 最小尺寸双向滚动条检查）；
+  sync exit1（4 PASS，止于 sync confirmation minimum size overlap 检查）；post-audit 44 PASS exit0；roots 21 PASS exit0。
+  诊断：对话框为代码构建固定像素边界，AutoSize 控件随 DPI 增大而固定边界/MinimumSize 不缩放；
+  多 DPI 属验收文档已声明的未实测限制（A04 limits：broad DPI matrix untested）。
+- 用户选择“按 100% 缩放环境验证后发布”。临时将 WindowsTests csproj ApplicationHighDpiMode 设为 DpiUnaware
+  （进程 96 DPI 虚拟化，布局度量与验收环境一致；被测 UI 代码不变），重建后复跑：
+  original 91 PASS exit0（.artifacts/release-0.3.0/gate-original-96dpi.log）；
+  sync 72 PASS exit0（gate--workspace-sync-only-96dpi.log）；
+  post-audit 44 PASS exit0（gate--post-audit-only-96dpi.log）；
+  roots 21 PASS exit0（gate--roots-only-96dpi.log）。
+- csproj 已恢复 PerMonitorV2 并重建；恢复后 sln -warnaserror 与 format --verify-no-changes 再次 exit0。
+
+源码完整性核对（FINAL-verification-manifest.json，82 文件）:
+- 80/82 哈希一致。差异 2 项：
+  1) tests/DeepSeekHarnessCleaner.Tests/Fixtures/WorkspaceFixture.cs — 本轮 dotnet format 空白符修复（已记录）。
+  2) tests/DeepSeekHarnessCleaner.WindowsTests/Program.cs — 现 694ee0e3…，清单 F34F2328…；
+     A04-production-gate.txt 记录清单采集后（2026-10-21）存在编译修正；当前内容含全部门禁模式，
+     四套件全过、-warnaserror 通过、无诊断残留。未宣称与清单逐字节一致。
+
+发布（scripts/publish.ps1 -Version 0.3.0）:
+- PUBLISH_OK out=dist/v0.3.0/win-x64；exit0。
+- DeepSeekHarnessCleaner.UI.exe 1492560 字节；SHA-256 ec54fe29e7ab0aeda531c6fb803539596e373410dc8a39b9d5e774025278afda。
+- win-x64、Release、单文件、--self-contained false -p:PublishSingleFile=true，未签名；不捆绑运行时（客户端需 .NET 10 Windows Desktop Runtime x64）。
+- FileVersion=0.3.0；ProductVersion=0.3.0+b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6。
+- 包内文件：exe、LICENSE.txt、README.md、SHA256SUMS.txt、THIRD-PARTY-NOTICES.txt（含 YamlDotNet 18.1.0 MIT，用户 2026-10-21 批准）。
+- SHA256SUMS 已随包生成。
+
+发布 EXE 冒烟（真实 144 DPI）:
+- Start-Process 等待退出：--smoke（布局/键盘自检，未带 --scan-root，历史 T-18 合成夹具已不在 .artifacts/tmp）：
+  SMOKE_RESULT=PASS，exit0，34 行逐项 PASS。日志 .artifacts/release-0.3.0/smoke-published.txt。
+
+限制（如实记录）:
+- 多 DPI 对话框布局：CleanupDialog/ResultsDialog 固定像素边界不随 DPI 缩放，150% 缩放下最小尺寸布局检查失败，
+  默认尺寸亦有约 1–4px 轻微重叠；主窗体（Dock/AutoSize）在 144 DPI 冒烟全部通过。属验收已声明的未实测边界，未做代码修复。
+- 发布 EXE 未重跑数据绑定冒烟（合成夹具缺失）；数据路径由 681 项自动测试与四门禁覆盖。
+- 未签名；未在新装运行时的干净 VM 上安装验证。

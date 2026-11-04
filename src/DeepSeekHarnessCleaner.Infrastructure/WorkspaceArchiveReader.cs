@@ -11,14 +11,12 @@ public sealed class WorkspaceArchiveReader
         if (!new PathGuard().Check(dataHome, path).IsAllowed) return null;
         try
         {
-            using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            if (input.Length > 8 * 1024 * 1024) return null;
-            using var doc = JsonDocument.Parse(input);
+            using var doc = WorkspaceJson.Load(path, out _);
             var root = doc.RootElement;
-            if (!UniqueObject(root) || !root.TryGetProperty("unit", out var unit) || !UniqueObject(unit)
+            if (!WorkspaceJson.UniqueObject(root) || !root.TryGetProperty("unit", out var unit) || !WorkspaceJson.UniqueObject(unit)
                 || !unit.TryGetProperty("name", out var name) || name.ValueKind != JsonValueKind.String || name.GetString() != "workspace"
                 || !unit.TryGetProperty("version", out var version) || !version.TryGetInt32(out var number) || number != 2
-                || !root.TryGetProperty("global", out var global) || !UniqueObject(global)
+                || !root.TryGetProperty("global", out var global) || !WorkspaceJson.UniqueObject(global)
                 || !global.TryGetProperty("initialized", out var initialized) || initialized.ValueKind != JsonValueKind.True
                 || !global.TryGetProperty("archivedSessionIds", out var archived) || archived.ValueKind != JsonValueKind.Array)
                 return null;
@@ -36,12 +34,9 @@ public sealed class WorkspaceArchiveReader
             }
             return ids;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or JsonException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or System.Security.SecurityException or JsonException or InvalidOperationException)
         {
             return null;
         }
     }
-
-    private static bool UniqueObject(JsonElement element) => element.ValueKind == JsonValueKind.Object
-        && element.EnumerateObject().Select(x => x.Name).Distinct(StringComparer.Ordinal).Count() == element.EnumerateObject().Count();
 }

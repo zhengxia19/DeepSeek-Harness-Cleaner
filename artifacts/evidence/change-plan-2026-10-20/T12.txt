@@ -1,0 +1,43 @@
+Task: change-plan-2026-10-20/T12
+Status: ACCEPTED (contract + in-memory proposal only)
+Date: 2026-10-20 Asia/Shanghai
+VerifiedHEAD: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6; previous T02-T11 changes preserved.
+Prerequisite: T11 checked, checkpoint/evidence reviewed (471 tests).
+Environment: project-local SDK 10.0.402; PowerShell 7.6.4; Microsoft Windows 10.0.19045.
+ChangedFiles: Application/WorkspaceMetadataPlan.cs; Application/WorkspaceMetadataProposal.cs; Tests/WorkspaceMetadataProposalTests.cs; docs/workspace-sync-design.md; design/interfaces/compatibility/testing/acceptance/changelog/pending-contract and task tracking.
+UpstreamVerification: web.open fixed official deepseek-ai/deepseek-harness commit 687f282e8625c6b8d11ff58211a90524be2e4317:
+- packages/workspace/workspace/src/spec.ts L17-27, L31-58, L68-75: fields, ordered accounting, timestamps, transaction marker, domain version.
+- entity.ts L162-165, L188-199: detach filtering and timestamp semantics; official mutate additionally prunes other invalid members, deliberately NOT adopted by Cleaner because exact selection must be preserved.
+- index.ts L369-378, L422-431: removal of archive/pin entries without reordering retained entries; L595-606: official create/delete transaction recovery, not repurposed by Cleaner.
+Immutable source links and field-by-field evidence are in docs/workspace-sync-design.md. Only public upstream source fetched, no user data sent. Source contract is not an installed-release/version/backend approval.
+ActualAPI: WorkspaceMetadataProposal.Build(cleanup, before, physicalOutcomes, after) -> WorkspaceMetadataPlan. DTO holds root/plan identity, current workspace path/SHA, proposed time, original post-audit RecheckedUtc, candidate references, decisions/block reasons and readonly copies of original targets, actual deletion facts and absence evidence. No file IO or CleanupExecutor.DeleteOne modification, no UI integration.
+States: factory produces Proposed/NoOp/Blocked only. Enum/document also define future NotRequested/BackupVerified/Prepared/Applying/Applied/RecoveryRequired with explicit producer/evidence responsibility. No actual write state claimed from enum existence.
+WritePolicy: ProductionWriteContractIds remains empty. Proposed is NOT permission to write; real release mapping, mandatory backup, process/path/hash/transaction/recovery gates remain T13-T16 work. No mutable config bypass introduced.
+Commands after . ./scripts/enter-env.ps1:
+1. dotnet build src/DeepSeekHarnessCleaner.Application/DeepSeekHarnessCleaner.Application.csproj --no-restore -warnaserror
+   Exit 0, 0 warnings/errors.
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter FullyQualifiedName~WorkspaceMetadataProposalTests --logger 'trx;LogFileName=T12-targeted.trx' --results-directory .artifacts/T12
+   Exit 0, initial 16 passed, 0 failed/skipped. Added metadata-only/no-original-target rejection afterward, included in full suite.
+3. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T12-full.trx' --results-directory .artifacts/T12
+   Exit 0, 488 passed, 0 failed/skipped (471 prior + 17 new).
+   After retaining original proof/time facts in final DTO, repeated with LogFileName=T12-final-full.trx: exit 0, same 488 passed, 0 failed/skipped.
+4. dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include src/DeepSeekHarnessCleaner.Application/WorkspaceMetadataPlan.cs src/DeepSeekHarnessCleaner.Application/WorkspaceMetadataProposal.cs tests/DeepSeekHarnessCleaner.Tests/WorkspaceMetadataProposalTests.cs
+   Exit 0, repeated after final DTO fields; changed C# files only.
+5. dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+   Exit 0, 0 warnings/errors; final build after DTO change also exit 0. git diff --check exit 0, line-ending warnings only.
+Acceptance:
+PASS: field/timestamp/transaction meanings grounded in pinned official source; allowed transformation excludes unselected members and official opportunistic pruning, preserves unrelated state/order. UpdatedAt applies only to changed member records at actual Apply time, not proposal time.
+PASS: actual synthetic successful deletes + fresh absent observations yield only selected archive/pin/member removals; unrelated missing-log session ID remains outside proposal.
+PASS: actual partial execution test changes pinned log after frozen plan, executor Skipped result retained; proposal includes only successfully deleted/absent archived session, leaves pinned session metadata outside proposal.
+PASS: failed/missing/duplicate result facts, Present/Unknown target observations, new log evidence and partial original-log selection exclude corresponding session; independently successful session still proposed.
+PASS: wrong plan, unknown index, missing hash, wrong root, invalid pointer and incomplete physical scan block all removals.
+PASS: metadata-only orphan with no original log targets not eligible; current known zero references gives NoOp, not Applied or a write.
+PASS: repeated proposal preserves reference evidence order and source workspace bytes; all unrelated JSON fields/timestamps/order unchanged because this task does not rewrite JSON. Outside sentinel SHA-256 unchanged.
+PASS: physical target/deletion/absence proof copies and original post-audit timestamp retained exactly; proposal generation time is not substituted for source observation or deletion time.
+ScopeLimit: T12 tests prove proposal scope and unchanged source, NOT an implemented JSON transformation/backup/replace/recovery. Actual before/after write invariants, mandatory original backup, write permission and crash recovery remain required in T13-T16. No production version added to allowlist.
+NotRun: GUI regression this round (no UI change; unit/integration tests ran on Windows 10), real metadata writes, version/release sample validation, T13-T16, multi-DPI/VM/release/publish. Previous GUI pass counts not reused as fresh evidence.
+RawEvidence: .artifacts/T12/T12-targeted.trx; T12-full.trx; T12-final-full.trx. Public source URLs/line references in sync design.
+Recovery: .artifacts/T12/backups/ affected docs; timestamped tracking backups; new Application DTO/factory/test/design files have no production wiring.
+GitCommit: NOT_COMMITTED.
+Safety: all physical delete dependency tests used synthetic fixture roots with isolated Inactive probe; no real Harness writes/process interference/system changes. No metadata writer exists in this task.
+NextCandidate: T13 mandatory raw backup; T13-T16 and overall A01-A07 acceptance incomplete.

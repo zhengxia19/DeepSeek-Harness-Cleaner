@@ -12,11 +12,38 @@ internal static partial class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        if (args.Contains("--installed-storage-e2e-only", StringComparer.Ordinal)) return RunInstalledStorageChecks();
+        if (args.Contains("--installed-storage-only", StringComparer.Ordinal))
+        {
+            var home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".dsh");
+            var recognized = WorkspaceProductionGate.Read(home) is not null;
+            Console.WriteLine(recognized ? "PASS: installed release and storage binding (read only)"
+                : "FAIL: installed storage binding not recognized");
+            return recognized ? 0 : 1;
+        }
+        if (args.Contains("--installed-release-only", StringComparer.Ordinal))
+        {
+            var archive = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Programs", "DeepSeek Harness", "resources", "app.asar");
+            var matches = WorkspaceReleaseReader.MatchesReviewedRelease(archive);
+            Console.WriteLine(matches ? "PASS: reviewed installed release fingerprints (read only)"
+                : "FAIL: installed release fingerprints not recognized");
+            return matches ? 0 : 1;
+        }
+        if (args.Length > 0 && args[0] == "--workspace-crash-child") return RunWorkspaceCrashChild(args);
+        if (args.Contains("--workspace-crash-only", StringComparer.Ordinal)) return RunWorkspaceCrashChecks();
         ApplicationConfiguration.Initialize();
         Control.CheckForIllegalCrossThreadCalls = true;
         var result = 1;
         using var dispatcher = new Form { ShowInTaskbar = false, WindowState = FormWindowState.Minimized };
-        dispatcher.Shown += (_, _) => { result = args.Contains("--default-open-only", StringComparer.Ordinal) ? RunDefaultOpenChecks() : RunChecks(); dispatcher.Close(); };
+        dispatcher.Shown += (_, _) =>
+        {
+            result = args.Contains("--workspace-sync-only", StringComparer.Ordinal) ? RunWorkspaceSyncChecks()
+            : args.Contains("--post-audit-only", StringComparer.Ordinal) ? RunPostAuditChecks()
+            : args.Contains("--audit-only", StringComparer.Ordinal) ? RunAuditChecks()
+            : args.Contains("--roots-only", StringComparer.Ordinal) ? RunRootSelectionChecks()
+            : args.Contains("--default-open-only", StringComparer.Ordinal) ? RunDefaultOpenChecks() : RunChecks(); dispatcher.Close();
+        };
         Application.Run(dispatcher);
         return result;
     }

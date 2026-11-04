@@ -1,0 +1,35 @@
+Task: change-plan-2026-10-20/T04
+Status: ACCEPTED
+Date: 2026-10-20 Asia/Shanghai
+Baseline: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6
+Prerequisites: T01-T03 checked; T03 evidence reviewed (383 passed). Existing uncommitted T02/T03 changes preserved.
+Environment: project-local SDK 10.0.402, PowerShell 7.6.4, Windows 10.0.19045.
+ChangedFiles: Infrastructure/RootLocator.cs; Infrastructure/RootDiscoveryResult.cs; Tests/RootDiscoveryTests.cs; docs/interfaces.md; current task/status/evidence/checkpoint.
+ActualAPI: RootLocator.DiscoverCandidates(string? selectedDshHome=null, string? savedDshHome=null, string? selectedDesktopHome=null, string? savedDesktopHome=null) -> RootDiscoveryResult.
+Models: RootCandidate(Kind, InputPath, NormalizedPath, Sources, Status, Reason), kind/source/status enums, RootDiscoveryResult(Candidates).
+Compatibility: parameterless RootLocator and Resolve optional arguments retained; Resolve still selects user > environment > default. New constructor delegates isolate current-account/environment lookups in tests.
+Scope: T04 candidate discovery and model only. No UI integration, root auto-selection, metadata writes or deletion changes. T05 full security/source validation and T06 UI/state invalidation not claimed.
+Commands after . ./scripts/enter-env.ps1:
+1. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter 'FullyQualifiedName~RootDiscoveryTests|FullyQualifiedName~RootLocatorTests' --logger 'trx;LogFileName=T04-targeted.trx' --results-directory .artifacts/T04
+   Exit 0; 18 passed, 0 failed, 0 skipped (8 new cases plus 10 existing RootLocator cases).
+2. dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include src/DeepSeekHarnessCleaner.Infrastructure/RootDiscoveryResult.cs src/DeepSeekHarnessCleaner.Infrastructure/RootLocator.cs tests/DeepSeekHarnessCleaner.Tests/RootDiscoveryTests.cs
+   Exit 0; changed C# files only, not repository-wide formatting claim.
+3. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T04-full.trx' --results-directory .artifacts/T04
+   Exit 0; 391 passed, 0 failed, 0 skipped. Prior suite 383 plus 8 new cases.
+4. dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+   Exit 0; 0 warnings, 0 errors.
+Acceptance:
+PASS: malformed, missing and non-Harness DSH_HOME candidates do not suppress independent valid default.
+PASS: every candidate exposes kind, source collection, normalized path or null on normalization failure, status and reason.
+PASS: ordinary root spellings normalized for dot segment, trailing separator and Windows case are deduplicated while retaining all four sources.
+PASS: direct reparse root is rejected, not followed as an accepted second identity.
+PASS: distinct roots and DSH/Desktop kinds remain independent; result never implicitly selects a root.
+PASS: repeat discovery does not create missing path or alter entry list/synthetic sentinel SHA-256.
+PASS: legacy Resolve still uses selected root or environment priority, without implicit fallback.
+Limitations: full unsafe-path/access/ancestor-reparse source matrix is T05; UI not yet connected. Candidate Valid is structural evidence, not permission to clean. No physical volume/file-ID identity guarantee beyond normalized ordinary paths is claimed.
+NotRun: WindowsTests/manual UI/release acceptance; ACL-denial and complete T05 safety matrix; T06 multiple-root user selection.
+RawResults: .artifacts/T04/T04-targeted.trx; .artifacts/T04/T04-full.trx.
+Recovery: original RootLocator.cs and interfaces.md in .artifacts/T04/backups/; tracking snapshots in timestamped .artifacts/T04/tracking-backups-*; new files can be removed and originals restored after preserving prior work.
+GitCommit: NOT_COMMITTED.
+Safety: no real Harness data written; production sources queried read-only; new writes limited to synthetic fixtures and project artifacts; no system settings changed.
+NextCandidate: T05; overall T05-T16 remain incomplete.

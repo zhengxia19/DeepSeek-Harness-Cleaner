@@ -1,0 +1,41 @@
+Task: change-plan-2026-10-20/T09
+Status: ACCEPTED
+Date: 2026-10-20 Asia/Shanghai
+Baseline: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6; earlier T02-T08 changes retained.
+Prerequisite: T08 checked, checkpoint/evidence reviewed (451 automated tests).
+Environment: project-local SDK 10.0.402, PowerShell 7.6.4, Windows 10.0.19045; actual UI tests at DPI=96.
+ChangedFiles: Application/PreCleanupAudit.cs; Infrastructure/PreCleanupAuditor.cs; UI/PreCleanupAuditText.cs; UI/MainForm.cs; UI/CleanupDialog.cs; Tests/PreCleanupAuditTests.cs and csproj linked pure presenter; WindowsTests/AuditChecks.cs and Program.cs flag; related interface/testing/acceptance/pending-contract/changelog/tracking docs.
+ActualAPI: PreCleanupAuditor.Audit(sessionRoot, selectedSessionIds, CleanupPlan, ct) -> PreCleanupAudit(PlanId, RootFingerprint, ObservedUtc, Targets, Snapshot). Matches compares plan ID, root fingerprint and full target records. Original target list frozen/copied, never expanded. Root fingerprint checked using existing planner contract, no new write permission.
+Integration: MainForm prepares original plan then invokes independent read-only audit off UI thread while _preparingDelete guards root switches/reentry. Unexpected audit failure does not open confirmation. CleanupDialog separates unchanged physical target list and read-only evidence tab; default view warns of reference/issue counts. Confirm rechecks audit/plan binding; mismatch disables/blocks execution. Existing backup/process/executor gates retained. Legacy low-level/independent attachment callers may omit audit and are labeled as no session pre-audit; normal MainForm supplies it.
+Commands after . ./scripts/enter-env.ps1:
+1. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter FullyQualifiedName~PreCleanupAuditTests --logger 'trx;LogFileName=T09-targeted.trx' --results-directory .artifacts/T09
+   Exit 0, 5 passed, 0 failed, 0 skipped.
+2. dotnet build tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-restore -warnaserror
+   Exit 0, 0 warnings/errors.
+3. dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-build -- --audit-only
+   Exit 0; .artifacts/T09/ui-audit.log contains 25 PASS assertions.
+4. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T09-full.trx' --results-directory .artifacts/T09
+   Exit 0, 456 passed, 0 failed, 0 skipped (451 prior + 5 new).
+5. dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include src/DeepSeekHarnessCleaner.Application/PreCleanupAudit.cs src/DeepSeekHarnessCleaner.Infrastructure/PreCleanupAuditor.cs src/DeepSeekHarnessCleaner.UI/PreCleanupAuditText.cs src/DeepSeekHarnessCleaner.UI/MainForm.cs src/DeepSeekHarnessCleaner.UI/CleanupDialog.cs tests/DeepSeekHarnessCleaner.Tests/PreCleanupAuditTests.cs tests/DeepSeekHarnessCleaner.WindowsTests/Program.cs tests/DeepSeekHarnessCleaner.WindowsTests/AuditChecks.cs
+   Exit 0, changed C# files only.
+6. dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-build
+   Exit 0; .artifacts/T09/ui-regression.log: 91 PASS assertions, WINDOWS_REGRESSION=PASS.
+7. dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+   Exit 0, 0 warnings/errors. git diff --check exit 0, line-ending warnings only.
+Acceptance:
+PASS: independent audit leaves original physical target list unchanged; dedicated cache, Workspace refs and retained shared attachment shown without automatic deletion scope expansion.
+PASS: actual MainForm confirmation includes bound audit; separate files/audit tabs, read-only multiline text and both scrollbars. Shows log generation file, dedicated cache, Workspace JSON Pointer and unknown coverage information.
+PASS: verified archive + workspace member refs displayed as outside physical scope. Shared attachment shows both verified owners.
+PASS: bad metadata explicitly Unknown; original log-only target set unchanged, no workspace deletion target.
+PASS: audit rejects wrong session root/fingerprint, canceled request; binding rejects different plan ID, root fingerprint, target ownership/records and mutated target list. Backup preference alone does not invalidate physical-scope binding.
+PASS: mismatched audit disables Confirm and RequestConfirm cannot execute even with injected Inactive process for that isolated test.
+PASS: all selected/unselected logs, dedicated cache, attachment, workspace and outside sentinel hashes unchanged after audit/cancel; known-to-corrupt metadata fault injection only in fixture, restored before final hash checks.
+PASS: unit tests verify all file/sentinel hashes unchanged; presenter text carries known evidence and unknown caveat without transcript text.
+VisualQA: inspected confirm-files.png and confirm-audit.png in .artifacts/T09/ui-7c850040901949678e7be012d401b6db. Both pages readable, buttons visible, target/audit views have appropriate scrolling. Actual host Harness process Active correctly blocks physical confirmation in MainForm test; not bypassed. Dedicated mismatch test uses only synthetic data with Inactive injection and still performs no deletion.
+Limitations: audit is snapshot evidence, not post-delete result/current backend/write authorization. Unknown metadata is disclosed, not used to claim complete cleanup; original chosen physical cleanup still follows its execution gates. T10 post-scan and T11 session-level report not implemented here.
+NotRun: multi-DPI/VM/other Windows SKU, native default-app checks, release/publish and T10-T16 tests. No release acceptance claim.
+RawEvidence: .artifacts/T09/T09-targeted.trx; T09-full.trx; ui-audit.log; ui-regression.log; synthetic UI fixture/screenshots above.
+Recovery: .artifacts/T09/backups/ contains pre-edit MainForm/CleanupDialog, test csproj and docs; timestamped tracking snapshots. New files isolated, prior uncommitted work preserved.
+GitCommit: NOT_COMMITTED.
+Safety: no real Harness writes; tests only synthetic roots/settings; no system settings/network content transfer/metadata writer.
+NextCandidate: T10; T10-T16 and final acceptance incomplete.

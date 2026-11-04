@@ -1,0 +1,62 @@
+Task: A04 supported release / effective storage binding / guarded synchronization
+Date: 2026-10-20
+Status: implementation and targeted acceptance PASS; final A01-A07 completion audit still pending.
+HEAD: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6; changes NOT_COMMITTED.
+Environment: Windows10.0.19045; project-local .NET10.0.402; PowerShell7.6.4; existing Windows UI DPI96.
+
+Requirement and implementation:
+- Conditional nonempty support: dsh-desktop@0.2.1-rc.2/workspace/v2/json-single, not allv2.
+- WorkspaceReleaseReader recognizes19 reviewed ASAR asset hashes plus package name/version. No Harness module executed. Packaging/root source chain documented in A04-installed-routing.txt.
+- WorkspaceProductionGate reads all manifest-declared patch files in bundle order, profile patch and optional home patch. Installation resolution precedes profile node_modules ancestor search. Core manifests must match release and compatible metadata.
+- Current environment-derived home must equal selected data home. Tilde/default/nonblank DSH_HOME follows launcher rules. Root mismatch remains read-only/unsupported for sync.
+- Only exact reviewed compatibility ranges accepted; unknown constraints/exemptions cannot authorize writes. Core injection/isolation/unknown scope, native includes, unsupported layout/field/transaction/routing states rejected.
+- WorkspaceStoragePolicy uses bounded YAML parsing/data composition, rejects aliases/anchors/multiple documents/duplicate keys/unknown tags, preserves !!js as inert scalar. Config replaces, not merges. Parent disable/runtime group context checked. Unknown insert targets/name mismatches skipped per reviewed app-boot behavior.
+- Strong source-format, physical absence, selected IDs, process inactivity, mandatory backup, identity/hash/path, no-overwrite rename and recovery rules retained.
+- Prepare captures StorageBinding; Apply and last replacement boundary revalidate it. Changes block old preparation, preserving source/backup or RecoveryRequired materials as appropriate. Recovery uses same production scope gate.
+- No personal profile hash hardcoded. An unrelated settings change is supported on a new preparation, but invalidates the old preparation fingerprint.
+- Public method signatures unchanged. Internal fixture binding probe cannot escape existing GUID-scoped synthetic-home constraint. Public DTOs cannot force allowance.
+
+Executed verification (actual commands):
+1. dotnet restore DeepSeekHarnessCleaner.sln: exit0, NuGet official feed only, project-local cache.
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests --no-restore --filter FullyQualifiedName~WorkspaceStoragePolicyTests ...: initial26 PASS; final policy/gate/drift subset45 PASS,0 failed/skipped.
+3. dotnet test tests/DeepSeekHarnessCleaner.Tests --no-restore --logger trx;LogFileName=audit-full.trx --results-directory .artifacts/FinalAcceptance -warnaserror: exit0,681 PASS,0 failed/skipped (636 previous +45).
+4. dotnet list DeepSeekHarnessCleaner.sln package --vulnerable --include-transitive: exit0; official source reported no known vulnerable packages for five solution projects. Log .artifacts/FinalAcceptance/dependency-audit.txt. This is not a guarantee of no vulnerabilities.
+5. WindowsTests --installed-storage-only: exit0, actual installed code/profile binding recognized read-only. No real source content emitted.
+6. WindowsTests --installed-storage-e2e-only: exit0,11 PASS. Public WorkspaceSyncCoordinator constructor, actual installed fingerprint/config path, newly generated synthetic .dsh/profile, simulated inactive process probe. Current test process DSH_HOME set temporarily and restored in finally. Unknown backend rejected; active probe rejected; unchecked request unchanged; checked request applied; exact independent raw backup verified; keep/sentinel hashes unchanged. No internal writer release bypass.
+7. WindowsTests --workspace-sync-only: exit0,72 PASS; existing default-off/confirm/recovery/retry/scope/backup controls remain verified.
+8. WindowsTests --workspace-crash-only: exit0,120 PASS across8 owned-child forced-termination stages; original/backup/recovery/physical result proofs retained. Does not simulate physical hardware loss.
+
+Verification logs:
+.artifacts/FinalAcceptance/audit-full.trx
+.artifacts/FinalAcceptance/storage-policy.trx
+.artifacts/FinalAcceptance/production-gate.trx
+.artifacts/FinalAcceptance/installed-storage-check.txt
+.artifacts/FinalAcceptance/installed-storage-e2e.txt
+.artifacts/FinalAcceptance/sync-gate-ui.txt
+.artifacts/FinalAcceptance/crash-eight-stages.txt
+Final build/format/UI-regression rerun results appended after terminal completion.
+
+Corrected intermediate development failures:
+- First policy compile used an incompatible dictionary extension call; replaced with TryGetValue, then build passed.
+- First new Windows E2E compile lacked UI namespace and used CanRequest instead of actual Available field; inspected actual signatures and corrected. No failed build claimed passing.
+
+Dependency: YamlDotNet18.1.0, MIT per official NuGet/upstream metadata; pure-managed net10 DLL300032B,0 production transitive dependencies. Agent checked license metadata/text; repository-required human license review remains pending and cannot be replaced by this check. Published-package size not claimed. See docs/dependencies.md. Functional A04 PASS does not close this separate acceptance gate.
+
+Limits:
+- Real Harness data never written/moved/deleted; real Harness processes never stopped. Installed code and bounded config declarations only read, credentials/transcript values not emitted or saved.
+- Simulated inactive probe is test input; E2E does not assert real Harness was inactive.
+- Static supported bindings do not prove arbitrary third-party plugin side effects or original producer Git commit. Unknown configuration forms fail closed.
+- Existing repeated-probe/check design is not a cross-process/filesystem transaction; two renames remain non-atomic. Hardware/OS/storage power loss, clean offline VM, broad DPI matrix and release/publish remain untested in this iteration.
+- T01-T16 historical evidence remains unchanged; A04 current conditions supersede historical empty production-allowlist statements.
+
+Final verification after last code edits:
+- dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror: exit0,0 warnings/errors.
+- dotnet build tests/DeepSeekHarnessCleaner.WindowsTests --no-restore -warnaserror: exit0,0 warnings/errors.
+- Final Windows rerun --installed-storage-only1 / --installed-storage-e2e-only11 / --roots-only21 / --post-audit-only44 / --workspace-sync-only72 / original-ui91 PASS, every command exit0.
+- Logs .artifacts/FinalAcceptance/gate-*.txt; current UI screenshots remain in generated fixture output directories.
+- Crash-stage log counted120 PASS, exit0. Latest full TRX681 PASS,0 failed/skipped.
+- git diff --check exit0. Changed-file formatting applied; verify-no-changes result recorded after final command.
+
+Final changed-file core and Windows format --verify-no-changes: exit0. Final git diff --check: exit0.
+
+Closure addendum2026-10-21: user explicitly agreed to YamlDotNet18.1.0 MIT use after the review requirement was explained. Human-review gate closed; source/test and proof-log hashes revalidated unchanged. Original pending-license notes describe2026-10-20 only. No product-code change, test rerun, commit or release in this closure.

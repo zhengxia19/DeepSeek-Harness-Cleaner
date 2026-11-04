@@ -1,0 +1,44 @@
+Task: change-plan-2026-10-20/T07
+Status: ACCEPTED
+Date: 2026-10-20 Asia/Shanghai
+Baseline: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6; prior uncommitted T02-T06 work preserved.
+Prerequisites: T06 checked and checkpoint/evidence reviewed (408 automated tests and Windows checks).
+Environment: project-local SDK 10.0.402; PowerShell 7.6.4; Windows 10.0.19045; existing UI regression DPI=96.
+ChangedFiles: Domain/WorkspaceReferenceIndex.cs; Infrastructure/WorkspaceReferenceReader.cs; Infrastructure/WorkspaceJson.cs; Infrastructure/WorkspaceArchiveReader.cs; Tests/WorkspaceReferenceTests.cs and WorkspacePendingContracts.md; interfaces/compatibility/acceptance/changelog/tracking docs.
+ActualAPI: WorkspaceReferenceReader.Read(string dataHome) -> WorkspaceReferenceIndex(Status, EvidencePath, SnapshotSha256, References, Reason, ErrorPointer). Domain enums Known/Unknown/Unsupported and Archived/Pinned/WorkspaceMember. Each reference contains SessionId, Kind, WorkspaceId and escaped JSON Pointer with actual array index.
+SourceContract: docs/workspace-compatibility.md, fixed upstream 687f282e8625c6b8d11ff58211a90524be2e4317. Synthetic samples only; no new real-release validation, no metadata write authorization.
+Implementation: strict v2 single-JSON snapshot, optional archive/pin defaults from source schema, explicit matching workspaceIds/table registry, valid member records, unique IDs, no archived/pinned overlap or ambiguous cross-workspace membership. Any pendingMutation presence (including null/unknown operation), uninitialized state, duplicate JSON fields anywhere, malformed/inaccessible/missing data returns Unknown with no misleading partial complete set. Other unit/version and per-record directory candidate return Unsupported; competing layouts return Unknown. No guessed SQLite location/backend.
+SharedLogic: WorkspaceArchiveReader now reuses bounded snapshot loading and UniqueObject helper, retaining archive-only validation, BOM behavior and null on unsupported/invalid/oversize input. Full index policy intentionally remains separate to preserve archive column behavior on pending/member states.
+Commands after . ./scripts/enter-env.ps1:
+1. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter 'FullyQualifiedName~WorkspaceReferenceTests|FullyQualifiedName~WorkspaceCompatibilityRegressionTests' --logger 'trx;LogFileName=T07-targeted.trx' --results-directory .artifacts/T07
+   Exit 1; 53 passed, 1 failed. New shared loader threw InvalidDataException for >8 MiB, not caught by legacy reader's existing filter. Corrected filter to return null, restoring old behavior; test retained.
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter 'FullyQualifiedName~WorkspaceReferenceTests|FullyQualifiedName~WorkspaceCompatibilityRegressionTests' --logger 'trx;LogFileName=T07-targeted-rerun.trx' --results-directory .artifacts/T07
+   Exit 0; 54 passed, 0 failed, 0 skipped (31 new + 23 T03 cases).
+3. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T07-full.trx' --results-directory .artifacts/T07
+   Exit 0; 439 passed, 0 failed, 0 skipped (408 prior + 31 new). Run after final root path prevalidation.
+4. dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include src/DeepSeekHarnessCleaner.Domain/WorkspaceReferenceIndex.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceJson.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceReferenceReader.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceArchiveReader.cs tests/DeepSeekHarnessCleaner.Tests/WorkspaceReferenceTests.cs
+   Exit 0; changed C# files only.
+5. dotnet build tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-restore -warnaserror
+   Exit 0; 0 warnings/errors.
+6. dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-build
+   Exit 0; .artifacts/T07/ui-regression.log contains 91 PASS assertions, WINDOWS_REGRESSION=PASS, including archive column display and protected hashes.
+7. dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+   Exit 0; 0 warnings/errors.
+Acceptance:
+PASS: all three reference kinds, exact paths/workspace IDs/array pointers and source SHA-256 established from synthetic snapshot, even when physical logs are absent.
+PASS: unknown version Unsupported; malformed JSON/duplicate IDs or fields/uninitialized/pending create/delete/null/future transaction Unknown, never known no references.
+PASS: mismatched workspace registry, missing table, blank/non-string members, ambiguous cross-workspace membership, bad record date, pin/archive conflict Unknown.
+PASS: initialized explicit empty registry plus schema-default archive/pin arrays Known empty; legacy archive reader remains null for missing archive field.
+PASS: JSON Pointer escaping for slash/tilde workspace key.
+PASS: missing data Unknown, per-record marker Unsupported, competing layouts Unknown; no backend location guessing.
+PASS: locked/oversize data safely rejected; fresh read after file change produces fresh snapshot hash.
+PASS: UTF-8 BOM accepted by both readers, source bytes unchanged; legacy oversize returns null.
+PASS: real file symbolic link rejected; outside synthetic bytes unchanged; no reader writes.
+PASS: prior archive characterization and UI column regression preserved. New index not yet integrated into audit UI (T08-T11).
+Limitations: Known describes known reference fields in that validated v2 JSON snapshot, not verified active runtime backend, full user data across backends, latest disk state or write permission. Actual release samples remain UNVERIFIED and write allowlist empty.
+NotRun: new audit/report integration T08-T11, writers T12-T16, native browser/default-app checks, multi-DPI/VM/SKU or release/publish acceptance.
+RawResults: .artifacts/T07/T07-targeted.trx; T07-targeted-rerun.trx; T07-full.trx; ui-regression.log.
+Recovery: .artifacts/T07/backups/ old archive reader and affected docs; timestamped tracking backups. No original historical evidence rewritten.
+GitCommit: NOT_COMMITTED.
+Safety: synthetic test roots only for mutations; no real Harness writes, no system settings, no network transfer of user content.
+NextCandidate: T08; full T08-T16 objective remains incomplete.

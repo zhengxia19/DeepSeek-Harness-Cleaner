@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "sourceKind": "Observed local Workspace metadata, not a transcript",
+  "sourcePathToken": "%USERPROFILE%/.dsh/storages/workspace.json",
+  "observedUtc": "2026-10-20T18:43:20.2779324+08:00",
+  "sourceFileLastWriteUtc": "2026-10-20T06:03:22.3889945Z",
+  "sourceSha256": "c63b0e3de8cae99001ce7208991b06162247419d79985e923185448dc51621ec",
+  "sourceStableAcrossRead": true,
+  "sourceMutationPerformed": false,
+  "observedDesktopPackageVersion": "0.2.1-rc.2",
+  "producerReleaseMappingVerified": false,
+  "workspaceVersion": 2,
+  "workspaceCount": 6,
+  "archiveCount": 20,
+  "pinnedCount": 0,
+  "memberCount": 51,
+  "distinctSessionCount": 55,
+  "sampleSha256": "cfe6dd00979d242da3854315645d3b171c9b76ee6f3d6c2dc7fc74fb1d422085",
+  "redaction": {
+    "workspaceAndSessionIds": "consistently renumbered, original order and relationships retained",
+    "paths": "replaced with C:/sanitized/SAMPLE_WORKSPACE_N",
+    "titles": "replaced",
+    "timestampValues": "replaced with 2000-01-01, not original event/provider times",
+    "unknownFields": "refuse sample generation"
+  },
+  "sourceIdTypesAndArrayUniquenessValidated": true,
+  "sourceIdValidationObservedUtc": "2026-10-20T10:47:04.5110596+00:00"
+}

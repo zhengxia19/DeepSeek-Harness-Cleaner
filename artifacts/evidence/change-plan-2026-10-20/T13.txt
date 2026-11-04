@@ -1,0 +1,33 @@
+Task: change-plan-2026-10-20/T13 mandatory original Workspace backup
+Result: ACCEPTED, 2026-10-20, Windows 10.0.19045 / local .NET 10.0.402
+HEAD: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6
+Prerequisite: T12 checked; proposal/contract and evidence reviewed.
+Changes: WorkspaceBackupService, WorkspaceBackupEvidence/Result, WorkspaceBackupTests.
+Create requires Proposed nonempty plan, canonical source path and hash, known source snapshot, Inactive process probe, ordinary controlled destination outside data/protected roots.
+Independent backup has exact original bytes (BOM/whitespace preserved), schema-versioned manifest containing source path/hash/length/mtime and operation/cleanup IDs, and verification record containing manifest hash.
+CreateNew + write-through/Flush(true); artifacts reread and verified. Existing valid operation is idempotent; incomplete/corrupt operations retained without overwrite. No session ZIP flag is accepted.
+Verify rereads bounded actual artifacts, checks strict JSON/duplicate fields/schema/identity/hash/path, rejects reparse/missing/locked/corrupt artifacts and forged evidence. It can verify original backup after source changes for recovery.
+Initial targeted compilation: EXIT 1, xUnit2031 test assertion analyzer; corrected Assert.Single overload. No initial runtime failure.
+Command: . ./scripts/enter-env.ps1; dotnet build src/DeepSeekHarnessCleaner.Infrastructure/DeepSeekHarnessCleaner.Infrastructure.csproj --no-restore -warnaserror
+Result: EXIT 0, 0 warnings/errors.
+Command: . ./scripts/enter-env.ps1; dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter FullyQualifiedName~WorkspaceBackupTests --logger 'trx;LogFileName=T13-targeted.trx' --results-directory .artifacts/T13
+Result: EXIT 0, 19 passed/0 failed/0 skipped (before final file-lock/evidence test).
+Command: . ./scripts/enter-env.ps1; dotnet format whitespace DeepSeekHarnessCleaner.sln --no-restore --include src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceBackupService.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceBackupEvidence.cs tests/DeepSeekHarnessCleaner.Tests/WorkspaceBackupTests.cs
+Result: EXIT 0.
+Command: . ./scripts/enter-env.ps1; dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T13-full.trx' --results-directory .artifacts/T13
+Result: EXIT 0, 508 passed/0 failed/0 skipped; 20 T13 cases (baseline 488).
+Command: . ./scripts/enter-env.ps1; dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+Result: EXIT 0, 0 warnings/errors.
+Command: . ./scripts/enter-env.ps1; dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceBackupService.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceBackupEvidence.cs tests/DeepSeekHarnessCleaner.Tests/WorkspaceBackupTests.cs
+Result: EXIT 0.
+Command: git diff --check
+Result: EXIT 0 (Git line-ending notices only).
+Acceptance: exact bytes/hash/path/verification record PASS; independent of optional session ZIP PASS; corrupt/unverifiable returns no backup evidence PASS; synthetic original-byte restoration rehearsal PASS.
+Negative tests: raw/manifest/verification corruption, missing file, duplicate/unknown/schema fields, changed source path/cleanup identity, concurrent source snapshot change, incomplete operation, cancellation, active/unknown process, relative/inside-data destination, actual symbolic-link root/artifact, exclusive lock, forged evidence.
+Recovery rehearsal: fixture-owned source deliberately changed, verified original independently, rechecked synthetic path/process/hash, restored exact bytes and checked outside sentinel hash unchanged. Does not claim source mtime restored or production recovery implemented.
+Safety: synthetic temp roots only; real Harness data not mutated; production write allowlist remains empty; no writer/restore API or UI integration. Backup evidence is not a write permit; T14 must reverify files and all current gates.
+NotRun: GUI this round (no GUI changes), ACL-denial injection, actual production metadata replacement/recovery, release/VM/DPI/sample/publish checks.
+Boundary: guard checks are not an atomic filesystem transaction; T14 replacement/concurrency gates remain required. Local evidence hashes provide consistency checks, not authenticity against coordinated hostile rewriting of all files.
+RawResults: .artifacts/T13/T13-targeted.trx, .artifacts/T13/T13-full.trx
+GitCommit: NOT_COMMITTED; prior uncommitted work preserved.
+Next: T14 safety writer; overall acceptance remains incomplete.

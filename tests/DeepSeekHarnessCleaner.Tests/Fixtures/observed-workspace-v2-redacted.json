@@ -1,0 +1,143 @@
+{
+  "unit": {
+    "name": "workspace",
+    "version": 2
+  },
+  "global": {
+    "initialized": true,
+    "workspaceIds": [
+      "SAMPLE_WORKSPACE_0001",
+      "SAMPLE_WORKSPACE_0002",
+      "SAMPLE_WORKSPACE_0003",
+      "SAMPLE_WORKSPACE_0004",
+      "SAMPLE_WORKSPACE_0005",
+      "SAMPLE_WORKSPACE_0006"
+    ],
+    "archivedSessionIds": [
+      "SAMPLE_SESSION_0001",
+      "SAMPLE_SESSION_0002",
+      "SAMPLE_SESSION_0003",
+      "SAMPLE_SESSION_0004",
+      "SAMPLE_SESSION_0005",
+      "SAMPLE_SESSION_0006",
+      "SAMPLE_SESSION_0007",
+      "SAMPLE_SESSION_0008",
+      "SAMPLE_SESSION_0009",
+      "SAMPLE_SESSION_0010",
+      "SAMPLE_SESSION_0011",
+      "SAMPLE_SESSION_0012",
+      "SAMPLE_SESSION_0013",
+      "SAMPLE_SESSION_0014",
+      "SAMPLE_SESSION_0015",
+      "SAMPLE_SESSION_0016",
+      "SAMPLE_SESSION_0017",
+      "SAMPLE_SESSION_0018",
+      "SAMPLE_SESSION_0019",
+      "SAMPLE_SESSION_0020"
+    ],
+    "pinnedSessionIds": []
+  },
+  "tables": {
+    "workspaces": {
+      "SAMPLE_WORKSPACE_0006": {
+        "path": "C:\\sanitized\\SAMPLE_WORKSPACE_0006",
+        "title": "Sanitized SAMPLE_WORKSPACE_0006",
+        "sessionIds": [
+          "SAMPLE_SESSION_0021",
+          "SAMPLE_SESSION_0022",
+          "SAMPLE_SESSION_0023",
+          "SAMPLE_SESSION_0024",
+          "SAMPLE_SESSION_0025",
+          "SAMPLE_SESSION_0018",
+          "SAMPLE_SESSION_0019",
+          "SAMPLE_SESSION_0026",
+          "SAMPLE_SESSION_0007",
+          "SAMPLE_SESSION_0006",
+          "SAMPLE_SESSION_0005"
+        ],
+        "createdAt": "2000-01-01T00:00:00.000Z",
+        "updatedAt": "2000-01-01T00:00:00.000Z"
+      },
+      "SAMPLE_WORKSPACE_0005": {
+        "path": "C:\\sanitized\\SAMPLE_WORKSPACE_0005",
+        "title": "Sanitized SAMPLE_WORKSPACE_0005",
+        "sessionIds": [
+          "SAMPLE_SESSION_0027",
+          "SAMPLE_SESSION_0028",
+          "SAMPLE_SESSION_0029"
+        ],
+        "createdAt": "2000-01-01T00:00:00.000Z",
+        "updatedAt": "2000-01-01T00:00:00.000Z"
+      },
+      "SAMPLE_WORKSPACE_0004": {
+        "path": "C:\\sanitized\\SAMPLE_WORKSPACE_0004",
+        "title": "Sanitized SAMPLE_WORKSPACE_0004",
+        "sessionIds": [
+          "SAMPLE_SESSION_0030",
+          "SAMPLE_SESSION_0031",
+          "SAMPLE_SESSION_0032",
+          "SAMPLE_SESSION_0033",
+          "SAMPLE_SESSION_0034",
+          "SAMPLE_SESSION_0035",
+          "SAMPLE_SESSION_0036",
+          "SAMPLE_SESSION_0037",
+          "SAMPLE_SESSION_0038",
+          "SAMPLE_SESSION_0039",
+          "SAMPLE_SESSION_0040",
+          "SAMPLE_SESSION_0016",
+          "SAMPLE_SESSION_0015",
+          "SAMPLE_SESSION_0013",
+          "SAMPLE_SESSION_0014",
+          "SAMPLE_SESSION_0011",
+          "SAMPLE_SESSION_0008",
+          "SAMPLE_SESSION_0009",
+          "SAMPLE_SESSION_0041",
+          "SAMPLE_SESSION_0010",
+          "SAMPLE_SESSION_0012",
+          "SAMPLE_SESSION_0042",
+          "SAMPLE_SESSION_0043"
+        ],
+        "createdAt": "2000-01-01T00:00:00.000Z",
+        "updatedAt": "2000-01-01T00:00:00.000Z"
+      },
+      "SAMPLE_WORKSPACE_0003": {
+        "path": "C:\\sanitized\\SAMPLE_WORKSPACE_0003",
+        "title": "Sanitized SAMPLE_WORKSPACE_0003",
+        "sessionIds": [
+          "SAMPLE_SESSION_0044",
+          "SAMPLE_SESSION_0020",
+          "SAMPLE_SESSION_0045",
+          "SAMPLE_SESSION_0046",
+          "SAMPLE_SESSION_0017",
+          "SAMPLE_SESSION_0047",
+          "SAMPLE_SESSION_0048",
+          "SAMPLE_SESSION_0049"
+        ],
+        "createdAt": "2000-01-01T00:00:00.000Z",
+        "updatedAt": "2000-01-01T00:00:00.000Z"
+      },
+      "SAMPLE_WORKSPACE_0002": {
+        "path": "C:\\sanitized\\SAMPLE_WORKSPACE_0002",
+        "title": "Sanitized SAMPLE_WORKSPACE_0002",
+        "sessionIds": [
+          "SAMPLE_SESSION_0050",
+          "SAMPLE_SESSION_0051",
+          "SAMPLE_SESSION_0052",
+          "SAMPLE_SESSION_0053"
+        ],
+        "createdAt": "2000-01-01T00:00:00.000Z",
+        "updatedAt": "2000-01-01T00:00:00.000Z"
+      },
+      "SAMPLE_WORKSPACE_0001": {
+        "path": "C:\\sanitized\\SAMPLE_WORKSPACE_0001",
+        "title": "Sanitized SAMPLE_WORKSPACE_0001",
+        "sessionIds": [
+          "SAMPLE_SESSION_0054",
+          "SAMPLE_SESSION_0055"
+        ],
+        "createdAt": "2000-01-01T00:00:00.000Z",
+        "updatedAt": "2000-01-01T00:00:00.000Z"
+      }
+    }
+  }
+}

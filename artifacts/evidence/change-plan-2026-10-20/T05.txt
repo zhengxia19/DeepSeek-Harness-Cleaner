@@ -1,0 +1,37 @@
+Task: change-plan-2026-10-20/T05
+Status: ACCEPTED
+Date: 2026-10-20 Asia/Shanghai
+Baseline: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6
+Prerequisite: T04 checked, artifacts/evidence/change-plan-2026-10-20/T04.txt reviewed. Prior uncommitted work retained.
+Environment: local .NET 10.0.402; PowerShell 7.6.4; Windows 10.0.19045.
+ChangedFiles: Infrastructure/RootLocator.cs; Tests/RootSafetyTests.cs; docs/interfaces.md; current task index/status/evidence/checkpoint.
+Implementation: candidate sources remain explicit, saved, DSH_HOME, and current-account defaults only. Reject relative/drive-relative/UNC/device/ADS/traversal and ambiguous dot/space suffix paths before probing. Walk ancestor components without recursive discovery; reject reparse ancestors/root. Reuse PathGuard for forbidden root and controlled marker checks. Probe top-level markers and single enumerator entry for access; errors remain inaccessible, not missing. Resolve retains source priority and now shares safe validation, mapping failures to existing RootProbeStatus plus error codes.
+Commands after . ./scripts/enter-env.ps1:
+1. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter 'FullyQualifiedName~RootSafetyTests|FullyQualifiedName~RootDiscoveryTests|FullyQualifiedName~RootLocatorTests' --logger 'trx;LogFileName=T05-targeted.trx' --results-directory .artifacts/T05
+   Exit 1; 33 passed, 2 failed. Actual ACL denial tests failed in fixture disposal because restoring an unchanged ACL object did not mark access sections dirty.
+   Repair: exact two synthetic directory ACLs restored by removing the test-added current-SID ListDirectory deny rule; successful enumeration confirmed. No real data or system security policy modified.
+   Retained initial failed synthetic roots (ACLs repaired): fx-2453edb3d7924335b2c012032c61c819 and fx-1f8e61bafb374d63b74717d662d1ace2 under Path.GetTempPath()/dshcleaner-fixtures. No blanket cleanup performed.
+   Fixture correction: build a new DirectorySecurity, explicitly set saved Access descriptor, then write it in finally. Assert restored Access SDDL equals original and enumeration works.
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter 'FullyQualifiedName~RootSafetyTests|FullyQualifiedName~RootDiscoveryTests|FullyQualifiedName~RootLocatorTests' --logger 'trx;LogFileName=T05-targeted-rerun.trx' --results-directory .artifacts/T05
+   Exit 0; 35 passed, 0 failed, 0 skipped.
+3. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T05-full.trx' --results-directory .artifacts/T05
+   Exit 0; 408 passed, 0 failed, 0 skipped (391 prior + 17 new). Includes final ACL descriptor-restoration assertions.
+4. dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include src/DeepSeekHarnessCleaner.Infrastructure/RootLocator.cs tests/DeepSeekHarnessCleaner.Tests/RootSafetyTests.cs
+   Exit 0, changed C# files only.
+5. dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+   Exit 0, 0 warnings, 0 errors.
+Acceptance:
+PASS: only four authorized sources; nested valid-looking and unrelated fixture roots are not automatically discovered. No EXE-install-root data inference.
+PASS: actual current-SID ACL ListDirectory denial on root and sessions marker yields Inaccessible / FILE_ACCESS_DENIED; legacy Resolve safely returns NotHarness plus error, without throwing or reporting missing.
+PASS: relative, drive-relative, UNC, device, ADS, literal traversal, ambiguous suffixes, volume/user/executable roots explicitly invalid.
+PASS: real directory symbolic links in ancestor or sessions marker rejected with PATH_REPARSE; outside synthetic sentinel SHA-256 unchanged.
+PASS: missing roots versus missing structural markers have distinct statuses/reasons; no missing paths created.
+PASS: duplicate ordinary root paths retain four sources in one candidate; discovery does not mutate entry lists. Existing bad-DSH_HOME/default and legacy priority cases remain passing.
+PASS: new ACL tests restore exact Access SDDL and usable enumeration before fixture disposal.
+Scope: T05 only; T06 UI and plan invalidation not implemented. Candidate validation is a point-in-time observation, not deletion permission; all execution checks still required.
+NotRun: WindowsTests/manual UI, release/VM acceptance, T06-T16; no release compatibility claim.
+RawResults: .artifacts/T05/T05-targeted.trx; T05-targeted-rerun.trx; T05-full.trx.
+Recovery: .artifacts/T05/backups/RootLocator.cs and interfaces.md; tracking snapshots .artifacts/T05/tracking-backups-*.
+GitCommit: NOT_COMMITTED.
+Safety: source probing read-only; only owned synthetic roots used for ACL/link/write tests. No real Harness writes, system PATH/registry/policy changes or network source discovery.
+NextCandidate: T06.

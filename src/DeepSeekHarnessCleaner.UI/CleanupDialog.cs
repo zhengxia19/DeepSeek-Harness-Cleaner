@@ -14,10 +14,19 @@ namespace DeepSeekHarnessCleaner.UI;
 public sealed class CleanupDialog : Form
 {
     private readonly ListView _targetList = new();
+    private readonly TabControl _evidenceTabs = new();
+    private readonly TextBox _auditText = new() { Multiline = true, ReadOnly = true, WordWrap = false, ScrollBars = ScrollBars.Both, Dock = DockStyle.Fill };
+    private readonly PreCleanupAudit? _audit;
     private readonly Label _planLabel = new();
     private readonly TextBox _warningLabel = new() { Multiline = true, ReadOnly = true, WordWrap = true, ScrollBars = ScrollBars.Vertical, BorderStyle = BorderStyle.None };
     private readonly Label _backupLabel = new();
     private readonly CheckBox _backupRequested = new() { Text = "删除前备份原始文件（可选）", AutoSize = true };
+    private readonly CheckBox _workspaceSyncRequested = new() { Text = "同步清理 Workspace 元数据（默认关闭）", AutoSize = true };
+    private readonly TextBox _workspaceSyncInfo = new() { Multiline = true, ReadOnly = true, WordWrap = true, ScrollBars = ScrollBars.Vertical, BorderStyle = BorderStyle.None };
+    private readonly Button _workspaceFolderButton = new() { Text = "选择强制备份目录…", AutoSize = true };
+    private readonly WorkspaceSyncCoordinator _workspaceCoordinator;
+    private string _workspaceBackupRoot;
+    private bool _confirmedWorkspaceSync;
     private readonly Label _resultLabel = new();
     private readonly Button _backupButton = new();
     private readonly Button _confirmButton = new();
@@ -43,7 +52,10 @@ public sealed class CleanupDialog : Form
         IReadOnlyList<SessionSummary> sessions,
         ActionsPresenter presenter,
         string zipPath,
-        IReadOnlyList<string>? attachmentPaths = null)
+        IReadOnlyList<string>? attachmentPaths = null,
+        PreCleanupAudit? preCleanupAudit = null,
+        WorkspaceSyncCoordinator? workspaceCoordinator = null,
+        string? workspaceBackupRoot = null)
     {
         _plan = planResult.Plan!;
         _exclusions = planResult.Exclusions;
@@ -53,13 +65,16 @@ public sealed class CleanupDialog : Form
         _presenter = presenter;
         _zipPath = zipPath;
         _attachmentPaths = attachmentPaths;
+        _audit = preCleanupAudit;
+        _workspaceCoordinator = workspaceCoordinator ?? new WorkspaceSyncCoordinator();
+        _workspaceBackupRoot = workspaceBackupRoot ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DeepSeekHarnessCleaner", "workspace-backups");
 
         Text = attachmentPaths is null ? "删除确认：会话原始文件" : "删除确认：独立附件文件";
         StartPosition = FormStartPosition.CenterParent;
         MinimizeBox = false;
         MaximizeBox = false;
-        ClientSize = new Size(820, 510);
-        MinimumSize = new Size(620, 420);
+        ClientSize = new Size(820, 610);
+        MinimumSize = new Size(620, 520);
 
         _planLabel.AutoSize = false;
         _planLabel.SetBounds(12, 10, 796, 24);
@@ -78,6 +93,8 @@ public sealed class CleanupDialog : Form
             : $"警告：进程状态 {probe.State}（{(probe.ErrorCode ?? string.Join("；", probe.RiskNotes))}），删除将被阻断。";
         if (attachmentPaths is not null)
             _warningLabel.Text += " 附件独立删除；已引用/Unknown 均可能被历史会话使用。删除会使相应历史附件不可用，请核对下方文件。";
+        if (_audit is not null)
+            _warningLabel.Text += Environment.NewLine + $"只读审计：Workspace 引用 {_audit.Snapshot.Sessions.SelectMany(x => x.Items).Count(x => x.Kind == SessionResidueKind.WorkspaceReference)} 条；未知/异常 {_audit.Snapshot.Issues.Count} 项。详见审计页；范围外文件不会自动删除。";
 
         _backupRequested.Location = new Point(12, 98);
         _backupRequested.CheckedChanged += (_, _) => UpdateConfirmation();
@@ -87,7 +104,20 @@ public sealed class CleanupDialog : Form
         _backupLabel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         _backupLabel.Text = "备份状态：未备份；可直接确认删除。未备份删除的文件无法由本工具恢复。";
 
-        _targetList.Location = new Point(12, 158);
+        _workspaceSyncRequested.Location = new Point(12, 153);
+        _workspaceSyncRequested.CheckedChanged += (_, _) => UpdateConfirmation();
+        _workspaceFolderButton.Location = new Point(630, 150);
+        _workspaceFolderButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        _workspaceFolderButton.Click += (_, _) =>
+        {
+            using var picker = new FolderBrowserDialog { Description = "Workspace 元数据强制备份目录（独立于会话 ZIP 选项）", ShowNewFolderButton = true };
+            if (picker.ShowDialog(this) == DialogResult.OK) { _workspaceBackupRoot = picker.SelectedPath; RefreshWorkspaceOption(); }
+        };
+        _workspaceSyncInfo.SetBounds(12, 180, 796, 72);
+        _workspaceSyncInfo.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        RefreshWorkspaceOption();
+
+        _targetList.Location = new Point(12, 258);
         _targetList.Size = new Size(796, 252);
         _targetList.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         _targetList.Scrollable = true;
@@ -119,36 +149,49 @@ public sealed class CleanupDialog : Form
 
         _backupButton.Text = "选择目录并备份(&B)";
         _backupButton.AutoSize = true;
-        _backupButton.Location = new Point(12, 424);
+        _backupButton.Location = new Point(12, 524);
         _backupButton.Anchor = AnchorStyles.Left | AnchorStyles.Bottom;
         _backupButton.TabIndex = 20;
         _backupButton.Click += OnBackupClick;
 
         _confirmButton.Text = "确认删除(&D)";
         _confirmButton.AutoSize = true;
-        _confirmButton.Location = new Point(360, 424);
+        _confirmButton.Location = new Point(360, 524);
         _confirmButton.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
         _confirmButton.TabIndex = 21;
-        _confirmButton.Enabled = probe.AllowsWrite && _plan.Targets.Count > 0;
+        _confirmButton.Enabled = probe.AllowsWrite && _plan.Targets.Count > 0 && (_audit is null || _audit.Matches(_plan));
         _confirmButton.Click += OnConfirmClick;
 
         _cancelButton.Text = "取消(&C)";
         _cancelButton.AutoSize = true;
-        _cancelButton.Location = new Point(680, 424);
+        _cancelButton.Location = new Point(680, 524);
         _cancelButton.Anchor = AnchorStyles.Right | AnchorStyles.Bottom;
         _cancelButton.TabIndex = 22;
         _cancelButton.Click += OnCancelClick;
 
         _resultLabel.AutoSize = false;
-        _resultLabel.SetBounds(12, 467, 796, 28);
+        _resultLabel.SetBounds(12, 567, 796, 28);
         _resultLabel.Anchor = AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right;
         _resultLabel.Text = string.Empty;
 
         Controls.AddRange(new Control[]
         {
             _planLabel, _warningLabel, _backupRequested, _backupLabel, _targetList,
+            _workspaceSyncRequested, _workspaceSyncInfo, _workspaceFolderButton,
             _backupButton, _confirmButton, _cancelButton, _resultLabel,
         });
+        _evidenceTabs.Bounds = _targetList.Bounds;
+        _evidenceTabs.Anchor = _targetList.Anchor;
+        var filesPage = new TabPage("待删除文件");
+        var auditPage = new TabPage("只读审计 / 范围外 / 未知项");
+        Controls.Remove(_targetList);
+        _targetList.Dock = DockStyle.Fill;
+        filesPage.Controls.Add(_targetList);
+        _auditText.Text = _audit is null ? "本调用未提供会话删除前审计；不表示会话已彻底清理。"
+            : _audit.Matches(_plan) ? PreCleanupAuditText.Render(_audit) : "审计与当前删除计划不一致，请重新扫描并生成计划。";
+        auditPage.Controls.Add(_auditText);
+        _evidenceTabs.TabPages.AddRange([filesPage, auditPage]);
+        Controls.Add(_evidenceTabs);
     }
 
     protected override void OnShown(EventArgs e)
@@ -159,7 +202,22 @@ public sealed class CleanupDialog : Form
 
     private void UpdateConfirmation() => _confirmButton.Enabled = !_running && !_backingUp
         && _plan.Targets.Count > 0 && (!_backupRequested.Checked || _backup is not null)
+        && (_audit is null || _audit.Matches(_plan))
         && _presenter.ProbeProcesses().AllowsWrite;
+
+    private WorkspaceSyncOption RefreshWorkspaceOption()
+    {
+        var option = _workspaceCoordinator.GetOption(_plan, _audit, _workspaceBackupRoot);
+        _workspaceSyncRequested.Enabled = !_running && !_backingUp && option.Available;
+        if (!option.Available) _workspaceSyncRequested.Checked = false;
+        _workspaceSyncInfo.Text = $"可复核引用：{option.ReferenceCount?.ToString() ?? "未知"} 处；仅同步成功删除且复查不存在的会话。"
+            + Environment.NewLine + "强制原始备份根目录：" + _workspaceBackupRoot
+            + Environment.NewLine + (option.Available ? "元数据备份不可跳过；取消会话 ZIP 不会关闭此备份。" : "禁用原因：" + option.Reason);
+        return option;
+    }
+
+    public bool WorkspaceSyncRequested => _confirmedWorkspaceSync;
+    public string WorkspaceBackupRoot => _workspaceBackupRoot;
 
     public bool BackupReady => _backup is not null;
 
@@ -177,6 +235,7 @@ public sealed class CleanupDialog : Form
     public VerifiedBackup? Backup => _backupRequested.Checked ? _backup : null;
 
     public string ZipPath => _zipPath;
+    public PreCleanupAudit? Audit => _audit;
 
     // 冒烟/自动化入口：等价于点击对应按钮。
     public void RequestBackup() => OnBackupClick(this, EventArgs.Empty);
@@ -255,12 +314,29 @@ public sealed class CleanupDialog : Form
 
     private async void OnConfirmClick(object? sender, EventArgs e)
     {
+        if (_running || _backingUp || RunFinished) return;
+        var wantedSync = _workspaceSyncRequested.Checked;
+        var syncOption = RefreshWorkspaceOption();
+        if (wantedSync && !syncOption.Available)
+        {
+            _resultLabel.Text = "同步条件已变化，未开始删除。请核对禁用原因并重新确认。";
+            return;
+        }
+        if (_audit is not null && !_audit.Matches(_plan))
+        {
+            _confirmButton.Enabled = false;
+            _resultLabel.Text = "删除计划已变化，请重新扫描并审计。";
+            return;
+        }
         if (_running || _backingUp || !_confirmButton.Enabled || (_backupRequested.Checked && (_manifest is null || _backup is null)))
         {
             return;
         }
 
         _running = true;
+        _confirmedWorkspaceSync = wantedSync && syncOption.Available;
+        _workspaceSyncRequested.Enabled = false;
+        _workspaceFolderButton.Enabled = false;
         _backupRequested.Enabled = false;
         _backupButton.Enabled = false;
         _confirmButton.Enabled = false;

@@ -1,0 +1,43 @@
+Task: final acceptance / A05 process-termination recovery and observed metadata compatibility
+Status: abrupt-process simulation verified; overall goal incomplete pending A04 deployed release/backend mapping.
+Date: 2026-10-20; Windows 10.0.19045; local .NET 10.0.402; PowerShell 7.6.4
+HEAD: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6
+Scope: original 00-plan A01-A07 audit. Prior T01-T16 work preserved.
+Changes: test-only parent/child crash harness; OutcomeRecorded writer seam; recovery verifies durable completion after marker retirement; 2 completion-record regressions; 2 provenance/redaction/read-only sample tests. Production writes remain disabled.
+
+Termination protocol: launch exact WindowsTests executable with shell disabled, hidden window and safe ArgumentList. Child restricted to TEMP/dshcleaner-fixtures/fx-GUID/.dsh. At a native writer barrier it flushes a unique operation/stage line and waits on stdin. Parent verifies the exact live process handle/barrier, forcibly terminates only its owned child and waits for exit. No managed cancellation/finally completes the writer. Real Harness processes are not stopped.
+Eight stages: IntentFlushed, CandidateFlushed, BeforeReplace, Replaced, Verified, CommitWindow, OriginalRetained, OutcomeRecorded.
+Final result: 120 PASS across eight actual forced exits. Initial seven-stage run: 105 PASS. All owned child exit codes were -1 and stderr empty. Per-process and recovery proofs are under .artifacts/FinalAcceptance/crash-STAGE-GUID/; exact paths in crash-eight-stages.txt. Initial run retained, not new coverage.
+Disk recovery: reload known synthetic operation from disk into fresh services; no preparation capability or child memory reused. Validate actual interruption state, reconcile safely, fresh retry/NoOp, selected log remains absent, unselected references survive, original raw backup exact, keep/sentinel hashes unchanged. Unknown orphan operations without known context remain blocked.
+
+Audit fix: process exit after retiring marker but before returning Applied was not recognized by recovery. New missing-marker branch requires exact write-applied.json operation/candidate hash/attempt time plus already revalidated original identity, backup, transformation, paths and physical absence. Missing/corrupt records remain blocked; bytes alone cannot establish success. No automatic log restore or rollback of an applied candidate.
+
+Observed sample: real workspace.json read with FileShare.ReadWrite|Delete; no exclusive lock/write, transcripts or credentials read. SHA and mtime unchanged across reads. Known-field, ID type and array uniqueness checks performed. All IDs consistently renamed, paths/titles replaced, timestamps explicitly replaced with 2000-01-01. Raw metadata JSON not persisted. Source hash/file mtime/observation time/redaction rules separated in provenance.
+Sample facts: v2 single file, initialized, no pending marker, 6 workspaces, 20 archived refs, 0 pinned refs, 51 member refs, 55 distinct session IDs. Redacted complete read-only index Known. Files: tests/DeepSeekHarnessCleaner.Tests/Fixtures/observed-workspace-v2-redacted*.json.
+Installed observation: running executable FileVersion=0.2.1-rc.2, ProductVersion=0.2.1.0. Installed desktop/runtime/workspace/storage-json packages are 0.2.1-rc.2. Cached dependency manifest says 0.2.0-rc.2; bundled dependency manifest says 0.2.1-rc.2. This does not establish active runtime or a malfunction. No Git commit declared in inspected manifests. Exact fingerprints and false mapping flags: installed-release-observation.json.
+Still unproven: packaged module semantics and active storage backend/root mapping to pinned source contract. Schema/version/package names alone cannot open production allowlist.
+
+Command: . ./scripts/enter-env.ps1; dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-restore -- --workspace-crash-only
+Result: EXIT 0; final 120 PASS; .artifacts/FinalAcceptance/crash-eight-stages.txt. Initial 105-PASS log: .artifacts/FinalAcceptance-crash-initial.txt.
+Command: . ./scripts/enter-env.ps1; dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter 'FullyQualifiedName~CompletedOperationWithoutMarker|FullyQualifiedName~WorkspaceObservedSampleTests' --logger 'trx;LogFileName=finalization-sample.trx' --results-directory .artifacts/FinalAcceptance
+Result: EXIT 0; 4 passed, 0 failed/skipped.
+Command: . ./scripts/enter-env.ps1; dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=audit-full.trx' --results-directory .artifacts/FinalAcceptance
+Result: EXIT 0; 624 passed, 0 failed/skipped (620 previous + 4 new).
+Command: . ./scripts/enter-env.ps1; dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+Result: EXIT 0; 0 warnings/errors.
+Command: . ./scripts/enter-env.ps1; dotnet build tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-restore -warnaserror
+Result: EXIT 0; 0 warnings/errors. Final seam also compiled by successful eight-stage run.
+Command: . ./scripts/enter-env.ps1; dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceMetadataWriter.cs src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceRecoveryService.cs tests/DeepSeekHarnessCleaner.Tests/WorkspaceSyncTests.cs tests/DeepSeekHarnessCleaner.Tests/WorkspaceObservedSampleTests.cs
+Result: EXIT 0; changed-file whitespace formatted first.
+Command: . ./scripts/enter-env.ps1; dotnet format tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-restore --verify-no-changes --include tests/DeepSeekHarnessCleaner.WindowsTests/Program.cs tests/DeepSeekHarnessCleaner.WindowsTests/WorkspaceCrashChecks.cs
+Result: EXIT 0.
+Command: . ./scripts/enter-env.ps1; dotnet run --project tests/DeepSeekHarnessCleaner.WindowsTests/DeepSeekHarnessCleaner.WindowsTests.csproj --no-build --no-restore -- --default-open-only
+Result: EXIT 0; 5 PASS. Actual .txt/.png application windows identified by unique synthetic filenames; source hashes unchanged. Only newly matched test windows receive close messages. Log: .artifacts/FinalAcceptance/default-open.txt. T16's 91 UI regression, 44 post-audit, 21 roots and 72 sync checks remain applicable; no UI production code changed here.
+Command: git diff --check
+Result: EXIT 0; line-ending notices only.
+
+Archive metadata helper: .artifacts/FinalAcceptance/Read-PackagedMetadata.ps1 (ignored, project-local). Bounded shared ASAR reads; only installed package metadata queried. Format sources: https://github.com/electron/asar/blob/main/src/disk.ts and https://github.com/electron/asar/blob/main/src/pickle.ts . No metadata body/credentials sent to web tools.
+Safety: all mutations/deletions/renames in synthetic roots. Real .dsh only read for metadata shape; profiles/credentials/transcripts not read. No real Harness process/system configuration/publish changes.
+Limits: abrupt owned-process termination, not hardware power removal or OS/VM/storage-controller failure. Recovery uses known saved synthetic context; unknown orphan operations remain blocked. No live metadata write or deployment.
+GitCommit: NOT_COMMITTED.
+Next: A04 packaged workspace/storage/app-boot/root mapping analysis; supported-release write policy only after evidence. Full goal active.

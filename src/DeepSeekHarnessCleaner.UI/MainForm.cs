@@ -46,6 +46,13 @@ public sealed partial class MainForm : Form
     private readonly string? _scanRootOverride;
     private readonly string? _logDirOverride;
     private string? _effectiveScanRoot;
+    private PostCleanupAudit? _lastPostCleanupAudit;
+    private WorkspaceSyncOutcome? _lastWorkspaceSyncOutcome;
+    private WorkspaceSyncAttempt? _lastWorkspaceSyncAttempt;
+    private WorkspaceSyncReviewDialog? _lastWorkspaceReview;
+    private readonly WorkspaceSyncCoordinator _workspaceCoordinator;
+    private readonly WorkspaceRecoveryService _workspaceRecovery;
+    private readonly string? _workspaceBackupOverride;
     private CancellationTokenSource? _previewCts;
     private bool _scanning;
     private bool _preparingDelete;
@@ -54,16 +61,23 @@ public sealed partial class MainForm : Form
     private readonly System.Windows.Forms.Timer _previewDebounce = new() { Interval = 140 };
 
     public MainForm(string? smokeResultPath = null, string? scanRootPath = null, string? logDirPath = null,
-        WindowStateStore? windowStateStore = null, Action<string>? windowNotice = null, bool persistWindowState = true)
+        WindowStateStore? windowStateStore = null, Action<string>? windowNotice = null, bool persistWindowState = true,
+        RootLocator? rootLocator = null, SettingsStore? settingsStore = null, ActionsPresenter? actionsPresenter = null,
+        WorkspaceSyncCoordinator? workspaceCoordinator = null, WorkspaceRecoveryService? workspaceRecovery = null, string? workspaceBackupRoot = null)
     {
         _smokeResultPath = smokeResultPath;
         _scanRootOverride = scanRootPath;
         _logDirOverride = logDirPath;
+        _workspaceCoordinator = workspaceCoordinator ?? new WorkspaceSyncCoordinator();
+        _workspaceRecovery = workspaceRecovery ?? new WorkspaceRecoveryService();
+        _workspaceBackupOverride = workspaceBackupRoot;
+        _rootLocator = rootLocator ?? new RootLocator();
+        _rootSettings = settingsStore ?? new SettingsStore();
         _windowStore = windowStateStore ?? (persistWindowState && smokeResultPath is null ? new WindowStateStore() : null);
         _windowNotice = windowNotice ?? (message => MessageBox.Show(message, "窗口位置记录", MessageBoxButtons.OK, MessageBoxIcon.Warning));
         _presenter = new InventoryPresenter(new UiScanSource(), TimeZoneInfo.Local);
         // 冒烟模式注入“无进程”快照，避免开发机上宿主进程使删除门禁恒阻断；真实模式用真实探测。
-        _actionsPresenter = new ActionsPresenter(_smokeResultPath is not null ? static () => [] : null);
+        _actionsPresenter = actionsPresenter ?? new ActionsPresenter(_smokeResultPath is not null ? static () => [] : null);
         _baseFont = SystemFonts.MessageBoxFont ?? DefaultFont;
         Font = _baseFont;
         AutoScaleMode = AutoScaleMode.Font;
@@ -120,6 +134,7 @@ public sealed partial class MainForm : Form
     {
         var fileMenu = new ToolStripMenuItem("文件(&F)");
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("扫描(&S)", null, OnScanClick));
+        fileMenu.DropDownItems.Add(new ToolStripMenuItem("选择数据根…", null, OnChooseRoots));
         fileMenu.DropDownItems.Add(new ToolStripSeparator());
         fileMenu.DropDownItems.Add(new ToolStripMenuItem("退出(&X)", null, OnExitClick));
 
@@ -408,7 +423,7 @@ public sealed partial class MainForm : Form
 
     private async void OnScanClick(object? sender, EventArgs e)
     {
-        if (_scanning)
+        if (_scanning || _preparingDelete || HasOpenRootOperations())
         {
             return;
         }
@@ -418,6 +433,7 @@ public sealed partial class MainForm : Form
         _statusLabel.Text = "扫描中…";
         try
         {
+            InvalidateRootState();
             var root = ResolveScanRoot();
             if (root is null)
             {
@@ -457,12 +473,13 @@ public sealed partial class MainForm : Form
 
     private string? ResolveScanRoot()
     {
-        if (_scanRootOverride is not null)
+        if (_scanRootOverride is not null && _confirmedDshHome is null)
         {
             return _scanRootOverride;
         }
 
-        var roots = new RootLocator().Resolve();
+        if (_confirmedDshHome is null && !ChooseRoots()) return null;
+        var roots = _rootLocator.Resolve(_confirmedDshHome);
         if (!roots.DshProbe.IsValid)
         {
             _rootErrorText = $"数据根不可用：{roots.DshProbe.ErrorCode}（{roots.DshProbe.HomePath}）";
@@ -573,7 +590,8 @@ public sealed partial class MainForm : Form
 
     private async void OnDeleteClick(object? sender, EventArgs e)
     {
-        if (_preparingDelete) return;
+        if (_lastWorkspaceReview is { IsDisposed: false, Visible: true }) { _lastWorkspaceReview.Activate(); return; }
+        if (_preparingDelete || _scanning || _choosingRoots) return;
         if (_lastCleanupDialog is { IsDisposed: false, Visible: true, RunFinished: false }) { _lastCleanupDialog.Activate(); return; }
         if (_effectiveScanRoot is null)
         {
@@ -595,16 +613,23 @@ public sealed partial class MainForm : Form
 
         var sessionRoot = _effectiveScanRoot;
         CleanupPlanResult planResult;
+        PreCleanupAudit? audit = null;
         try
         {
             _preparingDelete = true;
             _deleteButton.Enabled = false;
             _statusLabel.Text = "正在复验会话文件和身份…";
             planResult = await Task.Run(() => _actionsPresenter.BuildSessionPlan(sessionRoot, sessions));
+            if (planResult.Plan is { Targets.Count: > 0 } plan)
+            {
+                _statusLabel.Text = "正在只读审计日志、缓存、Workspace 引用及未知项…";
+                audit = await Task.Run(() => new PreCleanupAuditor().Audit(sessionRoot,
+                    sessions.Select(x => x.SessionId).OfType<string>().ToArray(), plan));
+            }
         }
         catch (Exception ex)
         {
-            if (!IsDisposed) _statusLabel.Text = "删除清单复验失败：" + ex.Message;
+            if (!IsDisposed) _statusLabel.Text = "删除清单复验或只读审计失败：" + ex.Message;
             return;
         }
         finally
@@ -612,7 +637,7 @@ public sealed partial class MainForm : Form
             _preparingDelete = false;
             if (!IsDisposed) _deleteButton.Enabled = _checkedSessions.Count > 0 || _sessionGrid.SelectedRows.Count > 0;
         }
-        if (IsDisposed) return;
+        if (IsDisposed || !string.Equals(sessionRoot, _effectiveScanRoot, StringComparison.OrdinalIgnoreCase)) return;
         if (planResult.Plan is null || planResult.Plan.Targets.Count == 0)
         {
             _statusLabel.Text = "无可删除目标：" + (planResult.RootErrorCode
@@ -625,7 +650,8 @@ public sealed partial class MainForm : Form
         // 备份清单以数据根（sessions 的父目录，即 .dsh 主目录）为根。
         var dataHome = Path.GetDirectoryName(sessionRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
             ?? sessionRoot;
-        var dialog = new CleanupDialog(planResult, sessionRoot, dataHome, sessions, _actionsPresenter, zipPath);
+        var dialog = new CleanupDialog(planResult, sessionRoot, dataHome, sessions, _actionsPresenter, zipPath, preCleanupAudit: audit,
+            workspaceCoordinator: _workspaceCoordinator, workspaceBackupRoot: _workspaceBackupOverride);
         dialog.CleanupFinished += OnCleanupFinished;
         _lastCleanupDialog = dialog;
         dialog.Show(this);
@@ -642,31 +668,94 @@ public sealed partial class MainForm : Form
         _statusLabel.Text = result.Aborted
             ? $"删除被阻断：{result.AbortCode}。"
             : $"删除完成：{result.DeletedCount} 个文件 / 跳过 {result.SkippedCount} / 失败 {result.FailedCount}。正在刷新清单…";
+        _scanning = true;
+        _scanButton.Enabled = false;
+        var source = sender as CleanupDialog ?? _lastCleanupDialog;
+        var finishedPlan = source?.Plan;
+        var finishedBackup = source?.Backup;
+        var finishedZipPath = source?.ZipPath;
+        var sessionRoot = _effectiveScanRoot;
+        var ids = source?.Audit?.Snapshot.Sessions.Select(x => x.SessionId).ToArray() ?? [];
+        _lastWorkspaceSyncAttempt = null;
+        _lastWorkspaceSyncOutcome = WorkspaceSyncOutcome.NotRequested(finishedPlan?.PlanId ?? Guid.Empty);
+        _lastPostCleanupAudit = null;
         try
         {
-            var refresh = await _presenter.ScanAsync(_effectiveScanRoot);
+            if (source?.Audit is { } before && finishedPlan is not null)
+                _lastPostCleanupAudit = await Task.Run(() => new PostCleanupAuditor().Audit(sessionRoot, finishedPlan, before));
+            else _lastPostCleanupAudit = PostCleanupAudit.Unknown(finishedPlan?.PlanId ?? Guid.Empty, ids, "POST_PRE_AUDIT_MISSING");
+            if (source?.Audit is { } syncBefore && finishedPlan is not null)
+            {
+                if (source.WorkspaceSyncRequested)
+                    _lastWorkspaceSyncOutcome = new(finishedPlan.PlanId, null, WorkspaceSyncState.RecoveryRequired, "SYNC_UI_STATUS_UNKNOWN", 0, null, null, DateTimeOffset.UtcNow);
+                _lastWorkspaceSyncAttempt = await Task.Run(() => _workspaceCoordinator.Run(finishedPlan, syncBefore, result,
+                    source.WorkspaceSyncRequested, source.WorkspaceBackupRoot));
+                _lastWorkspaceSyncOutcome = _lastWorkspaceSyncAttempt.Outcome;
+                if (_lastWorkspaceSyncAttempt.Audit is { } syncAudit) _lastPostCleanupAudit = syncAudit;
+            }
+            if (IsDisposed) return;
+            var refresh = await _presenter.ScanAsync(sessionRoot);
+            if (IsDisposed) return;
             if (refresh.RootErrorCode is null)
             {
                 BindSessions(refresh.Sessions);
                 UpdateSelectionStatus();
                 _statusLabel.Text += "（删除后已刷新）";
             }
+            else _lastPostCleanupAudit = PostCleanupAudit.Unknown(finishedPlan?.PlanId ?? Guid.Empty, ids, "POST_UI_SCAN_FAILED");
         }
         catch (Exception ex)
         {
+            _lastPostCleanupAudit = PostCleanupAudit.Unknown(finishedPlan?.PlanId ?? Guid.Empty, ids, "POST_SCAN_FAILED");
             _statusLabel.Text = "刷新失败：" + ex.Message;
         }
+        finally
+        {
+            _scanning = false;
+            if (!IsDisposed) _scanButton.Enabled = true;
+        }
 
-        // T-31：打开不泄露正文的执行结果报告（逐项状态/释放字节/备份位置/错误码 + 脱敏日志）。
-        if (_lastCleanupDialog is { } source)
+        if (IsDisposed) return;
+        _statusLabel.Text = PostCleanupAuditText.Summary(_lastPostCleanupAudit)
+            + (result.Aborted ? $"；文件执行被阻断：{result.AbortCode}。"
+                : $"；文件执行结果：删除 {result.DeletedCount} / 跳过 {result.SkippedCount} / 失败 {result.FailedCount}。");
+        // Existing file-level report remains separate; session-level report binding is T11.
+        if (finishedPlan is not null && finishedZipPath is not null)
         {
             var report = _actionsPresenter.BuildReport(
-                source.Plan, source.Backup, result, source.ZipPath);
-            var results = new ResultsDialog(report, _logDirOverride);
+                finishedPlan, finishedBackup, result, finishedZipPath, _lastPostCleanupAudit, _lastWorkspaceSyncOutcome);
+            var attempt = _lastWorkspaceSyncAttempt;
+            Action? review = attempt?.Outcome.State is WorkspaceSyncState.Blocked or WorkspaceSyncState.RecoveryRequired && source?.Audit is not null
+                ? () => OpenWorkspaceReview(finishedPlan, source.Audit!, result, attempt!, finishedBackup, finishedZipPath) : null;
+            var results = new ResultsDialog(report, _logDirOverride, review);
             _lastResultsDialog = results;
             results.Show(this);
             _statusLabel.Text += " 结果报告已打开（含脱敏日志）。";
         }
+    }
+
+    private void OpenWorkspaceReview(CleanupPlan cleanup, PreCleanupAudit before, CleanupExecutionResult execution,
+        WorkspaceSyncAttempt attempt, VerifiedBackup? backup, string zipPath)
+    {
+        if (_lastWorkspaceReview is { IsDisposed: false, Visible: true }) { _lastWorkspaceReview.Activate(); return; }
+        if (!string.Equals(_effectiveScanRoot, Path.Combine(before.Snapshot.DataHome, "sessions"), StringComparison.OrdinalIgnoreCase))
+        { _statusLabel.Text = "数据根已变化；不能复用旧操作，请回到原数据根重新复查。"; return; }
+        var dialog = new WorkspaceSyncReviewDialog(_workspaceCoordinator, _workspaceRecovery, cleanup, before, execution, attempt);
+        dialog.AttemptChanged += (_, updated) =>
+        {
+            _lastWorkspaceSyncAttempt = updated;
+            _lastWorkspaceSyncOutcome = updated.Outcome;
+            if (updated.Audit is { } audit) _lastPostCleanupAudit = audit;
+            var report = _actionsPresenter.BuildReport(cleanup, backup, execution, zipPath, _lastPostCleanupAudit, updated.Outcome);
+            Action? openAgain = updated.Outcome.State is WorkspaceSyncState.Blocked or WorkspaceSyncState.RecoveryRequired
+                ? () => OpenWorkspaceReview(cleanup, before, execution, updated, backup, zipPath) : null;
+            var results = new ResultsDialog(report, _logDirOverride, openAgain);
+            _lastResultsDialog = results;
+            results.Show(this);
+            _statusLabel.Text = "元数据重试结果：" + updated.Outcome.State + "；原文件删除结果保持不变。";
+        };
+        _lastWorkspaceReview = dialog;
+        dialog.Show(this);
     }
 
     private void OnExitClick(object? sender, EventArgs e)

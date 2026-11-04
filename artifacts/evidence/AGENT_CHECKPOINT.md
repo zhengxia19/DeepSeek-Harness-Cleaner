@@ -1,18 +1,15 @@
 # Agent Checkpoint
 
-LastTask: DOC-20261020
-LastResult: ACCEPTED (documentation/archive verification)
-NextCandidate: None; await new user requirements.
-
-CurrentDelivery: 0.2.4, implementation commit 4635695257da6fef7c15382355a331412e10e0f4.
-UserAcceptance: User reports real-machine acceptance completed on 2026-10-20. No OS/DPI details inferred.
-Evidence: artifacts/evidence/DOC-20261020.txt
-Acceptance: docs/acceptance.md
-Archive: archive/2026-10-20/manifest.csv (70 files, hashes verified).
-ArchiveBaseline: 299966b84ad35b17117c48984f0b9922f2430bcd
-
-Historical task records and evidence are immutable under archive/2026-10-20/tree/.
-Current task entry: docs/implementation-tasks.md. Old unchecked plans are not new work.
-No source/binary changes; no build/test rerun; release EXE SHA-256 unchanged.
-Ignored local logs, screenshots, fixtures, backups and old dist packages retained in place.
-No real Harness data modified. Git identity: the commit containing this checkpoint. Read local HEAD and remote main to verify synchronization.
+LastTask: publish release 0.3.0 (user goal: acceptance closed, compile/publish; single-file OK, framework-dependent, no bundled runtime).
+LastResult: COMPLETE. Release built, gated, smoke-verified, documented.
+ReleaseDate: 2026-11-04 (Asia/Shanghai client date).
+NextCandidate: none; further work (e.g. multi-DPI dialog layout fix) requires a new authorized task.
+VerifiedHEAD: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6 (release commit follows this checkpoint).
+GitCommit: release commit created locally on top of b5fbfba; no push.
+Authority: docs/change-plan-2026-10-20 acceptance closed 2026-10-21; release authorized by user goal statement this session.
+ReleaseEvidence: artifacts/evidence/release-0.3.0.txt; dist/v0.3.0/win-x64 (EXE 1492560B, SHA-256 ec54fe29e7ab0aeda531c6fb803539596e373410dc8a39b9d5e774025278afda); docs/release.md; CHANGELOG.md 0.3.0.
+ReleaseVerification: build -warnaserror exit0; dotnet test 681/681; format verify exit0 (after WorkspaceFixture.cs whitespace fix); Windows gates original91/sync72/post-audit44/roots21 all PASS exit0 at 96-DPI-equivalent (DpiUnaware virtualization, user-approved method) after native-144-DPI first run failed 2 minimum-size layout checks; published EXE --smoke PASS exit0 at real 144 DPI.
+SourceHashInventory: 80/82 match FINAL-verification-manifest.json; deltas = WorkspaceFixture.cs (format fix) and WindowsTests Program.cs (post-manifest A04 corrections per A04-production-gate.txt; functionally verified).
+DpiNote: desktop moved from 96 DPI (acceptance) to 150% scaling (DeviceDpi=144). Dialog fixed-pixel layouts do not scale with DPI; minimum-size checks fail natively at 150%. Untouched code boundary; fix would be a new task.
+Safety: real Harness data never written/moved/deleted; synthetic/temp isolation only; no PATH/registry changes.
+Limits: unsigned; no clean-VM install test; published-EXE data-binding smoke not rerun (synthetic fixture missing; covered by 681 tests + gates); multi-DPI dialog layout unimproved.

@@ -34,6 +34,7 @@ Copy-Item (Join-Path $repo 'LICENSE') (Join-Path $out 'LICENSE.txt')
 THIRD-PARTY NOTICES — DeepSeek Harness Cleaner v$Version
 本发布包内嵌以下第三方组件：
 - ZstdSharp.Port 0.8.8 (MIT) — Zstandard 解码，https://www.nuget.org/packages/ZstdSharp.Port
+- YamlDotNet 18.1.0 (MIT) — Workspace 存储策略 YAML 解析，https://www.nuget.org/packages/YamlDotNet
 运行依赖（不随本包分发）：.NET 10 Windows Desktop Runtime x64 (MIT, .NET Foundation)，https://dotnet.microsoft.com
 "@ | Set-Content (Join-Path $out 'THIRD-PARTY-NOTICES.txt') -Encoding utf8
 
@@ -44,6 +45,9 @@ DeepSeek Harness Cleaner v$Version（win-x64 单文件，不捆绑 .NET 运行�
 - 离线工具：无主动联网功能；本次构建未执行运行期联网验证。
 - 安全默认：扫描只读；会话及附件删除须明确确认，原始 ZIP 备份可选；保留 SHA-256、路径与进程复验，Harness 未完全退出时阻断删除。
 - 已适配本机 Harness 0.2.1-rc.2 的原生 v0/v4 元数据及整会话离线删除；未知版本/损坏日志禁止清理。预览展示已验证文本，不声称完整历史重放。
+- 数据根：启动后可选择会话/桌面数据根候选，展示来源与有效性；切换根清空旧扫描与勾选，桌面根需独立确认。
+- 审计：删除确认前有只读审计，分开展示文件目标、范围外证据与未知项；删除后复查文件与 Workspace，明确显示文件残留、元数据残留或未知。
+- Workspace 元数据同步默认关闭：仅对已核验的 0.2.1-rc.2 JSON 单文件存储启用，强制原始字节备份并复验，中断后可复查恢复与重试；未勾选时元数据字节保持不变。
 - 附件：完成扫描后从顶部“附件”进入，展示可核实名称/类型及关联会话；人工勾选后独立确认删除，备份可选；Unknown 不代表孤儿，会话删除不自动删除附件。
 - 会话：归档状态单独展示，元数据无法核实则显示未知；解析状态明确显示正常或异常。
 - 交互：点击会话“选择”表头全选/取消当前筛选结果；状态栏显示隐藏勾选数量。表格标题统一加粗居中。

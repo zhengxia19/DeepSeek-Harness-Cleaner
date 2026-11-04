@@ -1,0 +1,434 @@
+{
+  "observedUtc": "2026-10-20T11:44:41.2910451+00:00",
+  "head": "b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6",
+  "sourceFiles": [
+    {
+      "path": "Directory.Build.props",
+      "sha256": "604B871DFDB388755C10DD5834EB85A55F6F2B2C23CC3ED4D2DD941B5703FE1E"
+    },
+    {
+      "path": "Directory.Packages.props",
+      "sha256": "3FB94A1EF96A3C4C39D17733BC8C93B981F57575F6D90C6EE1D1C13CB9DF88B3"
+    },
+    {
+      "path": "global.json",
+      "sha256": "44634B9C6F0F6B56DCA6E144E6593AA8B3E6B48F8FC99DF8E5F315985A32E551"
+    },
+    {
+      "path": "NuGet.Config",
+      "sha256": "F545A7E2EA14AC53CDFB91217CAE67B8FF14275313F6298F9A3331D205B6C948"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Application/OutcomeReport.cs",
+      "sha256": "4680E8D97005B8ADC6038DBE0A7745B0C8B5244D7942F23AD8FD67183DD8BAF0"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Application/OutcomeSessionRow.cs",
+      "sha256": "C215B668F65E597A442F580580E1C3694C08136598CD153A1FEEC47E0FF90324"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Application/packages.lock.json",
+      "sha256": "DF3E2442F661F57FB7951857B254B1787B2764E13B079A99228DF85FDA929E81"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Application/PostCleanupAudit.cs",
+      "sha256": "17B9399769C1B23DBB3E08D48C9AF78CAC6E9C2FBFF2099D278103D43C0BA999"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Application/PreCleanupAudit.cs",
+      "sha256": "9D6F9CB02D46F181D80D706587EB2236BA4C0DD12EFD9A6C96DB682E825F3B1F"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Application/SessionResidueSnapshot.cs",
+      "sha256": "70FAE3A7D73434012CE50B0E1A0D1982F254644C263C19F74D3D788BB3BFF739"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Application/WorkspaceMetadataPlan.cs",
+      "sha256": "2BD05A6736495DD6F10DB2FBDE57BAFCE27596B0DB60CCFFE502DBF2311491D2"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Application/WorkspaceMetadataProposal.cs",
+      "sha256": "BBEA119A11DE78D47664C6CAB2D6A304A1835B8933DB3EEEAC9380C82A6818A0"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Application/WorkspaceSyncOption.cs",
+      "sha256": "1755052D9547BA91A1FED3224FE9C27A732C14C012970C39A6FB033DC6EDB23E"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Application/WorkspaceSyncOutcome.cs",
+      "sha256": "2E3E77EA1250E0F7C435981558B3D62B1FB5D3CDD5155813342E3787641E06FF"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Domain/packages.lock.json",
+      "sha256": "2241481B7E74DCDCD600303146B730ECC12CBD8E49AA55755EF95EE499FE229A"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Domain/WorkspaceReferenceIndex.cs",
+      "sha256": "8F83AADD2AB7DD8D55DADC6CC35DC97AC3163DD7E83C75755BA44DDC0A7DCB2B"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/AttachmentInventoryService.cs",
+      "sha256": "0268F68A75410813CE526E163F76B27D42017B0B1B981CA091FB50491D7EDB31"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/DeepSeekHarnessCleaner.Infrastructure.csproj",
+      "sha256": "5EE8FCCFFE62AFA3D6964F3142050175787C82BDBB193508E40895552982A6A9"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/packages.lock.json",
+      "sha256": "ECB8B774C3453286734215974A6B3E2D8A130ADDA1AA88B734444B99850611FA"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/PostCleanupAuditor.cs",
+      "sha256": "F55AB2DE8FB44C9599BFDDF2DB6D3000FAA2E24713BB1C8A9CB098E619398EE2"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/PreCleanupAuditor.cs",
+      "sha256": "C0CC3B67DD871564A8B34AAC8D0F3D9E3AB3ACFFE11B44963FE287D2FC7FFBC6"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/RootDiscoveryResult.cs",
+      "sha256": "970DE0139ED42FAB40404889C8B1C353B5CB46CB6E0751151171143686157ED7"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/RootLocator.cs",
+      "sha256": "F44FF5C7E4750616CE00828EB39D7EB23AA25C137F2E2813C82BE0DCC1C56CBD"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/SessionResidueInventory.cs",
+      "sha256": "A47E0318A337D0EE7851D9CE3B92098C7366421E96D4F48C99F28BF661FF2CAF"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceArchiveReader.cs",
+      "sha256": "1CD23987E5300ED6ACE43EBD6AF7E11B6FEE8336DB7609D5279AF4B5B0FC43FF"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceBackupEvidence.cs",
+      "sha256": "C319B17BFE4870890A263610B774355BEE1DCE9FAA9C57571F652E86DFCC928A"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceBackupService.cs",
+      "sha256": "99F7C0AD97EBB87E6F73220441C6A3916D7C4029F7E4863E342664D57FC6D073"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceFileIdentity.cs",
+      "sha256": "77CE4F9AD76FA3FAF8A52047F6D243880891768CDDC6532D7AD268467AC0B63B"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceJson.cs",
+      "sha256": "B5410C1A519DA6C78806698755FE6A7221FAEE701CA237AA2A4B28F5B1EF2319"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceMetadataTransform.cs",
+      "sha256": "6BC66710DC8F4AC823083BB21F285E3E8A69C096503088CF2D340EE6AE142606"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceMetadataWriter.cs",
+      "sha256": "CF9D0AAE70069628D6F6096EAF74FEC58A4FB4B97C47364B583E942F0D0DD798"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceProductionGate.cs",
+      "sha256": "CA61C0AAF3E8CEC5F5B5C67BF4DE5511B08F998AADFEAA7CB0DAB6DBC3D03C99"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceRecoveryService.cs",
+      "sha256": "AE9324AE3CF16ADE8DEB20CABE62C9A955340A6AEC801CCE0BC78DDF45FB2449"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceReferenceReader.cs",
+      "sha256": "ACBC9BA94FDE0EECD712B3BE06760D5C55E34906792DDE9C949D20089D24D6B9"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceReleaseReader.cs",
+      "sha256": "D6409C5DF7748D613ED0352D2D93C11BDE7FE4096D78D2276C846E3B0752909B"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceStoragePolicy.cs",
+      "sha256": "9DA079567BCF77691DA75900F94C0B6777BCDC42DA5C1F3A42FF52746F9B7A07"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceSyncCoordinator.cs",
+      "sha256": "67B38E0534202C3F22A4C59693EF0899834D9E1FD1394E16547EE0AB071AA727"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.Infrastructure/WorkspaceWritePreparation.cs",
+      "sha256": "3F77E49FE33FE64F3C20C20659F239D56D1B594BDA90E89D1E5033842156A137"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.UI/ActionsPresenter.cs",
+      "sha256": "F37BD5582BEE5C865016CAB18BB689900CD1D7E6964539E43843C6A8CD2E9477"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.UI/CleanupDialog.cs",
+      "sha256": "66346CFD57BF6BD6BFF48F35B688156A8355347270F96BA343B6A78EA28823EA"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.UI/InventoryPresenter.cs",
+      "sha256": "0834FC956242F434B7AFD55C092CB315272B5E5C8BD3660FAB110009CA9EC7C3"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.UI/MainForm.cs",
+      "sha256": "E5DEDD7BB3F1DFCC4EF6CD02492AC392F9E539438F4C149366BE4735FD942215"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.UI/MainForm.Roots.cs",
+      "sha256": "B58DC5EED12BCE00A930D7E2C304771A75F15F99B18AF471DDD1528F019763F7"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.UI/packages.lock.json",
+      "sha256": "110FECA763127F9B7C340B58213822BD0A593D7550B1C0AEBDADEBF0F87291A9"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.UI/PostCleanupAuditText.cs",
+      "sha256": "4C3EBA53E5DF2276B5B93B3F159310D4CF5C96C6BA7F9A019945D656B893AF20"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.UI/PreCleanupAuditText.cs",
+      "sha256": "CC7126D9176F8BBEFF80FF182BFD3B798DF840C9237A541B9A7CFD016387F66C"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.UI/ResultsDialog.cs",
+      "sha256": "2D346A6C8C7B86D035CB46BD9BCCC36FBBABE4A26151F292AC5DF8548AD1BB7A"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.UI/RootSelectionDialog.cs",
+      "sha256": "57EDFB29AB3123981EDA0EE5EAED329275BB67D98406BE5C5D53BFB49218BBF8"
+    },
+    {
+      "path": "src/DeepSeekHarnessCleaner.UI/WorkspaceSyncReviewDialog.cs",
+      "sha256": "6161A91ECCADAFD37DA00F2DCF25B903972D2A97C1A8999AA86D28FB9460F242"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj",
+      "sha256": "ED721D9E9B671C4F3D46E85B15CBB224FAA3F1BFAF15D3339C155712E665CAD4"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/Fixtures/observed-workspace-v2-redacted.json",
+      "sha256": "CFE6DD00979D242DA3854315645D3B171C9B76EE6F3D6C2DC7FC74FB1D422085"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/Fixtures/observed-workspace-v2-redacted.provenance.json",
+      "sha256": "641713164919C55F23DB648A928908886EB5A19D586B07AF7C209D816A031777"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/Fixtures/StorageGateFixture.cs",
+      "sha256": "99B7DDFCD081E9E591B74A7DDE9C926C4A585BF1E3C714D8978FD0B33265F4E5"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/Fixtures/WorkspaceFixture.cs",
+      "sha256": "45BC4A76E970ECA855AC87AE9D3655C2C659F6279B8DAE65F853DFD64C28E2E7"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/packages.lock.json",
+      "sha256": "45C1D9B7F34CC1F570BAB69E99B7EACFAAD8B8702E0B383DEFA8651947074ADD"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/PostCleanupAuditTests.cs",
+      "sha256": "456D71D0F4FDB69E9976830EE30AF9F19E6E0290A76A8503E196DD4A1B48F880"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/PreCleanupAuditTests.cs",
+      "sha256": "3CF0B54CBEA2B424C0B4574433BF6B4DED7360B0E61E31FAFD7309B052D9EE10"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/RootDiscoveryTests.cs",
+      "sha256": "37DF2A81E182D758FA1F345678483F30DA091C228AFF3BAE364289DA3866FC2B"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/RootSafetyTests.cs",
+      "sha256": "4886FA770B2236EB36F279343F3292DB25349D671D6BC2124D83D1A3D672DE34"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/SessionOutcomeTests.cs",
+      "sha256": "23AE1565AB6CA0948D55A0DE9C3EBD160A0AEF74E56797E524C6EEBC809F52B4"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/SessionResidueInventoryTests.cs",
+      "sha256": "F1D61BD04860882E632C2209390BBD70AAAE656EC653A7ED2D461CD975E81CDF"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/WorkspaceBackupTests.cs",
+      "sha256": "078C1F7C131C0DD885FD68C12CE84B16C98606961C554FABD59B87E6C2929C0F"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/WorkspaceCompatibilityRegressionTests.cs",
+      "sha256": "A70E3FBF42EBB1D677581164BDDED759F21D44D3E42FFC83528C255E8D259F23"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/WorkspaceFixtureTests.cs",
+      "sha256": "8052031E487F52FB3A41804EF6F24707294C73CF29FA739505473FF04132A1A4"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/WorkspaceMetadataProposalTests.cs",
+      "sha256": "CDA3EB5CC6C9D0DB443C4FC494EE77A28AE3AA1F7DC202C727441C99FF32B7FF"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/WorkspaceMetadataWriterTests.cs",
+      "sha256": "08BAB157F115BD838882384D81A6691B052CD1269E3D8642971BEE9048F1BFF8"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/WorkspaceObservedSampleTests.cs",
+      "sha256": "CC9EA787DF4301AF74F3FA4675C0E67303496519F5FC295EEFE64D33EC8C8D77"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/WorkspaceProductionGateTests.cs",
+      "sha256": "151ADB83FF9728A022394ADE6B35A0ED755693DC6AD5767F07A7219D5F5C3623"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/WorkspaceReferenceTests.cs",
+      "sha256": "146ECF565FEBA2220FBAF7CB8320ADE74BE47FAE00FE55A11599C4D7DF9C39FF"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/WorkspaceReleaseReaderTests.cs",
+      "sha256": "165876C2D8542A4086E703BA63049215EB85FC4FE5DE31D6D1EFC0A425D38E69"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/WorkspaceStoragePolicyTests.cs",
+      "sha256": "9F8A8FC2FF5705B30F8983E3BA11610088660536D3F17FF9593DA1A1B427FE6E"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/WorkspaceSyncOptionTests.cs",
+      "sha256": "9B84F4CE5236501276FBFFBE836BB5C80B566F6DADF9BBEFF341B42C07BE26B2"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/WorkspaceSyncOutcomeTests.cs",
+      "sha256": "97BAD09B1F24F5250F577488AF353E026DCA46AFEDCC0C547DB46F82B4389395"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.Tests/WorkspaceSyncTests.cs",
+      "sha256": "0177DDD1792DC84D932906D2E9643972B2C30CEA17C98ECE28946F5765B53D6A"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.WindowsTests/AuditChecks.cs",
+      "sha256": "085E43C3A651E70401570831FBAB4A6640187BC593F1D7B18779BE9F827BDA16"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.WindowsTests/InstalledStorageChecks.cs",
+      "sha256": "EEB63F5DC7119DE20E89B0BDEE0D0FA64CFE828DB3FE4F3538BEA4CEB24F2F3A"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.WindowsTests/packages.lock.json",
+      "sha256": "C6808F1A2808B44509FE88C5D3F427746DE01F6FD95726F16F9870C12B596413"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.WindowsTests/PostAuditChecks.cs",
+      "sha256": "FDFA57E5A1CFA17807EB88C26EF0A276B1729EBFB4774A39904FDBF62F7ACC51"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.WindowsTests/Program.cs",
+      "sha256": "F34F23281A0BB494CCE89E0AAFD33AFF8A66C4DB0F81697A135CC03E87EF8BA7"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.WindowsTests/RootSelectionChecks.cs",
+      "sha256": "866A58301285F72C577AD33BCBCD4BFBC348D6AB7EE2CFE48A090A3AA0191839"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.WindowsTests/WorkspaceCrashChecks.cs",
+      "sha256": "DD1DAE550137A5CFF65DCD70F8965395DD3CD8C828831DA77BD5AA991AE07921"
+    },
+    {
+      "path": "tests/DeepSeekHarnessCleaner.WindowsTests/WorkspaceSyncChecks.cs",
+      "sha256": "A80FA1B98360C6C859C334A72A9E694C236B7DDBB8580C8C26E27E635DF9FE74"
+    }
+  ],
+  "proofLogs": [
+    {
+      "path": ".artifacts\\FinalAcceptance\\audit-full.trx",
+      "sha256": "B9F5E3E60BB7D8D280922C618804C30596B803CF20A73BD701E1326064430F66"
+    },
+    {
+      "path": ".artifacts\\FinalAcceptance\\gate-installed-storage-e2e-only.txt",
+      "sha256": "32741BC2411493599881ABFBBF7EB0752C6F87C3355DCBA5F7A4A7D2D15B75A2"
+    },
+    {
+      "path": ".artifacts\\FinalAcceptance\\gate-installed-storage-only.txt",
+      "sha256": "182E8E6EE417E3034B66EE62D8F99F1227266C16BDE8589EBBEA5D48DCEB9329"
+    },
+    {
+      "path": ".artifacts\\FinalAcceptance\\gate-roots-only.txt",
+      "sha256": "09064AE8E54C33BB9BB7B3F96045B3F42F4D7FD8D81AE9F7B07C46A6F15253FF"
+    },
+    {
+      "path": ".artifacts\\FinalAcceptance\\gate-post-audit-only.txt",
+      "sha256": "D5DA4BA0BF9BAE66405E3CFAEA5E55F354D21206FB90A7BB733E7CD05EC7A581"
+    },
+    {
+      "path": ".artifacts\\FinalAcceptance\\gate-workspace-sync-only.txt",
+      "sha256": "77E4343D122887FFED3A9F4668818A2E9143F6F83E5B3980967EB3F88C835604"
+    },
+    {
+      "path": ".artifacts\\FinalAcceptance\\gate-original-ui.txt",
+      "sha256": "4E790C387FFB38F2A56A676BC4B2E424C728A8EC7E46709D48F0EFAEB3F5382A"
+    },
+    {
+      "path": ".artifacts\\FinalAcceptance\\crash-eight-stages.txt",
+      "sha256": "DD01741153AF7DC4C466630C7BBFB0D9988E72AB876CC7D295FA1DBC622A7244"
+    },
+    {
+      "path": ".artifacts\\FinalAcceptance\\default-open.txt",
+      "sha256": "22F0A1CF975D1400D3EAC4154AB7EAC7F4F17DE219D249A5582F7161E21CB850"
+    },
+    {
+      "path": ".artifacts\\FinalAcceptance\\storage-gate-solution-build.log",
+      "sha256": "20270E313C8CA2C77322E1195DCB0FD982AFFCD9DF1EFE8ADCEE0D050C63DD2A"
+    },
+    {
+      "path": ".artifacts\\FinalAcceptance\\storage-gate-build.log",
+      "sha256": "C3FAC4EEF6FECE1D955D6A7AE2FAED9D5D7E80C279FDD33D149AF5000D7EC2D1"
+    },
+    {
+      "path": ".artifacts\\FinalAcceptance\\dependency-audit.txt",
+      "sha256": "DD4452C226AEA6FEDB3D260CB438C2277495C0EE11939E84248C29ECAD9D7A4E"
+    }
+  ],
+  "crashStages": [
+    {
+      "stage": "IntentFlushed",
+      "processProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-IntentFlushed-0f6a92fa0bb748beba96503f74ccbe2e\\process-proof.json",
+      "recoveryProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-IntentFlushed-0f6a92fa0bb748beba96503f74ccbe2e\\recovery-proof.json",
+      "exitCode": -1
+    },
+    {
+      "stage": "CandidateFlushed",
+      "processProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-CandidateFlushed-dad4edb51141403fba0f172e688c71f7\\process-proof.json",
+      "recoveryProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-CandidateFlushed-dad4edb51141403fba0f172e688c71f7\\recovery-proof.json",
+      "exitCode": -1
+    },
+    {
+      "stage": "BeforeReplace",
+      "processProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-BeforeReplace-a24c40d05ed94e50a1be3db134b2bf83\\process-proof.json",
+      "recoveryProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-BeforeReplace-a24c40d05ed94e50a1be3db134b2bf83\\recovery-proof.json",
+      "exitCode": -1
+    },
+    {
+      "stage": "Replaced",
+      "processProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-Replaced-2935f07aed634220901a228fc3202807\\process-proof.json",
+      "recoveryProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-Replaced-2935f07aed634220901a228fc3202807\\recovery-proof.json",
+      "exitCode": -1
+    },
+    {
+      "stage": "Verified",
+      "processProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-Verified-b2518de4434d4bc5931809ab586372ad\\process-proof.json",
+      "recoveryProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-Verified-b2518de4434d4bc5931809ab586372ad\\recovery-proof.json",
+      "exitCode": -1
+    },
+    {
+      "stage": "CommitWindow",
+      "processProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-CommitWindow-51fa868dc26d447b8d76ee8314e904a2\\process-proof.json",
+      "recoveryProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-CommitWindow-51fa868dc26d447b8d76ee8314e904a2\\recovery-proof.json",
+      "exitCode": -1
+    },
+    {
+      "stage": "OriginalRetained",
+      "processProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-OriginalRetained-8269a33370614af58e81e48efbe801e3\\process-proof.json",
+      "recoveryProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-OriginalRetained-8269a33370614af58e81e48efbe801e3\\recovery-proof.json",
+      "exitCode": -1
+    },
+    {
+      "stage": "OutcomeRecorded",
+      "processProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-OutcomeRecorded-1b299680c8d143a99b709013cd6dbc71\\process-proof.json",
+      "recoveryProof": "D:\\Code\\DeepSeek-Harness-Cleaner\\.artifacts\\FinalAcceptance\\crash-OutcomeRecorded-1b299680c8d143a99b709013cd6dbc71\\recovery-proof.json",
+      "exitCode": -1
+    }
+  ]
+}

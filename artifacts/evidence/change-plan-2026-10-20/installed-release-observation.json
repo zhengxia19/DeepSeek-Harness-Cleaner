@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "observedUtc": "2026-10-20T10:52:43.9172005+00:00",
+  "sourcePathToken": "%LOCALAPPDATA%/Programs/DeepSeek Harness/resources/app.asar",
+  "readOnly": true,
+  "desktopPackageVersion": "0.2.1-rc.2",
+  "desktopPackageSha256": "53ee01d3b1accfbd037d245fb4752fb5fa5f8e2a76b7de634a4223558ee54bb9",
+  "runtimeRelease": {
+    "schemaVersion": 1,
+    "version": "0.2.1-rc.2",
+    "hostProtocolVersion": 4,
+    "nodeVersion": "24.21.0",
+    "pnpmVersion": "11.28.5"
+  },
+  "runtimeManifestSha256": "03a25344bce458c4c0fde1faab380232ffdea6510d159eacbb7e2da1c065e230",
+  "workspacePackageVersion": "0.2.1-rc.2",
+  "workspacePackageSha256": "32cdf22a0e518d23edc4d7f5484ceb9447aa6573b4ea45cd5f0adb4f31cafe87",
+  "storageJsonPackageVersion": "0.2.1-rc.2",
+  "storageJsonPackageSha256": "0df36e7340fb8e74556d7b41b52b6077985b71040bdee6759b8480e8bae0d93d",
+  "bundledDependencyManifestVersion": "0.2.1-rc.2",
+  "bundledPayloadDigest": "e2cef445c262ce6e8d28480b5ebecc8b0c54c06bea7183374debfcf02f30eb7d",
+  "cachedDependencyManifestVersion": "0.2.0-rc.2",
+  "cachedPayloadDigest": "a7dddb0dc2b5035d86c7f39a4e2c688ccf531a3ba11d0737d441d6376500c14e",
+  "cachedManifestDoesNotProveActiveRuntime": true,
+  "producerCommitVerified": false,
+  "activeBackendAndRootMappingVerified": false,
+  "productionWriteAllowed": false
+}

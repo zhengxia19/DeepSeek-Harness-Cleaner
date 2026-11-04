@@ -78,7 +78,9 @@ public sealed class ActionsPresenter
         CleanupPlan plan,
         VerifiedBackup? backup,
         CleanupExecutionResult result,
-        string zipPath)
+        string zipPath,
+        PostCleanupAudit? sessionAudit = null,
+        WorkspaceSyncOutcome? workspaceSync = null)
     {
         var byPath = plan.Targets.ToDictionary(static t => t.AbsolutePath, StringComparer.OrdinalIgnoreCase);
         var items = new List<OutcomeItem>(result.Outcomes.Count);
@@ -94,6 +96,10 @@ public sealed class ActionsPresenter
                 outcome.DeletedBytes));
         }
 
+        if (sessionAudit is not null && sessionAudit.PlanId != plan.PlanId)
+            sessionAudit = PostCleanupAudit.Unknown(plan.PlanId, plan.Targets.Select(x => x.OwnerSessionId).OfType<string>(), "REPORT_POST_AUDIT_PLAN_MISMATCH");
+        if (workspaceSync is not null && workspaceSync.CleanupPlanId != plan.PlanId)
+            workspaceSync = new(plan.PlanId, null, WorkspaceSyncState.Blocked, "SYNC_REPORT_PLAN_MISMATCH", 0, null, null, DateTimeOffset.UtcNow);
         return new OutcomeReport(new OutcomeReportInput(
             result.Aborted,
             result.AbortCode,
@@ -101,7 +107,8 @@ public sealed class ActionsPresenter
             backup?.ManifestSignature,
             backup?.FileEntryCount ?? 0,
             backup?.TotalBytes ?? 0,
-            items));
+            items)
+        { SessionAudit = sessionAudit, WorkspaceSync = workspaceSync });
     }
 
     private static OutcomeItemStatus MapStatus(ItemStatus status) => status switch

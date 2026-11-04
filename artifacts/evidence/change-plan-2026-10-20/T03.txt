@@ -1,0 +1,36 @@
+Task: change-plan-2026-10-20/T03
+Status: ACCEPTED
+Date: 2026-10-20 Asia/Shanghai
+Baseline: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6
+Prerequisites: T01 and T02 checked; corresponding evidence reviewed, T02 final TRX verified: 360 passed, 0 failed.
+InitialWorktree: uncommitted T02 fixtures and tracking documents present; preserved. No source behavior changes in this task.
+Environment: Microsoft Windows 10.0.19045; PowerShell 7.6.4; project-local .NET SDK 10.0.402 (enter-env.ps1).
+ChangedFiles: tests/DeepSeekHarnessCleaner.Tests/WorkspaceCompatibilityRegressionTests.cs; tests/DeepSeekHarnessCleaner.Tests/WorkspacePendingContracts.md; task index, phase-one and overall status, checkpoint, this evidence.
+VerifiedInterfaces: WorkspaceArchiveReader.Read(string dataHome); SessionLogDiscovery.Discover(string sessionRoot); SessionCacheIndex.Build(string storagesRoot, IReadOnlyList<string> knownSessionIds); CacheIndexResult.WholeCacheCandidates.
+VerifiedCallSites: UI/InventoryPresenter.cs; Infrastructure/SessionCleanupPreparation.cs. Existing DiscoveryTests, CacheIndexTests, FeedbackRepairTests inspected and retained.
+Commands, after . ./scripts/enter-env.ps1, repository root:
+1. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter FullyQualifiedName~WorkspaceCompatibilityRegressionTests --logger 'trx;LogFileName=T03-targeted.trx' --results-directory .artifacts/T03
+   First attempt exit 1: CS1061, test mistakenly used WholeCaches property. Corrected test to actual WholeCacheCandidates; production interface unchanged.
+   Rerun exit 0: 23 passed, 0 failed, 0 skipped.
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T03-full.trx' --results-directory .artifacts/T03
+   Exit 0: 383 passed, 0 failed, 0 skipped, no filter. Prior suite 360 plus 23 new cases.
+3. dotnet build DeepSeekHarnessCleaner.sln --no-restore -warnaserror
+   Exit 0: 0 warnings, 0 errors.
+4. dotnet format DeepSeekHarnessCleaner.sln --no-restore --verify-no-changes --include tests/DeepSeekHarnessCleaner.Tests/WorkspaceCompatibilityRegressionTests.cs
+   Exit 0: targeted changed C# file only; not a repository-wide formatting claim.
+Acceptance:
+PASS: archive-only result distinct from pins, members and physical file existence.
+PASS: unknown version, corrupt JSON, uninitialized state, duplicate archive IDs and duplicate object fields yield null, not known empty.
+PASS: invalid types/fields, missing file and locked file yield unknown; initialized empty archive returns empty known set.
+PASS: characterize existing archive-only behavior on pending mutations and duplicated member IDs; explicitly not a full-reference or write-safety guarantee. T07 must validate these separately.
+PASS: physical discovery preserves log generations including malformed content; workspace references do not create physical log candidates.
+PASS: cache mapping derives from physical ID inventory, leaves missing-log cache unmatched and never includes workspace.json in cleanup candidates.
+PASS: real file/directory symbolic links rejected by all three read paths; outside synthetic target SHA-256 unchanged before and after link cleanup.
+PASS: read-only workspace hashes and integrated file-set/all-file hashes unchanged.
+PASS: future audit/write contract test specification added, each explicitly NOT IMPLEMENTED/NOT EXECUTED. No fake passing tests.
+Regression: 383 tests PASS. T02 fixture and all previous Tests-project cases retained.
+NotExecuted: WindowsTests executable/UI/manual interaction, release/VM/real-sample compatibility, future T07-T16 audit/write tests. No release or complete project acceptance claim.
+RawResults: .artifacts/T03/T03-targeted.trx; .artifacts/T03/T03-full.trx.
+Safety: synthetic roots for new tests only; no real Harness data written; no system settings altered; write allowlist remains empty.
+GitCommit: NOT_COMMITTED.
+NextCandidate: T04, next round only; T04-T16 remain incomplete.

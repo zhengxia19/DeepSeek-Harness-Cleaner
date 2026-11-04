@@ -1,0 +1,63 @@
+Task: change-plan-2026-10-20/T02
+Status: BLOCKED
+Date: 2026-10-20 Asia/Shanghai
+Baseline: b5fbfbaf7d895680d4cbaac35ef9fe7f7976bfa6; initial git status clean.
+Prerequisite: T01 checked; docs/workspace-compatibility.md and artifacts/evidence/change-plan-2026-10-20/T01.txt reviewed.
+Environment: Microsoft Windows 10.0.19045; PowerShell 7.6.4; local SDK 10.0.402.
+ChangedFiles: tests/DeepSeekHarnessCleaner.Tests/Fixtures/WorkspaceFixture.cs, WorkspaceFixture.md; tests/DeepSeekHarnessCleaner.Tests/WorkspaceFixtureTests.cs; task index, schedule, phase-one progress and checkpoint.
+Scope: synthetic fixture construction, no production implementation; T03 not claimed.
+Commands (repository root; each dotnet command after . ./scripts/enter-env.ps1):
+1. dotnet --version => 10.0.402.
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter FullyQualifiedName~WorkspaceFixtureTests --logger 'trx;LogFileName=T02-fixtures.trx' --results-directory .artifacts/T02
+   ExitCode: 1. 8 passed, 2 failed, 0 skipped, 10 total.
+   Failures: Assert.Throws<JsonException> was too strict for JsonReaderException; corrected to ThrowsAny<JsonException>.
+   File.CreateSymbolicLink failed: client lacks required privilege. No permissions/settings changed.
+3. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter 'FullyQualifiedName!~SymbolicLinkFixture_PointsOnlyToSeparateSyntheticRoot' --logger 'trx;LogFileName=T02-regression.trx' --results-directory .artifacts/T02
+   ExitCode: 0. 359 passed, 0 failed, 0 skipped. The symbolic-link test was EXCLUDED, not passed/skipped by runner.
+4. dotnet build DeepSeekHarnessCleaner.sln --no-restore
+   ExitCode: 0. 0 warnings, 0 errors.
+Acceptance:
+PASS: archive, pin, multiple workspaces, duplicate archive/member IDs, malformed JSON, unknown version, uninitialized and pending create/delete, missing log, file-change fixture assertions.
+PASS: synthetic native v4 header-only logs, no user chat/credentials; workspace paths under owned temporary roots.
+PASS: changed workspace fingerprint and unchanged unselected-log/outside-sentinel SHA-256 assertions.
+PASS: provenance document labels actual release samples, per-record and SQLite UNVERIFIED; no write allowlist enabled.
+BLOCKED: real file symbolic-link fixture execution requires OS privilege unavailable in current process.
+NOT RUN: full unfiltered green suite, WindowsTests/UI/manual compatibility acceptance, future audit/write contracts. Build on Windows 10 alone is not application compatibility acceptance.
+RawResults: .artifacts/T02/T02-fixtures.trx; .artifacts/T02/T02-regression.trx
+Backups: .artifacts/T02/backups/ (before editing existing tracking docs).
+Safety: no real Harness data written, no system PATH/registry/policy changes; temporary synthetic test files only.
+GitCommit: NOT_COMMITTED.
+Next: rerun symbolic-link fixture and full relevant suite in an authorized environment permitting symbolic links; do not substitute a junction and claim literal symbolic-link coverage. Keep T02 unchecked, do not start T03.
+
+Continuation recheck (2026-10-20, second goal turn with this blocker):
+Previous turn classification: progress (fixtures, tests and durable evidence added).
+Current-state checks: git status retained the same T02 changes; checkpoint and unchecked T02 cross-checked.
+whoami /priv: SeCreateSymbolicLinkPrivilege absent from current process token.
+Command after . ./scripts/enter-env.ps1:
+dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter FullyQualifiedName~SymbolicLinkFixture_PointsOnlyToSeparateSyntheticRoot --logger 'trx;LogFileName=T02-link-recheck.trx' --results-directory .artifacts/T02
+ExitCode: 1; 0 passed, 1 failed, 0 skipped. Same IOException: required privilege missing.
+RawResults: .artifacts/T02/T02-link-recheck.trx.
+Status remains BLOCKED; no dependent task started. Requires external environment change, not a code workaround or weaker acceptance.
+
+Blocked audit, third consecutive goal turn (2026-10-20):
+Previous goal turn: no implementation progress; revalidated the same environment blocker.
+Current whoami /priv still lacks SeCreateSymbolicLinkPrivilege. Read actual T02-link-recheck.trx counters: total=1, passed=0, failed=1. T02 remains unchecked, worktree preserved.
+No live test/job is pending; previous test process ended with exit 1. Repeating it without environment change cannot resolve permission failure.
+No authorized project-local implementation can grant the missing OS privilege. Do not change system security policy or replace literal symbolic-link coverage with a junction. Dependency rules prohibit proceeding to T03 while T02 is blocked.
+Goal status: BLOCKED after three consecutive turns with the same blocking condition. Full objective remains incomplete. Resume after a capable test environment is available.
+
+Final acceptance after environment change (2026-10-20 Asia/Shanghai):
+Status: ACCEPTED (supersedes earlier BLOCKED entries; history retained).
+User reports Windows 10 Developer Mode enabled; actual symbolic-link creation now verified by passing test.
+Commands after . ./scripts/enter-env.ps1:
+1. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --filter FullyQualifiedName~WorkspaceFixtureTests --logger 'trx;LogFileName=T02-resume-fixtures.trx' --results-directory .artifacts/T02
+   ExitCode: 0; 10 passed, 0 failed, 0 skipped. Includes real file symbolic link, target resolution, link removal and unchanged external synthetic target SHA-256.
+2. dotnet test tests/DeepSeekHarnessCleaner.Tests/DeepSeekHarnessCleaner.Tests.csproj --no-restore --logger 'trx;LogFileName=T02-resume-full.trx' --results-directory .artifacts/T02
+   ExitCode: 0; 360 passed, 0 failed, 0 skipped. No filter; tests project only, not WindowsTests/manual UI.
+3. dotnet build DeepSeekHarnessCleaner.sln --no-restore
+   ExitCode: 0; 0 warnings, 0 errors.
+Acceptance: all T02 fixture construction requirements now PASS. Unknown and real release sample versions remain explicitly UNVERIFIED in Fixtures/WorkspaceFixture.md. No write allowlist or production behavior changed.
+Safety: no real Harness data written; all mutations used synthetic fixture roots. No system settings changed by agent.
+RawResults: .artifacts/T02/T02-resume-fixtures.trx; .artifacts/T02/T02-resume-full.trx.
+GitCommit: NOT_COMMITTED.
+NextCandidate: T03, next round only. Overall T01-T16 objective remains incomplete.

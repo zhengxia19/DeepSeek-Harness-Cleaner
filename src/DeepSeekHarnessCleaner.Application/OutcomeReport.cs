@@ -32,7 +32,11 @@ public sealed record OutcomeReportInput(
     string? BackupSignature,
     int BackupEntryCount,
     long BackupTotalBytes,
-    IReadOnlyList<OutcomeItem> Items);
+    IReadOnlyList<OutcomeItem> Items)
+{
+    public PostCleanupAudit? SessionAudit { get; init; }
+    public WorkspaceSyncOutcome? WorkspaceSync { get; init; }
+}
 
 /// <summary>
 /// T-31 不泄露正文的执行报告（REQ-016，TC-16/TC-18）：
@@ -54,9 +58,34 @@ public sealed class OutcomeReport
     /// <summary>清单签名白名单：SHA-256 小写 hex。</summary>
     private static readonly Regex SafeSignature = new("^[0-9a-f]{64}$", RegexOptions.CultureInvariant);
 
+    // Closed code vocabulary for new audit events: never log free text, paths, IDs, or credentials disguised as codes.
+    private static readonly HashSet<string> AuditLogCodes = new(StringComparer.Ordinal)
+    {
+        "POST_SCAN_FAILED", "POST_UI_SCAN_FAILED", "POST_PRE_AUDIT_MISSING", "POST_AUDIT_PLAN_MISMATCH",
+        "POST_AUDIT_ROOT_INVALID", "POST_AUDIT_ROOT_MISMATCH", "POST_AUDIT_ROOT_UNAVAILABLE", "POST_AUDIT_READ_FAILED",
+        "POST_TARGET_ASSOCIATION_UNKNOWN", "POST_TARGET_UNKNOWN", "POST_TARGET_CHANGED_TYPE", "POST_TARGET_UNREADABLE",
+        "REPORT_POST_AUDIT_PLAN_MISMATCH", "WORKSPACE_MISSING", "WORKSPACE_READ_FAILED", "WORKSPACE_JSON_INVALID",
+        "WORKSPACE_VERSION_UNSUPPORTED", "WORKSPACE_PER_RECORD_UNSUPPORTED", "WORKSPACE_LAYOUT_AMBIGUOUS",
+        "WORKSPACE_DUPLICATE_FIELD", "WORKSPACE_NOT_INITIALIZED", "WORKSPACE_TRANSACTION_UNKNOWN",
+        "WORKSPACE_IDS_INVALID", "WORKSPACE_REGISTRY_MISMATCH", "WORKSPACE_MEMBER_AMBIGUOUS",
+        "WORKSPACE_ARCHIVE_PIN_CONFLICT", "WORKSPACE_RECORD_INVALID", "WORKSPACE_TOO_LARGE",
+        "ATTACHMENT_REFERENCE_COVERAGE_UNKNOWN", "ATTACHMENT_SESSION_COVERAGE_UNKNOWN", "REFERENCE_UNREADABLE",
+        "REFERENCE_DECODE_INCOMPLETE", "REFERENCE_READ_LIMIT", "ATTACHMENT_CHANGED", "ATTACHMENT_ROOT_MISSING",
+        "ATTACHMENT_FILE_MISSING", "ATTACHMENT_RELATION_UNKNOWN", "AUDIT_RELATION_UNKNOWN",
+        "SESSION_IDENTITY_UNKNOWN", "SESSION_IDENTITY_DUPLICATE", "LOG_PATH_REJECTED", "LOG_UNREADABLE",
+        "PATH_REPARSE", "PATH_ESCAPE", "ROOT_INVALID", "ROOT_UNREADABLE", "FILE_ACCESS_DENIED",
+        "CACHE_STRUCTURE_MISMATCH", "CACHE_NAME_COLLISION", "CACHE_ID_NOT_IN_INVENTORY", "CACHE_INVENTORY_MISSING",
+        "NOT_WHITELISTED", "UNEXPECTED_LOCATION", "MISSING",
+    };
+
     public OutcomeReport(OutcomeReportInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
+        if (input.WorkspaceSync is { } sync && (sync.ProposedReferenceCount < 0 || sync.RemovedReferenceCount < 0
+            || sync.RemovedReferenceCount > sync.ProposedReferenceCount
+            || sync.State == WorkspaceSyncState.Applied && (sync.RemovedReferenceCount is not > 0 || sync.BackupDirectory is null)
+            || sync.State == WorkspaceSyncState.RecoveryRequired && sync.RemovedReferenceCount is not null))
+            input = input with { WorkspaceSync = sync with { State = WorkspaceSyncState.RecoveryRequired, ErrorCode = "SYNC_REPORT_STATE_INVALID", RemovedReferenceCount = null } };
         Input = input;
         Items = input.Items;
         Aborted = input.Aborted;
@@ -65,9 +94,35 @@ public sealed class OutcomeReport
         BackupSignature = input.BackupSignature;
         BackupEntryCount = Math.Max(0, input.BackupEntryCount);
         BackupTotalBytes = Math.Max(0, input.BackupTotalBytes);
+        Sessions = input.SessionAudit?.Sessions.Select(x => ProjectSession(x,
+            input.SessionAudit.After is null || input.SessionAudit.After.HasUnknowns || input.SessionAudit.Issues.Count > 0)).ToArray() ?? [];
+        var issues = input.SessionAudit is { } audit
+            ? audit.Issues.Concat(audit.After?.Issues ?? []).Concat(RelationIssues(audit.After)).Concat(audit.Targets.Where(x => x.Presence == TargetPresence.Unknown)
+                .Select(x => new SessionResidueIssue(x.Reason ?? "POST_TARGET_UNKNOWN", x.AbsolutePath, null)))
+            : Array.Empty<SessionResidueIssue>();
+        AuditIssues = issues.Distinct().ToArray();
     }
 
     public OutcomeReportInput Input { get; }
+    public WorkspaceSyncOutcome? WorkspaceSync => Input.WorkspaceSync;
+    public string WorkspaceSyncSummary => WorkspaceSync is not { } sync ? "Workspace 同步：未提供结果。" :
+        "Workspace 同步：" + (sync.State switch
+        {
+            WorkspaceSyncState.NotRequested => "未请求，未写入元数据",
+            WorkspaceSyncState.NoOp => "本次无需变更",
+            WorkspaceSyncState.Applied => $"已验证移除 {sync.RemovedReferenceCount} 处引用",
+            WorkspaceSyncState.RecoveryRequired => "结果待恢复复查，移除数量未知；请保留已有材料",
+            WorkspaceSyncState.Blocked => "已阻断",
+            _ => "状态未知",
+        }) + (sync.ErrorCode is null ? "。" : $"（{sync.ErrorCode}）。")
+        + "文件删除与元数据同步分别执行，不构成原子事务。";
+    public IReadOnlyList<OutcomeSessionRow> Sessions { get; }
+    public IReadOnlyList<SessionResidueIssue> AuditIssues { get; }
+    public bool HasSessionAudit => Input.SessionAudit is not null;
+    public int PhysicalResidueSessionCount => Sessions.Count(x => x.State == SessionCleanupState.PhysicalResidue);
+    public int MetadataResidueSessionCount => Sessions.Count(x => x.WorkspaceReferenceCount > 0);
+    public int UnknownSessionCount => Sessions.Count(x => x.HasUnknowns || x.State == SessionCleanupState.Unknown);
+    public bool HasAuditUnknowns => HasSessionAudit && (Input.SessionAudit!.HasUnknowns || UnknownSessionCount > 0 || AuditIssues.Count > 0);
 
     public IReadOnlyList<OutcomeItem> Items { get; }
 
@@ -135,7 +190,88 @@ public sealed class OutcomeReport
                 .Append('\n');
         }
 
+        if (Input.SessionAudit is { } audit)
+        {
+            sb.Append("ts=").Append(ts).Append(" event=session_audit_summary")
+                .Append(" sessions=").Append(Sessions.Count).Append(" physical_residue=").Append(PhysicalResidueSessionCount)
+                .Append(" metadata_residue=").Append(MetadataResidueSessionCount).Append(" unknown=").Append(UnknownSessionCount)
+                .Append(" issues=").Append(AuditIssues.Count).Append(" has_unknowns=").Append(HasAuditUnknowns ? "true" : "false")
+                .Append(" observed_utc=").Append(audit.ObservedUtc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)).Append('\n');
+            for (var index = 0; index < Sessions.Count; index++)
+            {
+                var session = Sessions[index];
+                sb.Append("ts=").Append(ts).Append(" event=session_audit session_index=").Append(index + 1)
+                    .Append(" state=").Append(session.State.ToString())
+                    .Append(" residue=").Append(session.ResidueCategories.Count == 0 ? "-" : string.Join(',', session.ResidueCategories))
+                    .Append(" present=").Append(session.PresentTargets).Append(" absent=").Append(session.AbsentTargets)
+                    .Append(" target_unknown=").Append(session.UnknownTargets).Append(" observed_logs=").Append(session.ObservedLogCount)
+                    .Append(" metadata_refs=").Append(session.WorkspaceReferenceCount?.ToString(CultureInfo.InvariantCulture) ?? "unknown")
+                    .Append(" has_unknowns=").Append(session.HasUnknowns ? "true" : "false").Append('\n');
+            }
+            foreach (var issue in AuditIssues)
+            {
+                var index = Sessions.Select((s, i) => (s, i)).FirstOrDefault(x => x.s.SessionId == issue.SessionId);
+                sb.Append("ts=").Append(ts).Append(" event=session_audit_issue")
+                    .Append(" code=").Append(AuditLogCodes.Contains(issue.Code) ? issue.Code : "OTHER_AUDIT_ISSUE")
+                    .Append(" session_index=").Append(index.s is null ? "-" : (index.i + 1).ToString(CultureInfo.InvariantCulture)).Append('\n');
+            }
+        }
+        if (WorkspaceSync is { } sync)
+        {
+            sb.Append("ts=").Append(ts).Append(" event=workspace_sync")
+                .Append(" state=").Append(Enum.IsDefined(sync.State) ? sync.State : "Unknown")
+                .Append(" proposed_refs=").Append(Math.Max(0, sync.ProposedReferenceCount))
+                .Append(" removed_refs=").Append(sync.RemovedReferenceCount is >= 0 ? sync.RemovedReferenceCount.Value.ToString(CultureInfo.InvariantCulture) : "unknown")
+                .Append(" backup_present=").Append(sync.BackupDirectory is null ? "false" : "true")
+                .Append(" code=").Append(SyncLogCodes.Contains(sync.ErrorCode ?? "") ? sync.ErrorCode : sync.ErrorCode is null ? "-" : "OTHER_SYNC_ERROR")
+                .Append(" observed_utc=").Append(sync.ObservedUtc.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)).Append('\n');
+        }
         return sb.ToString();
+    }
+
+    private static readonly HashSet<string> SyncLogCodes = new(StringComparer.Ordinal)
+    {
+        "SYNC_PRODUCTION_VERSION_NOT_ALLOWED", "SYNC_BACKUP_ROOT_REQUIRED", "SYNC_PHYSICAL_CONTEXT_INVALID",
+        "SYNC_CANCELED", "SYNC_COORDINATION_FAILED", "SYNC_RETRY_CONTEXT_INVALID", "SYNC_RECOVERY_REQUIRED",
+        "SYNC_PREPARE_FAILED", "SYNC_APPLY_FAILED", "SYNC_PROCESS_NOT_INACTIVE", "SYNC_BACKUP_INVALID",
+        "SYNC_SOURCE_UNKNOWN_OR_CHANGED", "SYNC_SOURCE_IDENTITY_CHANGED", "SYNC_CANDIDATE_CHANGED",
+        "SYNC_ARTIFACT_EXISTS_OR_UNSAFE", "SYNC_UNFINISHED_CANDIDATE", "SYNC_PHYSICAL_PROOF_INVALID",
+        "SYNC_LOG_ABSENCE_UNKNOWN", "SYNC_NO_ELIGIBLE_REMOVALS", "SYNC_REFERENCE_SNAPSHOT_UNKNOWN",
+        "SYNC_REPORT_PLAN_MISMATCH", "SYNC_RECOVERY_UNVERIFIABLE", "SYNC_RECOVERY_CANCELED",
+        "SYNC_REPORT_STATE_INVALID",
+    };
+
+    private static OutcomeSessionRow ProjectSession(PostCleanupSessionResult source, bool globalUnknown)
+    {
+        var categories = new HashSet<OutcomeResidueCategory>();
+        if (source.ObservedLogCount > 0) categories.Add(OutcomeResidueCategory.SessionLog);
+        if (source.WorkspaceReferenceCount > 0) categories.Add(OutcomeResidueCategory.WorkspaceMetadata);
+        foreach (var target in source.Targets.Where(x => x.Presence == TargetPresence.Present))
+            categories.Add(target.Category switch
+            {
+                CleanupCategory.SessionLog => OutcomeResidueCategory.SessionLog,
+                CleanupCategory.DedicatedCache => OutcomeResidueCategory.DedicatedCache,
+                CleanupCategory.Attachment => OutcomeResidueCategory.Attachment,
+                _ => OutcomeResidueCategory.OtherPhysical,
+            });
+        var invalid = !Enum.IsDefined(source.State) || source.ObservedLogCount < 0 || source.WorkspaceReferenceCount < 0
+            || source.Targets.Any(x => !Enum.IsDefined(x.Presence));
+        var state = invalid ? SessionCleanupState.Unknown : source.State;
+        return new OutcomeSessionRow(source.SessionId, state, categories.OrderBy(x => x).ToArray(),
+            source.Targets.Count(x => x.Presence == TargetPresence.Present), source.Targets.Count(x => x.Presence == TargetPresence.Absent),
+            source.Targets.Count(x => x.Presence == TargetPresence.Unknown || !Enum.IsDefined(x.Presence)), Math.Max(0, source.ObservedLogCount),
+            source.WorkspaceReferenceCount >= 0 ? source.WorkspaceReferenceCount : null,
+            globalUnknown || source.HasUnknowns || state == SessionCleanupState.Unknown);
+    }
+
+    private static IEnumerable<SessionResidueIssue> RelationIssues(SessionResidueSnapshot? snapshot)
+    {
+        if (snapshot is null) yield break;
+        foreach (var session in snapshot.Sessions)
+            foreach (var item in session.Items.Where(x => x.Scope == SessionResidueScope.UnknownReference))
+                yield return new SessionResidueIssue(item.Reason ?? "AUDIT_RELATION_UNKNOWN", item.EvidencePath, session.SessionId);
+        foreach (var item in snapshot.UnattributedItems.Where(x => x.Scope == SessionResidueScope.UnknownReference))
+            yield return new SessionResidueIssue(item.Reason ?? "AUDIT_RELATION_UNKNOWN", item.EvidencePath, null);
     }
 
     private static string SafeCode(string code) =>
