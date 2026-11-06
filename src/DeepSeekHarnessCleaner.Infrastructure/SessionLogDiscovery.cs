@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security;
+using DeepSeekHarnessCleaner.Application;
 
 namespace DeepSeekHarnessCleaner.Infrastructure;
 
@@ -47,11 +48,11 @@ public sealed record DiscoveryResult(
 /// </summary>
 public sealed class SessionLogDiscovery
 {
-    public const string NotWhitelistedReason = "NOT_WHITELISTED";
-    public const string UnexpectedLocationReason = "UNEXPECTED_LOCATION";
+    public const string NotWhitelistedReason = ErrorCodes.NotWhitelisted;
+    public const string UnexpectedLocationReason = ErrorCodes.UnexpectedLocation;
     public const string ReparseReason = PathGuard.PathReparseErrorCode;
     public const string FileAccessReason = PathGuard.FileAccessDeniedErrorCode;
-    public const string MissingReason = "MISSING";
+    public const string MissingReason = ErrorCodes.Missing;
 
     private readonly PathGuard _guard;
 

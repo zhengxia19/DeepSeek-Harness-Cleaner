@@ -49,7 +49,7 @@ public sealed class CacheCleanupSelection
 
     public const string WorkspaceReason = "WORKSPACE_NEVER_CLEANED";
     public const string OutOfScopeReason = "OUT_OF_CACHE_SCOPE";
-    public const string StructureMismatchReason = "CACHE_STRUCTURE_MISMATCH";
+    public const string StructureMismatchReason = ErrorCodes.CacheStructureMismatch;
     public const string NotSelectedReason = "CACHE_NOT_SELECTED";
     public const string DuplicateReason = "CACHE_DUPLICATE_PATH";
 

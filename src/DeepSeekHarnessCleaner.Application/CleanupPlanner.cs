@@ -61,7 +61,7 @@ public sealed record DedicatedCacheEvidence(
 /// </summary>
 public sealed class CleanupPlanner
 {
-    private const string CodeRootInvalid = "ROOT_INVALID";
+    private const string CodeRootInvalid = ErrorCodes.RootInvalid;
 
     /// <summary>生成计划。<paramref name="selectedSessions"/> 为用户选择（含日期筛选结果）的完整会话集合。</summary>
     public CleanupPlanResult Build(

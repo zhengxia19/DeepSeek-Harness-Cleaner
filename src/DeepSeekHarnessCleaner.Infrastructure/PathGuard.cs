@@ -30,10 +30,10 @@ public sealed record PathCheckResult(
 /// </summary>
 public sealed class PathGuard
 {
-    public const string RootInvalidErrorCode = "ROOT_INVALID";
-    public const string PathReparseErrorCode = "PATH_REPARSE";
-    public const string PathEscapeErrorCode = "PATH_ESCAPE";
-    public const string FileAccessDeniedErrorCode = "FILE_ACCESS_DENIED";
+    public const string RootInvalidErrorCode = ErrorCodes.RootInvalid;
+    public const string PathReparseErrorCode = ErrorCodes.PathReparse;
+    public const string PathEscapeErrorCode = ErrorCodes.PathEscape;
+    public const string FileAccessDeniedErrorCode = ErrorCodes.FileAccessDenied;
 
     /// <summary>会话文件名白名单：session.jsonl(.zstd)、session.vN.jsonl(.zstd)，N 为正整数（design.md §3）。大小写敏感。单一实现：白名单判定与代际解析共用此正则（S05）。</summary>
     private static readonly Regex SessionFileNamePattern =

@@ -135,5 +135,5 @@
 - 目标：同名错误码字符串全仓单一定义点；`OutcomeReport.AuditLogCodes` 白名单由常量组装而非重复字面量。
 - 实施内容：新建 internal 静态错误码常量类（按族分组），折叠已确认重复：`ZSTD_TRUNCATED`（`SessionEventReader.cs:58` 与 `SessionHeaderReader.cs:53` 两处定义）；将 `OutcomeReport.cs:62-80` 白名单中的字面量替换为常量引用；各选择器 `*DuplicateReason` 等仅单处定义但被白名单重复字面量引用的码同步引用常量。错误码字符串值一律不改。
 - 源码映射：`SessionEventReader.cs:58`、`SessionHeaderReader.cs:53`、`OutcomeReport.cs:62-80`、各 `*Reason`/`Code*` 常量定义处。
-- 验收：[ ] 编译零警告；[ ] 单元测试全过；[ ] 新增测试：AuditLogCodes 覆盖全部已定义错误码常量（反射或清单断言）；[ ] 提交信息记录折叠的重复定义清单。
+- 验收：[x] 编译零警告；[x] 单元测试全过（681/698，17 项失败与符号链接权限基线同名集一致，见 acceptance 已知环境问题）；[x] 新增测试：AuditLogCodes 覆盖全部已定义错误码常量（反射或清单断言）；[x] 提交信息记录折叠的重复定义清单。
 - 最小验证：`dotnet test --no-restore`。

@@ -11,7 +11,7 @@ namespace DeepSeekHarnessCleaner.Infrastructure;
 public sealed class RootLocator
 {
     public const string DshHomeEnvironmentVariable = "DSH_HOME";
-    public const string RootInvalidErrorCode = "ROOT_INVALID";
+    public const string RootInvalidErrorCode = PathGuard.RootInvalidErrorCode;
 
     /// <summary>.dsh 根必须同时存在的顶层结构目录（architecture.md §5 受控区域；ROOT-20261104：attachments 为 DSH 懒创建，降为可选）。</summary>
     private static readonly string[] DshRequiredDirs = ["sessions", "storages"];

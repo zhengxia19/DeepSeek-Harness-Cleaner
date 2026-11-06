@@ -1,4 +1,5 @@
 using System.Security;
+using DeepSeekHarnessCleaner.Application;
 
 namespace DeepSeekHarnessCleaner.Infrastructure;
 
@@ -51,10 +52,10 @@ public sealed class SessionCacheIndex
     public const string ProjCacheJsonName = "session_projcache.json";
     public const string CacheExtension = ".json";
 
-    public const string StructureMismatchReason = "CACHE_STRUCTURE_MISMATCH";
-    public const string NameCollisionReason = "CACHE_NAME_COLLISION";
-    public const string NoInventoryReason = "CACHE_INVENTORY_MISSING";
-    public const string NotInInventoryReason = "CACHE_ID_NOT_IN_INVENTORY";
+    public const string StructureMismatchReason = ErrorCodes.CacheStructureMismatch;
+    public const string NameCollisionReason = ErrorCodes.CacheNameCollision;
+    public const string NoInventoryReason = ErrorCodes.CacheInventoryMissing;
+    public const string NotInInventoryReason = ErrorCodes.CacheIdNotInInventory;
     public const string ReparseReason = PathGuard.PathReparseErrorCode;
     public const string FileAccessReason = PathGuard.FileAccessDeniedErrorCode;
 

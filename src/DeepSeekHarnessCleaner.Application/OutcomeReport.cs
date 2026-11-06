@@ -61,21 +61,21 @@ public sealed class OutcomeReport
     // Closed code vocabulary for new audit events: never log free text, paths, IDs, or credentials disguised as codes.
     private static readonly HashSet<string> AuditLogCodes = new(StringComparer.Ordinal)
     {
-        "POST_SCAN_FAILED", "POST_UI_SCAN_FAILED", "POST_PRE_AUDIT_MISSING", "POST_AUDIT_PLAN_MISMATCH",
-        "POST_AUDIT_ROOT_INVALID", "POST_AUDIT_ROOT_MISMATCH", "POST_AUDIT_ROOT_UNAVAILABLE", "POST_AUDIT_READ_FAILED",
-        "POST_TARGET_ASSOCIATION_UNKNOWN", "POST_TARGET_UNKNOWN", "POST_TARGET_CHANGED_TYPE", "POST_TARGET_UNREADABLE",
-        "REPORT_POST_AUDIT_PLAN_MISMATCH", "WORKSPACE_MISSING", "WORKSPACE_READ_FAILED", "WORKSPACE_JSON_INVALID",
-        "WORKSPACE_VERSION_UNSUPPORTED", "WORKSPACE_PER_RECORD_UNSUPPORTED", "WORKSPACE_LAYOUT_AMBIGUOUS",
-        "WORKSPACE_DUPLICATE_FIELD", "WORKSPACE_NOT_INITIALIZED", "WORKSPACE_TRANSACTION_UNKNOWN",
-        "WORKSPACE_IDS_INVALID", "WORKSPACE_REGISTRY_MISMATCH", "WORKSPACE_MEMBER_AMBIGUOUS",
-        "WORKSPACE_ARCHIVE_PIN_CONFLICT", "WORKSPACE_RECORD_INVALID", "WORKSPACE_TOO_LARGE",
-        "ATTACHMENT_REFERENCE_COVERAGE_UNKNOWN", "ATTACHMENT_SESSION_COVERAGE_UNKNOWN", "REFERENCE_UNREADABLE",
-        "REFERENCE_DECODE_INCOMPLETE", "REFERENCE_READ_LIMIT", "ATTACHMENT_CHANGED", "ATTACHMENT_ROOT_MISSING",
-        "ATTACHMENT_FILE_MISSING", "ATTACHMENT_RELATION_UNKNOWN", "AUDIT_RELATION_UNKNOWN",
-        "SESSION_IDENTITY_UNKNOWN", "SESSION_IDENTITY_DUPLICATE", "LOG_PATH_REJECTED", "LOG_UNREADABLE",
-        "PATH_REPARSE", "PATH_ESCAPE", "ROOT_INVALID", "ROOT_UNREADABLE", "FILE_ACCESS_DENIED",
-        "CACHE_STRUCTURE_MISMATCH", "CACHE_NAME_COLLISION", "CACHE_ID_NOT_IN_INVENTORY", "CACHE_INVENTORY_MISSING",
-        "NOT_WHITELISTED", "UNEXPECTED_LOCATION", "MISSING",
+        ErrorCodes.PostScanFailed, ErrorCodes.PostUiScanFailed, ErrorCodes.PostPreAuditMissing, ErrorCodes.PostAuditPlanMismatch,
+        ErrorCodes.PostAuditRootInvalid, ErrorCodes.PostAuditRootMismatch, ErrorCodes.PostAuditRootUnavailable, ErrorCodes.PostAuditReadFailed,
+        ErrorCodes.PostTargetAssociationUnknown, ErrorCodes.PostTargetUnknown, ErrorCodes.PostTargetChangedType, ErrorCodes.PostTargetUnreadable,
+        ErrorCodes.ReportPostAuditPlanMismatch, ErrorCodes.WorkspaceMissing, ErrorCodes.WorkspaceReadFailed, ErrorCodes.WorkspaceJsonInvalid,
+        ErrorCodes.WorkspaceVersionUnsupported, ErrorCodes.WorkspacePerRecordUnsupported, ErrorCodes.WorkspaceLayoutAmbiguous,
+        ErrorCodes.WorkspaceDuplicateField, ErrorCodes.WorkspaceNotInitialized, ErrorCodes.WorkspaceTransactionUnknown,
+        ErrorCodes.WorkspaceIdsInvalid, ErrorCodes.WorkspaceRegistryMismatch, ErrorCodes.WorkspaceMemberAmbiguous,
+        ErrorCodes.WorkspaceArchivePinConflict, ErrorCodes.WorkspaceRecordInvalid, ErrorCodes.WorkspaceTooLarge,
+        ErrorCodes.AttachmentReferenceCoverageUnknown, ErrorCodes.AttachmentSessionCoverageUnknown, ErrorCodes.ReferenceUnreadable,
+        ErrorCodes.ReferenceDecodeIncomplete, ErrorCodes.ReferenceReadLimit, ErrorCodes.AttachmentChanged, ErrorCodes.AttachmentRootMissing,
+        ErrorCodes.AttachmentFileMissing, ErrorCodes.AttachmentRelationUnknown, ErrorCodes.AuditRelationUnknown,
+        ErrorCodes.SessionIdentityUnknown, ErrorCodes.SessionIdentityDuplicate, ErrorCodes.LogPathRejected, ErrorCodes.LogUnreadable,
+        ErrorCodes.PathReparse, ErrorCodes.PathEscape, ErrorCodes.RootInvalid, ErrorCodes.RootUnreadable, ErrorCodes.FileAccessDenied,
+        ErrorCodes.CacheStructureMismatch, ErrorCodes.CacheNameCollision, ErrorCodes.CacheIdNotInInventory, ErrorCodes.CacheInventoryMissing,
+        ErrorCodes.NotWhitelisted, ErrorCodes.UnexpectedLocation, ErrorCodes.Missing,
     };
 
     public OutcomeReport(OutcomeReportInput input)

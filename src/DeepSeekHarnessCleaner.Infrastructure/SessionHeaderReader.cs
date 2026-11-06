@@ -50,10 +50,10 @@ public sealed class SessionHeaderReader
     public const string HeaderDateInvalidErrorCode = "HEADER_DATE_INVALID";
     public const string HeaderCwdInvalidErrorCode = "HEADER_CWD_INVALID";
     public const string HeaderLineTooLongErrorCode = "HEADER_LINE_TOO_LONG";
-    public const string ZstdTruncatedErrorCode = "ZSTD_TRUNCATED";
-    public const string ZstdCorruptErrorCode = "ZSTD_CORRUPT";
+    public const string ZstdTruncatedErrorCode = SessionEventReader.ZstdTruncatedErrorCode;
+    public const string ZstdCorruptErrorCode = SessionEventReader.ZstdCorruptErrorCode;
     public const string ZstdLimitErrorCode = "ZSTD_LIMIT";
-    public const string FileUnreadableErrorCode = "FILE_UNREADABLE";
+    public const string FileUnreadableErrorCode = SessionEventReader.FileUnreadableErrorCode;
 
     /// <summary>
     /// 读取 <paramref name="fullPath"/> 的首条 header。<paramref name="expectedSessionId"/>
