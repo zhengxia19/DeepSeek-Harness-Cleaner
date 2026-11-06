@@ -92,4 +92,17 @@ public sealed class WorkspaceProductionGateTests
         using var root = FixtureRoot.Create();
         Assert.Null(WorkspaceProductionGate.Read(root.DshHome));
     }
+
+    [Fact]
+    public void DuplicateKeysAreJudgedIdenticallyByWalkerAndGateEntries()
+    {
+        // 同一含重复键 JSON：walker 入口报出重复位置，gate 入口（经 Document→DuplicateField）拒绝绑定。
+        const string json = "{\"name\":\"test-bundle\",\"dsh\":{\"bundle\":{\"patch\":\"./cordis.patch.yml\"}},\"dsh\":{\"bundle\":{\"patch\":\"./cordis.patch.yml\"}}}";
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        Assert.Equal("/dsh", WorkspaceJson.DuplicateField(document.RootElement));
+        using var root = FixtureRoot.Create();
+        var fixture = Create(root.DshHome);
+        fixture.Packages[StorageGateFixture.BundleManifest] = Encoding.UTF8.GetBytes(json);
+        Assert.Null(fixture.Read());
+    }
 }

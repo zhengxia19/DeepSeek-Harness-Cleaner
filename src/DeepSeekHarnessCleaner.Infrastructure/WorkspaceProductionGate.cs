@@ -122,8 +122,10 @@ internal static class WorkspaceProductionGate
     private static JsonDocument Document(byte[]? bytes)
     {
         if (bytes is null) throw new InvalidDataException();
-        var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 32, AllowDuplicateProperties = false });
-        if (document.RootElement.ValueKind == JsonValueKind.Object) return document;
+        // Duplicate-key detection uses the WorkspaceJson.DuplicateField walker, not the STJ
+        // AllowDuplicateProperties option (whose semantics depend on the STJ version).
+        var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 32 });
+        if (document.RootElement.ValueKind == JsonValueKind.Object && WorkspaceJson.DuplicateField(document.RootElement) is null) return document;
         document.Dispose();
         throw new InvalidDataException();
     }

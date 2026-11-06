@@ -111,7 +111,7 @@
 - 目标：JSON 对象重复属性检测只保留一种机制；不同文件同一输入判定一致。
 - 实施内容：现存两机制：`WorkspaceJson.DuplicateField`（walker，4 消费者）与 `WorkspaceProductionGate.cs:125` 的 `AllowDuplicateProperties=false` 解析器选项。统一为 walker（解析器选项语义依赖 STJ 版本行为，不可控）；ProductionGate 改为加载后跑 `DuplicateField`。zip 条目重复（`BackupManifest` DUPLICATE_ENTRY、`WorkspaceReleaseReader.cs:109`）与会话 ID 重复属不同语义，不在本任务。
 - 源码映射：`WorkspaceJson.cs:35-53`、`WorkspaceProductionGate.cs:125`。
-- 验收：[ ] 编译零警告；[ ] 既有重复键负向测试（含 ProductionGate 路径）通过且错误码不变；[ ] 新增测试：同一含重复键 JSON 经两入口判定一致；[ ] 单元测试全过。
+- 验收：[x] 编译零警告；[x] 既有重复键负向测试（含 ProductionGate 路径）通过且错误码不变；[x] 新增测试：同一含重复键 JSON 经两入口判定一致；[x] 单元测试全过。
 - 最小验证：`dotnet test --no-restore`。
 
 ### B06 桌面缓存目录白名单删除平行副本
