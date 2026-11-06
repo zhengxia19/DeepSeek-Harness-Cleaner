@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Security.AccessControl;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using DeepSeekHarnessCleaner.Application;
 using DeepSeekHarnessCleaner.Domain;
 
@@ -81,85 +82,28 @@ public sealed class WorkspaceMetadataWriter
             using var input = WorkspaceFileIdentity.OpenForRename(plan.WorkspacePath);
             Require(WorkspaceFileIdentity.Read(input) == preparation.Identity, "SYNC_SOURCE_IDENTITY_CHANGED");
             var original = WorkspaceMetadataTransform.Load(plan.WorkspacePath);
-            RequireMissing(plan.DataHome, lockPath);
-            coordination = new FileStream(lockPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 4096, FileOptions.WriteThrough);
-            ownsLock = true;
-            var lockBytes = Encoding.UTF8.GetBytes(plan.OperationId.ToString("N"));
-            coordination.Write(lockBytes);
-            coordination.Flush(true);
+            // Phase: lock acquisition.
+            AcquireLock(plan, lockPath, ref coordination, ref ownsLock, out var lockBytes);
+            // Phase: candidate build + intent/candidate writes.
             var appliedUtc = DateTimeOffset.UtcNow;
             var ids = Eligible(plan);
             var bytes = WorkspaceMetadataTransform.Build(original, ids, appliedUtc);
             var candidateHash = Hash(bytes);
-            var intent = new WriteIntent(1, plan.OperationId, plan.CleanupPlanId, plan.RootFingerprint,
-                preparation.Identity, candidateHash, appliedUtc, backup.ManifestSha256, backup.VerificationSha256);
-            WriteNew(Path.GetDirectoryName(backup.RawPath)!, journal, JsonSerializer.SerializeToUtf8Bytes(intent, RecordJson), ct);
-            _fault?.Invoke(WorkspaceWritePoint.IntentFlushed);
-            WriteNew(plan.DataHome, candidatePath, bytes, ct);
-            using var candidate = WorkspaceFileIdentity.OpenForRename(candidatePath);
-            var candidateIdentity = WorkspaceFileIdentity.Read(candidate);
-            Require(candidateIdentity.Sha256 == candidateHash, "SYNC_CANDIDATE_CHANGED");
-            WorkspaceMetadataTransform.Validate(original, WorkspaceMetadataTransform.Load(candidatePath), ids,
-                appliedUtc.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture));
-            _fault?.Invoke(WorkspaceWritePoint.CandidateFlushed);
-            Check(plan, backup, ct, ownsLock: true, storageBinding: preparation.StorageBinding);
-            Require(WorkspaceFileIdentity.Read(input) == preparation.Identity, "SYNC_SOURCE_IDENTITY_CHANGED");
-            using (var current = Open(plan.WorkspacePath))
-                Require(WorkspaceFileIdentity.Read(current) == preparation.Identity, "SYNC_SOURCE_IDENTITY_CHANGED");
-            using (var current = Open(candidatePath))
-                Require(WorkspaceFileIdentity.Read(current) == candidateIdentity, "SYNC_CANDIDATE_CHANGED");
+            WriteIntentAndCandidate(plan, backup, preparation, journal, candidatePath, appliedUtc, ids, bytes, candidateHash, ct);
+            // Phase: candidate verification + rechecks (handle stays open through the commit window).
+            using var candidate = VerifyCandidate(plan, backup, preparation, input, original, ids, appliedUtc, candidatePath, candidateHash, ct, out var candidateIdentity);
             var operationRoot = Path.GetDirectoryName(backup.RawPath)!;
             var previousPath = Path.Combine(operationRoot, "workspace.replaced.json");
-            RequireMissing(operationRoot, previousPath);
-            var applying = Path.Combine(operationRoot, "write-applying.json");
-            WriteNew(operationRoot, applying, JsonSerializer.SerializeToUtf8Bytes(new { plan.OperationId, candidateHash }, RecordJson), ct);
-            _fault?.Invoke(WorkspaceWritePoint.BeforeReplace);
-            // Recheck after the deterministic fault seam too. Existing source handles deny new content writers.
-            Check(plan, backup, ct, ownsLock: true, storageBinding: preparation.StorageBinding);
-            using (var current = Open(plan.WorkspacePath))
-                Require(WorkspaceFileIdentity.Read(current) == preparation.Identity, "SYNC_SOURCE_IDENTITY_CHANGED");
-            Require(new PathGuard().Check(plan.DataHome, candidatePath).IsAllowed, "SYNC_CANDIDATE_PATH_INVALID");
-            using (var current = Open(candidatePath))
-                Require(WorkspaceFileIdentity.Read(current) == candidateIdentity, "SYNC_CANDIDATE_CHANGED");
-            // Both handles deny external writes/rename; use those identities, never reopen a replacement by name.
-            var sections = AccessControlSections.Access | AccessControlSections.Owner | AccessControlSections.Group;
-            var security = new FileInfo(plan.WorkspacePath).GetAccessControl(sections);
-            var copy = new FileSecurity();
-            copy.SetSecurityDescriptorBinaryForm(security.GetSecurityDescriptorBinaryForm(), sections);
-            new FileInfo(candidatePath).SetAccessControl(copy);
-            Require(security.GetSecurityDescriptorSddlForm(sections)
-                == new FileInfo(candidatePath).GetAccessControl(sections).GetSecurityDescriptorSddlForm(sections), "SYNC_SECURITY_CHANGED");
-            _fault?.Invoke(WorkspaceWritePoint.CommitWindow);
-            ct.ThrowIfCancellationRequested();
-            Require(_probe.Probe().AllowsWrite, "SYNC_PROCESS_NOT_INACTIVE");
-            WorkspaceFileIdentity.RenameNoReplace(input, previousPath);
-            _fault?.Invoke(WorkspaceWritePoint.OriginalRetained);
-            Require(_probe.Probe().AllowsWrite, "SYNC_PROCESS_NOT_INACTIVE");
-            RequireMissing(plan.DataHome, plan.WorkspacePath);
-            WorkspaceFileIdentity.RenameNoReplace(candidate, plan.WorkspacePath);
-            _fault?.Invoke(WorkspaceWritePoint.Replaced);
-            // Once replacement is attempted, verify the outcome even if cancellation has arrived.
-            Require(new PathGuard().Check(plan.DataHome, plan.WorkspacePath).IsAllowed, "SYNC_POST_PATH_INVALID");
-            Require(new PathGuard().Check(operationRoot, previousPath).IsAllowed, "SYNC_PREVIOUS_PATH_INVALID");
-            using (var previous = Open(previousPath))
-                Require(WorkspaceFileIdentity.Read(previous) == preparation.Identity, "SYNC_REPLACED_SOURCE_MISMATCH");
-            using (var current = Open(plan.WorkspacePath))
-                Require(WorkspaceFileIdentity.Read(current).Sha256 == candidateHash, "SYNC_POST_HASH_INVALID");
-            WorkspaceMetadataTransform.Validate(original, WorkspaceMetadataTransform.Load(plan.WorkspacePath), ids,
-                appliedUtc.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture));
-            var index = new WorkspaceReferenceReader().Read(plan.DataHome, FileShare.Read | FileShare.Delete);
-            Require(index.Status == WorkspaceReferenceStatus.Known && index.SnapshotSha256 == candidateHash
-                && !index.References.Any(x => ids.Contains(x.SessionId)), "SYNC_POST_REFERENCES_INVALID");
-            Require(new WorkspaceBackupService(_probe).Verify(plan, backup).Success, "SYNC_BACKUP_INVALID");
-            CheckPhysical(plan, ids, CancellationToken.None);
+            // Phase: commit window (security descriptor copy + double rename).
+            CommitWindow(plan, backup, preparation, input, candidate, candidateIdentity, candidatePath, operationRoot, previousPath, candidateHash, ct);
+            // Phase: post-replacement verification.
+            VerifyOutcome(plan, backup, preparation, original, ids, candidateHash, appliedUtc, operationRoot, previousPath, ct);
             var completed = Path.Combine(operationRoot, "write-applied.json");
             WriteNew(operationRoot, completed, JsonSerializer.SerializeToUtf8Bytes(new { plan.OperationId, candidateHash, appliedUtc }, RecordJson), CancellationToken.None);
             _fault?.Invoke(WorkspaceWritePoint.Verified);
             Require(_probe.Probe().AllowsWrite, "SYNC_PROCESS_NOT_INACTIVE");
-            coordination.Dispose();
-            coordination = null;
-            Require(new PathGuard().Check(plan.DataHome, lockPath).IsAllowed && File.ReadAllBytes(lockPath).SequenceEqual(lockBytes), "SYNC_LOCK_CHANGED");
-            File.Delete(lockPath); // Only this operation's exact tool lock, after successful replacement verification.
+            // Phase: lock release after successful replacement verification.
+            ReleaseLock(plan, lockPath, lockBytes, ref coordination);
             _fault?.Invoke(WorkspaceWritePoint.OutcomeRecorded);
             return new(WorkspaceSyncState.Applied, null, candidateHash, appliedUtc, journal);
         }
@@ -170,6 +114,115 @@ public sealed class WorkspaceMetadataWriter
 
         WorkspaceWriteResult Failure(string code) => new(ownsLock ? WorkspaceSyncState.RecoveryRequired : WorkspaceSyncState.Blocked,
             code, null, null, ownsLock ? journal : null);
+    }
+
+    private static void AcquireLock(WorkspaceMetadataPlan plan, string lockPath, ref FileStream? coordination, ref bool ownsLock, out byte[] lockBytes)
+    {
+        RequireMissing(plan.DataHome, lockPath);
+        coordination = new FileStream(lockPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 4096, FileOptions.WriteThrough);
+        ownsLock = true;
+        lockBytes = Encoding.UTF8.GetBytes(plan.OperationId.ToString("N"));
+        coordination.Write(lockBytes);
+        coordination.Flush(true);
+    }
+
+    private void WriteIntentAndCandidate(WorkspaceMetadataPlan plan, WorkspaceBackupEvidence backup,
+        WorkspaceWritePreparation preparation, string journal, string candidatePath,
+        DateTimeOffset appliedUtc, HashSet<string> ids, byte[] bytes, string candidateHash, CancellationToken ct)
+    {
+        var intent = new WriteIntent(1, plan.OperationId, plan.CleanupPlanId, plan.RootFingerprint,
+            preparation.Identity, candidateHash, appliedUtc, backup.ManifestSha256, backup.VerificationSha256);
+        WriteNew(Path.GetDirectoryName(backup.RawPath)!, journal, JsonSerializer.SerializeToUtf8Bytes(intent, RecordJson), ct);
+        _fault?.Invoke(WorkspaceWritePoint.IntentFlushed);
+        WriteNew(plan.DataHome, candidatePath, bytes, ct);
+    }
+
+    private FileStream VerifyCandidate(WorkspaceMetadataPlan plan, WorkspaceBackupEvidence backup,
+        WorkspaceWritePreparation preparation, FileStream input, JsonObject original, HashSet<string> ids,
+        DateTimeOffset appliedUtc, string candidatePath, string candidateHash, CancellationToken ct,
+        out WorkspaceFileIdentity candidateIdentity)
+    {
+        var candidate = WorkspaceFileIdentity.OpenForRename(candidatePath);
+        try
+        {
+            candidateIdentity = WorkspaceFileIdentity.Read(candidate);
+            Require(candidateIdentity.Sha256 == candidateHash, "SYNC_CANDIDATE_CHANGED");
+            WorkspaceMetadataTransform.Validate(original, WorkspaceMetadataTransform.Load(candidatePath), ids,
+                appliedUtc.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture));
+            _fault?.Invoke(WorkspaceWritePoint.CandidateFlushed);
+            Check(plan, backup, ct, ownsLock: true, storageBinding: preparation.StorageBinding);
+            Require(WorkspaceFileIdentity.Read(input) == preparation.Identity, "SYNC_SOURCE_IDENTITY_CHANGED");
+            using (var current = Open(plan.WorkspacePath))
+                Require(WorkspaceFileIdentity.Read(current) == preparation.Identity, "SYNC_SOURCE_IDENTITY_CHANGED");
+            using (var current = Open(candidatePath))
+                Require(WorkspaceFileIdentity.Read(current) == candidateIdentity, "SYNC_CANDIDATE_CHANGED");
+            return candidate;
+        }
+        catch { candidate.Dispose(); throw; }
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")] // Caller Apply guards with SYNC_PLATFORM_UNSUPPORTED.
+    private void CommitWindow(WorkspaceMetadataPlan plan, WorkspaceBackupEvidence backup,
+        WorkspaceWritePreparation preparation, FileStream input, FileStream candidate,
+        WorkspaceFileIdentity candidateIdentity, string candidatePath, string operationRoot,
+        string previousPath, string candidateHash, CancellationToken ct)
+    {
+        RequireMissing(operationRoot, previousPath);
+        var applying = Path.Combine(operationRoot, "write-applying.json");
+        WriteNew(operationRoot, applying, JsonSerializer.SerializeToUtf8Bytes(new { plan.OperationId, candidateHash }, RecordJson), ct);
+        _fault?.Invoke(WorkspaceWritePoint.BeforeReplace);
+        // Recheck after the deterministic fault seam too. Existing source handles deny new content writers.
+        Check(plan, backup, ct, ownsLock: true, storageBinding: preparation.StorageBinding);
+        using (var current = Open(plan.WorkspacePath))
+            Require(WorkspaceFileIdentity.Read(current) == preparation.Identity, "SYNC_SOURCE_IDENTITY_CHANGED");
+        Require(new PathGuard().Check(plan.DataHome, candidatePath).IsAllowed, "SYNC_CANDIDATE_PATH_INVALID");
+        using (var current = Open(candidatePath))
+            Require(WorkspaceFileIdentity.Read(current) == candidateIdentity, "SYNC_CANDIDATE_CHANGED");
+        // Both handles deny external writes/rename; use those identities, never reopen a replacement by name.
+        var sections = AccessControlSections.Access | AccessControlSections.Owner | AccessControlSections.Group;
+        var security = new FileInfo(plan.WorkspacePath).GetAccessControl(sections);
+        var copy = new FileSecurity();
+        copy.SetSecurityDescriptorBinaryForm(security.GetSecurityDescriptorBinaryForm(), sections);
+        new FileInfo(candidatePath).SetAccessControl(copy);
+        Require(security.GetSecurityDescriptorSddlForm(sections)
+            == new FileInfo(candidatePath).GetAccessControl(sections).GetSecurityDescriptorSddlForm(sections), "SYNC_SECURITY_CHANGED");
+        _fault?.Invoke(WorkspaceWritePoint.CommitWindow);
+        ct.ThrowIfCancellationRequested();
+        Require(_probe.Probe().AllowsWrite, "SYNC_PROCESS_NOT_INACTIVE");
+        WorkspaceFileIdentity.RenameNoReplace(input, previousPath);
+        _fault?.Invoke(WorkspaceWritePoint.OriginalRetained);
+        Require(_probe.Probe().AllowsWrite, "SYNC_PROCESS_NOT_INACTIVE");
+        RequireMissing(plan.DataHome, plan.WorkspacePath);
+        WorkspaceFileIdentity.RenameNoReplace(candidate, plan.WorkspacePath);
+        _fault?.Invoke(WorkspaceWritePoint.Replaced);
+    }
+
+    private void VerifyOutcome(WorkspaceMetadataPlan plan, WorkspaceBackupEvidence backup,
+        WorkspaceWritePreparation preparation, JsonObject original, HashSet<string> ids,
+        string candidateHash, DateTimeOffset appliedUtc, string operationRoot, string previousPath, CancellationToken ct)
+    {
+        // Once replacement is attempted, verify the outcome even if cancellation has arrived.
+        Require(new PathGuard().Check(plan.DataHome, plan.WorkspacePath).IsAllowed, "SYNC_POST_PATH_INVALID");
+        Require(new PathGuard().Check(operationRoot, previousPath).IsAllowed, "SYNC_PREVIOUS_PATH_INVALID");
+        using (var previous = Open(previousPath))
+            Require(WorkspaceFileIdentity.Read(previous) == preparation.Identity, "SYNC_REPLACED_SOURCE_MISMATCH");
+        using (var current = Open(plan.WorkspacePath))
+            Require(WorkspaceFileIdentity.Read(current).Sha256 == candidateHash, "SYNC_POST_HASH_INVALID");
+        WorkspaceMetadataTransform.Validate(original, WorkspaceMetadataTransform.Load(plan.WorkspacePath), ids,
+            appliedUtc.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture));
+        var index = new WorkspaceReferenceReader().Read(plan.DataHome, FileShare.Read | FileShare.Delete);
+        Require(index.Status == WorkspaceReferenceStatus.Known && index.SnapshotSha256 == candidateHash
+            && !index.References.Any(x => ids.Contains(x.SessionId)), "SYNC_POST_REFERENCES_INVALID");
+        Require(new WorkspaceBackupService(_probe).Verify(plan, backup).Success, "SYNC_BACKUP_INVALID");
+        CheckPhysical(plan, ids, CancellationToken.None);
+    }
+
+    private static void ReleaseLock(WorkspaceMetadataPlan plan, string lockPath, byte[] lockBytes, ref FileStream? coordination)
+    {
+        coordination!.Dispose();
+        coordination = null;
+        Require(new PathGuard().Check(plan.DataHome, lockPath).IsAllowed && File.ReadAllBytes(lockPath).SequenceEqual(lockBytes), "SYNC_LOCK_CHANGED");
+        File.Delete(lockPath); // Only this operation's exact tool lock, after successful replacement verification.
     }
 
     private void Check(WorkspaceMetadataPlan plan, WorkspaceBackupEvidence backup, CancellationToken ct, bool ownsLock = false,

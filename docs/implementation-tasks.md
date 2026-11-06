@@ -87,7 +87,7 @@
 - 目标：约 90 行的 `Apply` 拆为私有阶段方法，最危险写入路径可分段诊断；行为、错误码、fault seam 顺序完全不变。
 - 实施内容：按现有注释边界拆私有方法（建议：锁获取、候选构建写入、候选校验+复验、提交窗口（安全描述符复制+双 rename）、收尾）；`_fault` 调用点顺序与 `WorkspaceWritePoint` 枚举不动；不新增抽象层。
 - 源码映射：`WorkspaceMetadataWriter.cs:63-~150`（`WorkspaceWritePoint` 各调用点为阶段边界）。
-- 验收：[ ] 编译零警告；[ ] 既有 fault-injection/崩溃点测试逐项通过且各 `WorkspaceWritePoint` 触发顺序不变；[ ] 单元测试全过 + WindowsTests `--roots-only` 全过；[ ] 提交信息记录拆出的方法清单与行数守恒说明。
+- 验收：[x] 编译零警告；[x] 既有 fault-injection/崩溃点测试逐项通过且各 `WorkspaceWritePoint` 触发顺序不变；[x] 单元测试全过 + WindowsTests `--roots-only` 全过；[x] 提交信息记录拆出的方法清单与行数守恒说明。
 - 最小验证：`dotnet test --no-restore`（单元 + roots-only）。
 
 ### B03 祖先 reparse 走查收敛为 PathGuard 单一 helper
