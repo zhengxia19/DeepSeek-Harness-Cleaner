@@ -127,7 +127,7 @@
 - 目标：`WorkspaceBackupEvidence` 不可由公开构造伪造（备份校验通过的事实只能由 WorkspaceBackupService 产生），对齐 `WorkspaceWritePreparation` 既有模式。
 - 实施内容：`WorkspaceBackupEvidence` 记录类型保留，构造器降 internal（消费者均在 Infrastructure，测试经 InternalsVisibleTo 可达）；grep 确认 src 内无 Infrastructure 之外的构造调用；不改字段与消费逻辑。范围仅此一个 DTO：`ResolvedRoots` 等其余公开 DTO 是否同改待本任务实测后另行决定，不预先扩大。
 - 源码映射：`WorkspaceBackupEvidence.cs:4-8`；消费者 `WorkspaceBackupService.cs:86,95`、`WorkspaceMetadataWriter.cs:35,175`、`WorkspaceRecoveryService.cs:41,55,104,113,211`、`WorkspaceSyncCoordinator.cs:64,117`、`WorkspaceWritePreparation.cs:8,12`。
-- 验收：[ ] 编译零警告；[ ] 单元测试全过 + WindowsTests `--roots-only` 全过；[ ] 提交信息说明威胁模型（伪造备份证据进入写链的可构造路径）与证据等级（可构造）。
+- 验收：[x] 编译零警告；[x] 单元测试全过 + WindowsTests `--roots-only` 全过；[x] 提交信息说明威胁模型（伪造备份证据进入写链的可构造路径）与证据等级（可构造）。
 - 最小验证：`dotnet test --no-restore`（单元 + roots-only）。
 
 ### B08 错误码常量折叠
