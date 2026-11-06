@@ -79,7 +79,7 @@
 - 目标：附件索引构建对大量附件不再二次方退化；去重与保序行为不变。
 - 实施内容：`diskIds` 的 `List.Contains` 去重与 `:142` 的 `diskIds.Contains` 查找改用 `HashSet<string>(StringComparer.Ordinal)` 配合原 List 保序；不改首次出现顺序语义。
 - 源码映射：`AttachmentIndex.cs:113-118,142`。
-- 验收：[ ] 编译零警告；[ ] AttachmentIndexTests 全过；[ ] 提交信息记录改动前后复杂度说明。
+- 验收：[x] 编译零警告；[x] AttachmentIndexTests 全过；[x] 提交信息记录改动前后复杂度说明。
 - 最小验证：`dotnet test --no-restore`（AttachmentIndexTests）。
 
 ### B02 WorkspaceMetadataWriter.Apply 拆阶段

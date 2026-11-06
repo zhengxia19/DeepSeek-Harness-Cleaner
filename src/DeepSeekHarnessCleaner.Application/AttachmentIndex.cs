@@ -111,9 +111,10 @@ public sealed class AttachmentIndex
         }
 
         var diskIds = new List<string>();
+        var diskIdSet = new HashSet<string>(StringComparer.Ordinal);
         foreach (var id in attachmentIdsOnDisk)
         {
-            if (!string.IsNullOrWhiteSpace(id) && !diskIds.Contains(id, StringComparer.Ordinal))
+            if (!string.IsNullOrWhiteSpace(id) && diskIdSet.Add(id))
             {
                 diskIds.Add(id);
             }
@@ -139,7 +140,7 @@ public sealed class AttachmentIndex
         var dangling = new List<DanglingAttachmentReference>();
         foreach (var pair in references)
         {
-            if (!diskIds.Contains(pair.Key, StringComparer.Ordinal))
+            if (!diskIdSet.Contains(pair.Key))
             {
                 dangling.Add(new DanglingAttachmentReference(pair.Key, pair.Value));
             }
