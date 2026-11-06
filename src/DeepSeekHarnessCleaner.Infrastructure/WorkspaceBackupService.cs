@@ -139,8 +139,7 @@ public sealed class WorkspaceBackupService
             || root.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Any(x => x == ".." || x.EndsWith(' ') || (x != "." && x.EndsWith('.')))
             || new PathGuard().Check(root, root).ErrorCode != PathGuard.PathEscapeErrorCode)
             throw new IOException("WORKSPACE_BACKUP_ROOT_REJECTED");
-        for (var directory = new DirectoryInfo(root); directory is not null; directory = directory.Parent)
-            if ((File.GetAttributes(directory.FullName) & FileAttributes.ReparsePoint) != 0) throw new IOException("WORKSPACE_BACKUP_REPARSE");
+        if (PathGuard.FindReparseAncestor(root, includeSelf: true, skipMissing: false) is not null) throw new IOException("WORKSPACE_BACKUP_REPARSE");
     }
 
     private static byte[] ReadBounded(string path, int limit, CancellationToken ct)

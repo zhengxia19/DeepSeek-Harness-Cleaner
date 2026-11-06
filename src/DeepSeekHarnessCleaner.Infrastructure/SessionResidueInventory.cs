@@ -27,17 +27,16 @@ public sealed class SessionResidueInventory
             issues.Add(new("ROOT_INVALID", dataHome, null));
             return Result();
         }
-        for (var parent = Directory.GetParent(Path.GetFullPath(dataHome)); parent is not null; parent = parent.Parent)
+        try
         {
-            try
+            if (PathGuard.FindReparseAncestor(dataHome, includeSelf: false, skipMissing: false) is not null)
             {
-                if ((File.GetAttributes(parent.FullName) & FileAttributes.ReparsePoint) == 0) continue;
                 issues.Add(new(PathGuard.PathReparseErrorCode, dataHome, null));
                 return Result();
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-            { issues.Add(new("ROOT_UNREADABLE", dataHome, null)); return Result(); }
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        { issues.Add(new("ROOT_UNREADABLE", dataHome, null)); return Result(); }
         var sessionRoot = Path.Combine(dataHome, "sessions");
         var storageRoot = Path.Combine(dataHome, "storages");
         var pathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;

@@ -86,11 +86,9 @@ public sealed class AttachmentOpener
     private void EnsureSafeCopyRoot()
     {
         // Check every existing ancestor before creating a tool-owned directory.
-        for (var current = new DirectoryInfo(_copyRoot); current is not null; current = current.Parent)
-            if (current.Exists && (current.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("打开副本目录包含重解析点。");
+        if (PathGuard.FindReparseAncestor(_copyRoot, includeSelf: true, skipMissing: true) is not null) throw new IOException("打开副本目录包含重解析点。");
         Directory.CreateDirectory(_copyRoot);
-        for (var current = new DirectoryInfo(_copyRoot); current is not null; current = current.Parent)
-            if ((current.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("打开副本目录包含重解析点。");
+        if (PathGuard.FindReparseAncestor(_copyRoot, includeSelf: true, skipMissing: true) is not null) throw new IOException("打开副本目录包含重解析点。");
     }
 
     private static string? DetectExtension(ReadOnlySpan<byte> bytes)

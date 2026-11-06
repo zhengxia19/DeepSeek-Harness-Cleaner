@@ -81,8 +81,6 @@ public sealed class WindowStateStore
 
     private static void RejectReparse(string path)
     {
-        for (var current = new FileInfo(path) as FileSystemInfo; current is not null;
-            current = current is DirectoryInfo directory ? directory.Parent : new FileInfo(current.FullName).Directory)
-            if (current.Exists && (current.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("窗口记录路径包含重解析点。");
+        if (PathGuard.FindReparseAncestor(path, includeSelf: true, skipMissing: true) is not null) throw new IOException("窗口记录路径包含重解析点。");
     }
 }

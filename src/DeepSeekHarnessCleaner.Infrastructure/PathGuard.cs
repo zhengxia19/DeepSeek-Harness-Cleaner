@@ -53,6 +53,43 @@ public sealed class PathGuard
     }
 
     /// <summary>
+    /// 祖先 reparse 走查（design.md §7.2，B03 单一实现）：自卷根向下逐段走查到 path，includeSelf 决定是否含 path 本身。
+    /// Check 的走查仅覆盖根→目标内部，ValidateRoot 仅查根自身，均不含根之上的祖先，故此处独立实现。
+    /// skipMissing=true 跳过不存在条目继续（尚未创建的路径）；否则 IO 失败原样抛出，由调用方按各自返回形态归类。
+    /// 返回首个 reparse point 的完整路径；无则 null。
+    /// </summary>
+    public static string? FindReparseAncestor(string path, bool includeSelf, bool skipMissing)
+    {
+        var full = Path.GetFullPath(path);
+        var prefix = Path.GetPathRoot(full);
+        if (prefix is null)
+            return null;
+        if (IsReparsePath(prefix, skipMissing))
+            return prefix;
+        var segments = full[prefix.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < segments.Length && (includeSelf || i < segments.Length - 1); i++)
+        {
+            prefix = Path.Combine(prefix, segments[i]);
+            if (IsReparsePath(prefix, skipMissing))
+                return prefix;
+        }
+
+        return null;
+    }
+
+    private static bool IsReparsePath(string path, bool skipMissing)
+    {
+        try
+        {
+            return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;
+        }
+        catch (Exception ex) when (skipMissing && (ex is DirectoryNotFoundException or FileNotFoundException))
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// 校验 target 是否可作为 root 内的受控删除候选。
     /// 拒绝：字面 <c>..</c> 段、根外/跨根、根目录本身、UNC/设备路径、ADS、
     /// 根到目标每一级的 reparse point、目录目标（除非 allowDirectory）。

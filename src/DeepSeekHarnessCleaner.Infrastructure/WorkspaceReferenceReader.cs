@@ -26,8 +26,7 @@ public sealed class WorkspaceReferenceReader
             if (rootCheck.ErrorCode != PathGuard.PathEscapeErrorCode) return Failure(rootCheck.ErrorCode ?? PathGuard.RootInvalidErrorCode);
             var fullHome = Path.GetFullPath(dataHome);
             // Root ancestors may themselves be junctions; do not traverse such aliases for evidence.
-            for (var parent = Directory.GetParent(fullHome); parent is not null; parent = parent.Parent)
-                if ((File.GetAttributes(parent.FullName) & FileAttributes.ReparsePoint) != 0) return Failure(PathGuard.PathReparseErrorCode);
+            if (PathGuard.FindReparseAncestor(fullHome, includeSelf: false, skipMissing: false) is not null) return Failure(PathGuard.PathReparseErrorCode);
             var layout = Path.Combine(dataHome, "storages", "workspace");
             try
             {

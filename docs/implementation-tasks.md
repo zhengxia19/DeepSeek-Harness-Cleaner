@@ -95,7 +95,7 @@
 - 目标：祖先目录逐段 reparse 走查一处实现、7 处复用；各处错误码不变。S04 已证明 `PathGuard.Check` 不覆盖祖先，故新增命名方法（如 `CheckAncestors`），不并入 Check。
 - 实施内容：在 PathGuard 实现"自根向下逐段（或自路径向上至根）检查现存祖先的 ReparsePoint"；替换以下各处的手写走查：`PostCleanupAuditor.cs:27-28`、`RootLocator.cs:94-101`（前缀组件式）、`SessionResidueInventory.cs:30-34`、`WorkspaceReferenceReader.cs:29-30`、`AttachmentOpener.cs:88-93`（创建路径式）、`WindowStateStore.cs:82-86`、`WorkspaceBackupService.cs:143`（备份根子目录式）。各处的返回形态（异常/错误码/Unknown）保留，仅走查循环收敛。
 - 源码映射：上列 7 处 + `PathGuard.cs`。
-- 验收：[ ] 编译零警告；[ ] 既有 reparse 负向测试逐项通过且错误码不变；[ ] 新增测试：同一祖先 junction 场景下 7 个入口全部拒绝（可复用现有夹具）；[ ] 单元测试全过 + WindowsTests `--roots-only` 全过；[ ] 提交信息记录替换点清单。
+- 验收：[x] 编译零警告；[x] 既有 reparse 负向测试逐项通过且错误码不变；[x] 新增测试：同一祖先 junction 场景下 7 个入口全部拒绝（可复用现有夹具）；[x] 单元测试全过 + WindowsTests `--roots-only` 全过；[x] 提交信息记录替换点清单。
 - 最小验证：`dotnet test --no-restore`（单元 + roots-only）。
 
 ### B04 字节限额读取实现统一

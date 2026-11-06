@@ -24,8 +24,7 @@ public sealed class PostCleanupAuditor
             var dataHome = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(sessionRoot)))!;
             var guard = new PathGuard();
             if (guard.Check(dataHome, dataHome).ErrorCode != PathGuard.PathEscapeErrorCode) return Unknown("POST_AUDIT_ROOT_UNAVAILABLE");
-            for (var parent = Directory.GetParent(dataHome); parent is not null; parent = parent.Parent)
-                if ((File.GetAttributes(parent.FullName) & FileAttributes.ReparsePoint) != 0) return Unknown(PathGuard.PathReparseErrorCode);
+            if (PathGuard.FindReparseAncestor(dataHome, includeSelf: false, skipMissing: false) is not null) return Unknown(PathGuard.PathReparseErrorCode);
             var after = new SessionResidueInventory().Scan(dataHome, ids, [], ct);
             var observations = new List<TargetPresenceEvidence>();
             foreach (var target in before.Targets)
