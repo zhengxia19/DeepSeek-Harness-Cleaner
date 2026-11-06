@@ -69,3 +69,71 @@
 - 源码映射：`PathGuard.cs:42-43`、`SessionLogDiscovery.cs:109,123`。
 - 验收：[x] 编译零警告；[x] DiscoveryTests/HeaderTests 全过；[x] 新增测试：白名单通过与代际解析结果对同一文件名恒一致（含畸形代际数字用例）；[x] 单元测试全过。
 - 最小验证：`dotnet test --no-restore`。
+
+## 新任务清单 SIMPLIFY-20261106：B 级简化（用户 2026-11-06 全授权）
+
+背景：SIMPLIFY-20261104 三层审查的 B 级（有收益证据的简化）发现，经 2026-11-06 逐项源码复核确认缺口真实存在。B01–B08 按风险从低到高编号执行；B03 与 B06 均触及 PathGuard，须先后执行；B08 依赖 B03/B04 完成后的错误码现状。所有任务不改行为语义与错误码值，§5 安全底线机制只收敛副本、不可移除。
+
+### B01 AttachmentIndex diskIds 去重 O(n²) 改 HashSet
+
+- 目标：附件索引构建对大量附件不再二次方退化；去重与保序行为不变。
+- 实施内容：`diskIds` 的 `List.Contains` 去重与 `:142` 的 `diskIds.Contains` 查找改用 `HashSet<string>(StringComparer.Ordinal)` 配合原 List 保序；不改首次出现顺序语义。
+- 源码映射：`AttachmentIndex.cs:113-118,142`。
+- 验收：[ ] 编译零警告；[ ] AttachmentIndexTests 全过；[ ] 提交信息记录改动前后复杂度说明。
+- 最小验证：`dotnet test --no-restore`（AttachmentIndexTests）。
+
+### B02 WorkspaceMetadataWriter.Apply 拆阶段
+
+- 目标：约 90 行的 `Apply` 拆为私有阶段方法，最危险写入路径可分段诊断；行为、错误码、fault seam 顺序完全不变。
+- 实施内容：按现有注释边界拆私有方法（建议：锁获取、候选构建写入、候选校验+复验、提交窗口（安全描述符复制+双 rename）、收尾）；`_fault` 调用点顺序与 `WorkspaceWritePoint` 枚举不动；不新增抽象层。
+- 源码映射：`WorkspaceMetadataWriter.cs:63-~150`（`WorkspaceWritePoint` 各调用点为阶段边界）。
+- 验收：[ ] 编译零警告；[ ] 既有 fault-injection/崩溃点测试逐项通过且各 `WorkspaceWritePoint` 触发顺序不变；[ ] 单元测试全过 + WindowsTests `--roots-only` 全过；[ ] 提交信息记录拆出的方法清单与行数守恒说明。
+- 最小验证：`dotnet test --no-restore`（单元 + roots-only）。
+
+### B03 祖先 reparse 走查收敛为 PathGuard 单一 helper
+
+- 目标：祖先目录逐段 reparse 走查一处实现、7 处复用；各处错误码不变。S04 已证明 `PathGuard.Check` 不覆盖祖先，故新增命名方法（如 `CheckAncestors`），不并入 Check。
+- 实施内容：在 PathGuard 实现"自根向下逐段（或自路径向上至根）检查现存祖先的 ReparsePoint"；替换以下各处的手写走查：`PostCleanupAuditor.cs:27-28`、`RootLocator.cs:94-101`（前缀组件式）、`SessionResidueInventory.cs:30-34`、`WorkspaceReferenceReader.cs:29-30`、`AttachmentOpener.cs:88-93`（创建路径式）、`WindowStateStore.cs:82-86`、`WorkspaceBackupService.cs:143`（备份根子目录式）。各处的返回形态（异常/错误码/Unknown）保留，仅走查循环收敛。
+- 源码映射：上列 7 处 + `PathGuard.cs`。
+- 验收：[ ] 编译零警告；[ ] 既有 reparse 负向测试逐项通过且错误码不变；[ ] 新增测试：同一祖先 junction 场景下 7 个入口全部拒绝（可复用现有夹具）；[ ] 单元测试全过 + WindowsTests `--roots-only` 全过；[ ] 提交信息记录替换点清单。
+- 最小验证：`dotnet test --no-restore`（单元 + roots-only）。
+
+### B04 字节限额读取实现统一
+
+- 目标："读到上限即停/超限判定"单一实现；各文件数值常量保持现值不变（改数值属行为变更，不在本任务）。
+- 实施内容：以 `SessionHeaderReader.ReadAtMost:161` 为基础提取共享 bounded-read helper（internal，放 Infrastructure 公共处），替换各读取器中重复的"缓冲+1 判定/流式截断"实现：`SessionEventReader.ParseLines:147-156`、`SessionTitleReader`（MaxLineBytes/MaxInspectBytes 判定处）、`WorkspaceJson`（MaxBytes 快照加载）、`WorkspaceReleaseReader`（MaximumHeader/MaximumEntry）、`AttachmentInventoryService`（MaxReferenceReadBytes 预检）、`PreviewPresenter`（MaxPreviewReadBytes）。`CompressionLimits.MaxLineBytes` 先例不动。
+- 源码映射：上列各文件限额执行点（常量定义处仅引用不改值）。
+- 验收：[ ] 编译零警告；[ ] 各读取器既有超限/截断负向测试逐项通过且错误码不变；[ ] 单元测试全过；[ ] 提交信息记录替换的读取实现清单。
+- 最小验证：`dotnet test --no-restore`。
+
+### B05 JSON 重复键检测单一机制
+
+- 目标：JSON 对象重复属性检测只保留一种机制；不同文件同一输入判定一致。
+- 实施内容：现存两机制：`WorkspaceJson.DuplicateField`（walker，4 消费者）与 `WorkspaceProductionGate.cs:125` 的 `AllowDuplicateProperties=false` 解析器选项。统一为 walker（解析器选项语义依赖 STJ 版本行为，不可控）；ProductionGate 改为加载后跑 `DuplicateField`。zip 条目重复（`BackupManifest` DUPLICATE_ENTRY、`WorkspaceReleaseReader.cs:109`）与会话 ID 重复属不同语义，不在本任务。
+- 源码映射：`WorkspaceJson.cs:35-53`、`WorkspaceProductionGate.cs:125`。
+- 验收：[ ] 编译零警告；[ ] 既有重复键负向测试（含 ProductionGate 路径）通过且错误码不变；[ ] 新增测试：同一含重复键 JSON 经两入口判定一致；[ ] 单元测试全过。
+- 最小验证：`dotnet test --no-restore`。
+
+### B06 桌面缓存目录白名单删除平行副本
+
+- 目标：桌面缓存目录白名单全仓一份。现状为两份名单且注释自认"同名单"（改一漏一已被代码承认）。
+- 实施内容：删除 `DesktopCleanupSelection.cs:35` 的副本，Application 层引用 Infrastructure `PathGuard.DesktopCacheDirs:38`（或反向收敛，取依赖方向合规的一侧）；两处 `Contains/Any` 判定复用同一比较语义（OrdinalIgnoreCase）。
+- 源码映射：`DesktopCleanupSelection.cs:34-35,98`、`PathGuard.cs:38,52`。
+- 验收：[ ] 编译零警告；[ ] DesktopCleanupTests 全过（白名单五目录行为不变）；[ ] grep 证实名单仅一处定义；[ ] 单元测试全过。
+- 最小验证：`dotnet test --no-restore`（DesktopCleanupTests）。
+
+### B07 备份证据 DTO 收敛为能力对象
+
+- 目标：`WorkspaceBackupEvidence` 不可由公开构造伪造（备份校验通过的事实只能由 WorkspaceBackupService 产生），对齐 `WorkspaceWritePreparation` 既有模式。
+- 实施内容：`WorkspaceBackupEvidence` 记录类型保留，构造器降 internal（消费者均在 Infrastructure，测试经 InternalsVisibleTo 可达）；grep 确认 src 内无 Infrastructure 之外的构造调用；不改字段与消费逻辑。范围仅此一个 DTO：`ResolvedRoots` 等其余公开 DTO 是否同改待本任务实测后另行决定，不预先扩大。
+- 源码映射：`WorkspaceBackupEvidence.cs:4-8`；消费者 `WorkspaceBackupService.cs:86,95`、`WorkspaceMetadataWriter.cs:35,175`、`WorkspaceRecoveryService.cs:41,55,104,113,211`、`WorkspaceSyncCoordinator.cs:64,117`、`WorkspaceWritePreparation.cs:8,12`。
+- 验收：[ ] 编译零警告；[ ] 单元测试全过 + WindowsTests `--roots-only` 全过；[ ] 提交信息说明威胁模型（伪造备份证据进入写链的可构造路径）与证据等级（可构造）。
+- 最小验证：`dotnet test --no-restore`（单元 + roots-only）。
+
+### B08 错误码常量折叠
+
+- 目标：同名错误码字符串全仓单一定义点；`OutcomeReport.AuditLogCodes` 白名单由常量组装而非重复字面量。
+- 实施内容：新建 internal 静态错误码常量类（按族分组），折叠已确认重复：`ZSTD_TRUNCATED`（`SessionEventReader.cs:58` 与 `SessionHeaderReader.cs:53` 两处定义）；将 `OutcomeReport.cs:62-80` 白名单中的字面量替换为常量引用；各选择器 `*DuplicateReason` 等仅单处定义但被白名单重复字面量引用的码同步引用常量。错误码字符串值一律不改。
+- 源码映射：`SessionEventReader.cs:58`、`SessionHeaderReader.cs:53`、`OutcomeReport.cs:62-80`、各 `*Reason`/`Code*` 常量定义处。
+- 验收：[ ] 编译零警告；[ ] 单元测试全过；[ ] 新增测试：AuditLogCodes 覆盖全部已定义错误码常量（反射或清单断言）；[ ] 提交信息记录折叠的重复定义清单。
+- 最小验证：`dotnet test --no-restore`。
