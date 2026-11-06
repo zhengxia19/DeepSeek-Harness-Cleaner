@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using DeepSeekHarnessCleaner.Application;
 
 namespace DeepSeekHarnessCleaner.Infrastructure;
 
@@ -34,10 +35,6 @@ public sealed class PathGuard
     public const string PathEscapeErrorCode = "PATH_ESCAPE";
     public const string FileAccessDeniedErrorCode = "FILE_ACCESS_DENIED";
 
-    /// <summary>桌面缓存目录白名单（design.md §6，不含 logs/Local Storage/Session Storage/Network）。</summary>
-    public static readonly string[] DesktopCacheDirs =
-        ["Cache", "Code Cache", "GPUCache", "DawnGraphiteCache", "DawnWebGPUCache"];
-
     /// <summary>会话文件名白名单：session.jsonl(.zstd)、session.vN.jsonl(.zstd)，N 为正整数（design.md §3）。大小写敏感。单一实现：白名单判定与代际解析共用此正则（S05）。</summary>
     private static readonly Regex SessionFileNamePattern =
         new(@"^session(?:\.v(?<generation>[1-9][0-9]*))?\.jsonl(?:\.zstd)?$", RegexOptions.Compiled);
@@ -45,11 +42,11 @@ public sealed class PathGuard
     /// <summary>一次匹配同时完成白名单判定与代际捕获：Success=false 即白名单外；generation 组未命中即 v0 默认代际。</summary>
     public Match MatchSessionFileName(string fileName) => SessionFileNamePattern.Match(fileName);
 
-    /// <summary>相对根的首段是否属于桌面缓存目录白名单。</summary>
+    /// <summary>相对根的首段是否属于桌面缓存目录白名单。名单与比较语义取自 Application DesktopCleanupSelection（B06 单一实现；依赖方向 Infrastructure→Application）。</summary>
     public bool IsDesktopCacheDirectory(string relativeDir)
     {
         var head = relativeDir.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
-        return DesktopCacheDirs.Contains(head, StringComparer.OrdinalIgnoreCase);
+        return DesktopCleanupSelection.IsDesktopCacheTopSegment(head);
     }
 
     /// <summary>

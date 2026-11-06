@@ -119,7 +119,7 @@
 - 目标：桌面缓存目录白名单全仓一份。现状为两份名单且注释自认"同名单"（改一漏一已被代码承认）。
 - 实施内容：删除 `DesktopCleanupSelection.cs:35` 的副本，Application 层引用 Infrastructure `PathGuard.DesktopCacheDirs:38`（或反向收敛，取依赖方向合规的一侧）；两处 `Contains/Any` 判定复用同一比较语义（OrdinalIgnoreCase）。
 - 源码映射：`DesktopCleanupSelection.cs:34-35,98`、`PathGuard.cs:38,52`。
-- 验收：[ ] 编译零警告；[ ] DesktopCleanupTests 全过（白名单五目录行为不变）；[ ] grep 证实名单仅一处定义；[ ] 单元测试全过。
+- 验收：[x] 编译零警告；[x] DesktopCleanupTests 全过（白名单五目录行为不变）；[x] grep 证实名单仅一处定义；[x] 单元测试全过。
 - 最小验证：`dotnet test --no-restore`（DesktopCleanupTests）。
 
 ### B07 备份证据 DTO 收敛为能力对象

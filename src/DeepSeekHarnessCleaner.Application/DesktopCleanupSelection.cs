@@ -31,9 +31,13 @@ public sealed record DesktopCleanupPlanResult(
 /// </summary>
 public sealed class DesktopCleanupSelection
 {
-    /// <summary>design.md §6 固定桌面缓存目录白名单（与 Infrastructure PathGuard.DesktopCacheDirs 同名单）。</summary>
+    /// <summary>design.md §6 固定桌面缓存目录白名单（全仓唯一定义，B06；Infrastructure PathGuard 亦引用此名单）。</summary>
     public static readonly IReadOnlyList<string> DesktopCacheDirs =
         ["Cache", "Code Cache", "GPUCache", "DawnGraphiteCache", "DawnWebGPUCache"];
+
+    /// <summary>顶层目录名是否属于白名单（单一比较语义：OrdinalIgnoreCase）。</summary>
+    public static bool IsDesktopCacheTopSegment(string topSegment) =>
+        DesktopCacheDirs.Contains(topSegment, StringComparer.OrdinalIgnoreCase);
 
     public const string LogsDirName = "logs";
 
@@ -95,7 +99,7 @@ public sealed class DesktopCleanupSelection
 
             var topSegment = segments[0];
             CleanupCategory category;
-            if (DesktopCacheDirs.Any(d => string.Equals(d, topSegment, StringComparison.OrdinalIgnoreCase)))
+            if (IsDesktopCacheTopSegment(topSegment))
             {
                 category = CleanupCategory.DesktopCache;
             }
