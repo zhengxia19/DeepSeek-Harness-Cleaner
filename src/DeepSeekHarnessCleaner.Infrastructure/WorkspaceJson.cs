@@ -12,18 +12,11 @@ internal static class WorkspaceJson
     {
         using var input = new FileStream(path, FileMode.Open, FileAccess.Read, share);
         if (input.Length > MaxBytes) throw new InvalidDataException("WORKSPACE_TOO_LARGE");
-        using var buffer = new MemoryStream();
-        var chunk = new byte[8192];
-        int count;
-        while ((count = input.Read(chunk)) > 0)
-        {
-            if (buffer.Length + count > MaxBytes) throw new InvalidDataException("WORKSPACE_TOO_LARGE");
-            buffer.Write(chunk, 0, count);
-        }
-        var bytes = buffer.ToArray();
+        var bytes = BoundedRead.ReadAllUpTo(input, MaxBytes, out var exceeded);
+        if (exceeded) throw new InvalidDataException("WORKSPACE_TOO_LARGE");
         sha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         // Stream parsing preserves the legacy reader's handling of a UTF-8 BOM.
-        buffer.Position = 0;
+        using var buffer = new MemoryStream(bytes, writable: false);
         return JsonDocument.Parse(buffer);
     }
 

@@ -24,8 +24,10 @@ public sealed class SessionTitleReader
                 using var memory = new MemoryStream(decoded.Content, writable: false);
                 return Parse(memory);
             }
-            if (input.Length > MaxInspectBytes) return null;
-            return Parse(input);
+            var bytes = BoundedRead.ReadAllUpTo(input, MaxInspectBytes, out var exceeded);
+            if (exceeded) return null;
+            using var plain = new MemoryStream(bytes, writable: false);
+            return Parse(plain);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or JsonException or DecoderFallbackException)
         {

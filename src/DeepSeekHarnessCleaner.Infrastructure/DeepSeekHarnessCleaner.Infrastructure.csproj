@@ -9,6 +9,7 @@
     <PackageReference Include="YamlDotNet" />
     <InternalsVisibleTo Include="DeepSeekHarnessCleaner.Tests" />
     <InternalsVisibleTo Include="DeepSeekHarnessCleaner.WindowsTests" />
+    <InternalsVisibleTo Include="DeepSeekHarnessCleaner.UI" />
   </ItemGroup>
 
   <ItemGroup>

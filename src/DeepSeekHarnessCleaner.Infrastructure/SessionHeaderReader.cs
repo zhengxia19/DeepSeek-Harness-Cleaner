@@ -109,7 +109,7 @@ public sealed class SessionHeaderReader
         failure = null;
         using var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         var buffer = new byte[maxLineBytes + 1];
-        int read = ReadAtMost(stream, buffer, buffer.Length);
+        int read = BoundedRead.ReadAtMost(stream, buffer, buffer.Length);
         if (read == 0)
             return Array.Empty<byte>();
 
@@ -156,20 +156,6 @@ public sealed class SessionHeaderReader
         }
 
         return content[..firstLength];
-    }
-
-    private static int ReadAtMost(Stream stream, byte[] buffer, int count)
-    {
-        int total = 0;
-        while (total < count)
-        {
-            int read = stream.Read(buffer, total, count - total);
-            if (read <= 0)
-                break;
-            total += read;
-        }
-
-        return total;
     }
 
     private static SessionHeaderReadResult ParseHeaderLine(string line)

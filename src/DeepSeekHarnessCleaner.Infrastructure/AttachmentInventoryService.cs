@@ -57,12 +57,15 @@ public sealed class AttachmentInventoryService
                         if (decoded.IsSuccess) text = Encoding.UTF8.GetString(decoded.Content);
                         else issues.Add("REFERENCE_DECODE_INCOMPLETE");
                     }
-                    else if (input.Length <= MaxReferenceReadBytes)
+                    else
                     {
-                        using var reader = new StreamReader(input, Encoding.UTF8);
-                        text = reader.ReadToEnd();
+                        var bytes = BoundedRead.ReadAllUpTo(input, MaxReferenceReadBytes, out var exceeded, ct);
+                        if (exceeded) issues.Add("REFERENCE_READ_LIMIT");
+                        // StreamReader(Encoding.UTF8) 默认剥离 BOM；此处按字节解码保持同一行为。
+                        else text = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF
+                            ? Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3)
+                            : Encoding.UTF8.GetString(bytes);
                     }
-                    else issues.Add("REFERENCE_READ_LIMIT");
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {

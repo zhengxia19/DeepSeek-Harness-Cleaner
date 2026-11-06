@@ -87,13 +87,7 @@ public sealed class PreviewPresenter
             // 明文：读取上限 + 1 字节判定是否超限，超限不提供正文（与事件流同一上限）。
             var limit = MaxPreviewReadBytes;
             var buffer = new byte[checked((int)limit) + 1];
-            var total = 0;
-            int read;
-            while (total < buffer.Length && (read = stream.Read(buffer, total, buffer.Length - total)) > 0)
-            {
-                total += read;
-                ct.ThrowIfCancellationRequested();
-            }
+            var total = BoundedRead.ReadAtMost(stream, buffer, buffer.Length, ct);
 
             if (total > limit)
             {

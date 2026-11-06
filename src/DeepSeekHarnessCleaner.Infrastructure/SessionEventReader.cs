@@ -125,24 +125,7 @@ public sealed class SessionEventReader
     }
 
     private static byte[] ReadPlainWithLimit(FileStream stream, long maxTotalBytes, out bool exceeded)
-    {
-        exceeded = false;
-        using var buffer = new MemoryStream();
-        var chunk = new byte[64 * 1024];
-        int read;
-        while ((read = stream.Read(chunk, 0, chunk.Length)) > 0)
-        {
-            if (buffer.Length + read > maxTotalBytes)
-            {
-                exceeded = true;
-                break;
-            }
-
-            buffer.Write(chunk, 0, read);
-        }
-
-        return buffer.ToArray();
-    }
+        => BoundedRead.ReadAllUpTo(stream, maxTotalBytes, out exceeded);
 
     private static List<EventLine> ParseLines(byte[] content, int maxLineBytes, CancellationToken cancellationToken)
     {

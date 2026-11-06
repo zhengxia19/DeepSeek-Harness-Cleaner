@@ -103,7 +103,7 @@
 - 目标："读到上限即停/超限判定"单一实现；各文件数值常量保持现值不变（改数值属行为变更，不在本任务）。
 - 实施内容：以 `SessionHeaderReader.ReadAtMost:161` 为基础提取共享 bounded-read helper（internal，放 Infrastructure 公共处），替换各读取器中重复的"缓冲+1 判定/流式截断"实现：`SessionEventReader.ParseLines:147-156`、`SessionTitleReader`（MaxLineBytes/MaxInspectBytes 判定处）、`WorkspaceJson`（MaxBytes 快照加载）、`WorkspaceReleaseReader`（MaximumHeader/MaximumEntry）、`AttachmentInventoryService`（MaxReferenceReadBytes 预检）、`PreviewPresenter`（MaxPreviewReadBytes）。`CompressionLimits.MaxLineBytes` 先例不动。
 - 源码映射：上列各文件限额执行点（常量定义处仅引用不改值）。
-- 验收：[ ] 编译零警告；[ ] 各读取器既有超限/截断负向测试逐项通过且错误码不变；[ ] 单元测试全过；[ ] 提交信息记录替换的读取实现清单。
+- 验收：[x] 编译零警告；[x] 各读取器既有超限/截断负向测试逐项通过且错误码不变；[x] 单元测试全过；[x] 提交信息记录替换的读取实现清单。
 - 最小验证：`dotnet test --no-restore`。
 
 ### B05 JSON 重复键检测单一机制

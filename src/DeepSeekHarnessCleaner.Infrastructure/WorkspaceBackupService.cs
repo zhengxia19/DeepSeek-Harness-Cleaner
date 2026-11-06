@@ -146,16 +146,9 @@ public sealed class WorkspaceBackupService
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         if (stream.Length > limit) throw new InvalidDataException("WORKSPACE_BACKUP_SIZE_LIMIT");
-        using var buffer = new MemoryStream();
-        var chunk = new byte[8192];
-        int count;
-        while ((count = stream.Read(chunk)) > 0)
-        {
-            ct.ThrowIfCancellationRequested();
-            if (buffer.Length + count > limit) throw new InvalidDataException("WORKSPACE_BACKUP_SIZE_LIMIT");
-            buffer.Write(chunk, 0, count);
-        }
-        return buffer.ToArray();
+        var bytes = BoundedRead.ReadAllUpTo(stream, limit, out var exceeded, ct);
+        if (exceeded) throw new InvalidDataException("WORKSPACE_BACKUP_SIZE_LIMIT");
+        return bytes;
     }
 
     private static void WriteNew(string path, byte[] bytes, string root, CancellationToken ct)
